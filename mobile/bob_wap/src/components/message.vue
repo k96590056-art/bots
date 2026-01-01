@@ -119,7 +119,7 @@ export default {
 <style lang="scss" scoped>
 .van-tabs__nav--card .van-tab.van-tab--active {
     color: #fff;
-    background-color: #cf866b;
+    background-color: #1890ff;
 }
 .van-tabs__nav--card {
 

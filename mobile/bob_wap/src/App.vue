@@ -617,7 +617,7 @@ p {
 
 .van-button--info {
   color: #fff;
-  background-color: #cf866b;
+  background-color: #1890ff;
   border: 1px solid #cf866b;
 }
 </style>

@@ -481,7 +481,7 @@ export default {
     height: 3px;
     left: calc(50% - 15px);
     z-index: 200;
-    background: #cf866b;
+    background: #1890ff;
     border-radius: 4px;
   }
 }

@@ -237,7 +237,7 @@ export default {
       text-align: center;
     }
     .lisga.act {
-      background: #cf866b;
+      background: #1890ff;
       color: #fff;
       border: none;
     }

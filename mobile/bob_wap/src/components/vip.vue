@@ -3058,7 +3058,7 @@ export default {
   width: 0.08rem;
   height: 4.48px;
   height: 0.28rem;
-  background: #cf866b;
+  background: #1890ff;
   position: absolute;
   left: -3.84px;
   left: -0.24rem;
@@ -3894,7 +3894,7 @@ p[data-v-f2b5b3f8] {
   height: 16px;
   line-height: 16px;
   border-radius: 50%;
-  background-color: #cf866b;
+  background-color: #1890ff;
   text-align: center;
   color: #fff;
   font-size: 0.28rem;

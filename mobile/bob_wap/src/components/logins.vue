@@ -21,7 +21,7 @@
                     </div>
                   </div>
 
-                  <div class="login_btnGroup__37-ja"><button style="background: #cf866b" @click="login" class="login_activeBtn__3wLDx" type="button" data-analytics="button" data-label="登录" data-key="yb_lgn_btn_tap">登录</button></div>
+                  <div class="login_btnGroup__37-ja"><button style="background: #1890ff" @click="login" class="login_activeBtn__3wLDx" type="button" data-analytics="button" data-label="登录" data-key="yb_lgn_btn_tap">登录</button></div>
                   <div class="login_visitorBtn__2xo1h"><a data-analytics="button" @click="$parent.goNav('/')" data-label="先去逛逛" data-key="yb_tour">先去逛逛</a><a @click="$parent.openKefu">在线客服</a></div>
                 </div>
               </div>
@@ -79,7 +79,7 @@
                 </div>
                 <div class="register_ruleContainer__1h-YD"></div>
 
-                <div class="register_btnGroup__1vkHI"><button style="background: #cf866b" class="register_registerBtn__1set3" @click="register" type="button" data-key="yb_rgstr_btn_tap" data-analytics="button" data-label="注册">注册</button></div>
+                <div class="register_btnGroup__1vkHI"><button style="background: #1890ff" class="register_registerBtn__1set3" @click="register" type="button" data-key="yb_rgstr_btn_tap" data-analytics="button" data-label="注册">注册</button></div>
               </div>
             </div>
           </div>

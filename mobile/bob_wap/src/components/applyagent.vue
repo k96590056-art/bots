@@ -30,7 +30,7 @@
           <van-field label="联系方式" v-model="info.mobile" placeholder="请输入您的联系方式" />
           <van-field label="申请理由" v-model="info.apply_info" placeholder="请输入申请说明" />
         </van-form>
-        <van-button style="background:#cf866b;color:#fff" @click="shenqing" block >加入我们</van-button>
+        <van-button style="background:#1890ff;color:#fff" @click="shenqing" block >加入我们</van-button>
       </div>
     </div>
   </div>
@@ -126,7 +126,7 @@ export default {
     text-align: center;
     font-size: 12px;
     color: #fff;
-    background-color: #cf866b;
+    background-color: #1890ff;
     border-radius: 4px;
   }
 }
