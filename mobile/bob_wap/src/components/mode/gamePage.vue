@@ -157,6 +157,31 @@ export default {
       }
     },
     
+    getMobileUrlType() {
+      const ua = navigator.userAgent.toLowerCase();
+      
+      // 判断是否是 iOS 设备 (iPhone, iPad, iPod)
+      const isIOS = /iphone|ipad|ipod/.test(ua);
+      if (isIOS) {
+        return 3; // 苹果设备
+      }
+      
+      // 判断是否是 Android 设备
+      const isAndroid = /android/.test(ua);
+      if (isAndroid) {
+        return 4; // Android 设备
+      }
+      
+      // 判断是否是移动设备（其他手机设备）
+      const isMobile = /mobile|phone|tablet/.test(ua) || /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua);
+      if (isMobile) {
+        return 2; // 其他手机设备
+      }
+      
+      // 默认是电脑设备
+      return 1; // 电脑
+    },
+    
     getservicerurl() {
       let that = this;
       that.$apiFun.post('/api/getservicerurl', {}).then(res => {
@@ -189,12 +214,15 @@ export default {
       let that = this;
       that.isLoading = true;
       
+      // 根据设备类型动态获取 is_mobile_url 参数值
+      const mobileUrlType = that.getMobileUrlType();
+      
       that.$apiFun
         .post('/api/getGameUrl', {
           plat_name: name, 
           game_type: type || 0, 
           game_code: code, 
-          is_mobile_url: 2
+          is_mobile_url: mobileUrlType
         })
         .then(res => {
           if (res.code == 501) {
