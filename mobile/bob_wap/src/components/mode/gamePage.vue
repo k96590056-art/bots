@@ -194,7 +194,7 @@ export default {
           plat_name: name, 
           game_type: type || 0, 
           game_code: code, 
-          is_mobile_url: 1
+          is_mobile_url: 2
         })
         .then(res => {
           if (res.code == 501) {
