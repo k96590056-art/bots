@@ -1,5 +1,5 @@
 <template>
-  <div class="acts" style="background: #f1f1f1" v-if="activitytypeList.length > 0">
+  <div class="acts" v-if="activitytypeList.length > 0">
     <div class="pageTop">优惠活动</div>
     <van-tabs v-model="actType" class="topsa" @click="activitylist">
       <van-tab title="全部" :name="''"> </van-tab>
@@ -77,6 +77,15 @@ export default {
 </script>
 <style lang="scss" scoped>
 // @import '../../../static/css/dashboard-activity.b2be1233.css';
+.acts {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background-image: url('/static/image/diy/login_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
+}
 .topsa {
   position: fixed;
   top: 40px;

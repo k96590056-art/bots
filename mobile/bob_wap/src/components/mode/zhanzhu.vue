@@ -1,5 +1,5 @@
 <template>
-  <div class="acts" style="background-color: #ede9e7; min-height: 100vh">
+  <div class="acts">
     <div class="pageTop">赞助</div>
     <div style="height: 30px"></div>
     <div class="lis" @click="$parent.goNav('/zhanzhuye?type=1')">
@@ -52,6 +52,15 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+.acts {
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background-image: url('/static/image/diy/login_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
+}
 .lis {
   display: flex;
   width: calc(100% - 40px);

@@ -50,20 +50,25 @@ export default {
     // 检测 Telegram 环境并自动登录
     checkTelegramAutoLogin() {
       let that = this;
+      
+      // 判断是否为开发模式
+      const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-      // 调试信息收集
+      // 调试信息收集（仅开发模式）
       let debugInfo = [];
-      debugInfo.push('=== Telegram自动登录调试 ===');
-      debugInfo.push('URL: ' + window.location.href.substring(0, 50));
-      debugInfo.push('hash: ' + (window.location.hash ? window.location.hash.substring(0, 30) : '无'));
-      debugInfo.push('Telegram存在: ' + (!!window.Telegram));
-      debugInfo.push('WebApp存在: ' + (!!(window.Telegram && window.Telegram.WebApp)));
+      if (isDevelopment) {
+        debugInfo.push('=== Telegram自动登录调试 ===');
+        debugInfo.push('URL: ' + window.location.href.substring(0, 50));
+        debugInfo.push('hash: ' + (window.location.hash ? window.location.hash.substring(0, 30) : '无'));
+        debugInfo.push('Telegram存在: ' + (!!window.Telegram));
+        debugInfo.push('WebApp存在: ' + (!!(window.Telegram && window.Telegram.WebApp)));
 
-      console.log('=== [Telegram自动登录] 开始检测 ===');
-      console.log('[Telegram自动登录] window.Telegram 存在:', !!window.Telegram);
-      console.log('[Telegram自动登录] window.Telegram.WebApp 存在:', !!(window.Telegram && window.Telegram.WebApp));
-      console.log('[Telegram自动登录] URL:', window.location.href);
-      console.log('[Telegram自动登录] hash:', window.location.hash);
+        console.log('=== [Telegram自动登录] 开始检测 ===');
+        console.log('[Telegram自动登录] window.Telegram 存在:', !!window.Telegram);
+        console.log('[Telegram自动登录] window.Telegram.WebApp 存在:', !!(window.Telegram && window.Telegram.WebApp));
+        console.log('[Telegram自动登录] URL:', window.location.href);
+        console.log('[Telegram自动登录] hash:', window.location.hash);
+      }
 
       // 检测是否在 Telegram Web App 环境中
       if (window.Telegram && window.Telegram.WebApp) {
@@ -78,30 +83,36 @@ export default {
         const initDataUnsafe = window.__TELEGRAM_INIT_DATA_UNSAFE__ || webApp.initDataUnsafe;
         const currentToken = sessionStorage.getItem('token');
 
-        debugInfo.push('initData长度: ' + (initData ? initData.length : 0));
-        debugInfo.push('预保存: ' + (window.__TELEGRAM_INIT_DATA__ ? '有' : '无'));
-        debugInfo.push('当前token: ' + (currentToken ? '已有' : '无'));
-        debugInfo.push('platform: ' + (webApp.platform || '未知'));
-        debugInfo.push('user: ' + JSON.stringify((initDataUnsafe && initDataUnsafe.user) || {}));
+        if (isDevelopment) {
+          debugInfo.push('initData长度: ' + (initData ? initData.length : 0));
+          debugInfo.push('预保存: ' + (window.__TELEGRAM_INIT_DATA__ ? '有' : '无'));
+          debugInfo.push('当前token: ' + (currentToken ? '已有' : '无'));
+          debugInfo.push('platform: ' + (webApp.platform || '未知'));
+          debugInfo.push('user: ' + JSON.stringify((initDataUnsafe && initDataUnsafe.user) || {}));
 
-        console.log('[Telegram自动登录] WebApp 对象:', webApp);
-        console.log('[Telegram自动登录] initData 存在:', !!initData);
-        console.log('[Telegram自动登录] initData 长度:', initData ? initData.length : 0);
-        console.log('[Telegram自动登录] initData 内容:', initData);
-        console.log('[Telegram自动登录] initDataUnsafe:', initDataUnsafe);
-        console.log('[Telegram自动登录] 预保存数据:', window.__TELEGRAM_INIT_DATA__);
-        console.log('[Telegram自动登录] 当前 token:', currentToken);
+          console.log('[Telegram自动登录] WebApp 对象:', webApp);
+          console.log('[Telegram自动登录] initData 存在:', !!initData);
+          console.log('[Telegram自动登录] initData 长度:', initData ? initData.length : 0);
+          console.log('[Telegram自动登录] initData 内容:', initData);
+          console.log('[Telegram自动登录] initDataUnsafe:', initDataUnsafe);
+          console.log('[Telegram自动登录] 预保存数据:', window.__TELEGRAM_INIT_DATA__);
+          console.log('[Telegram自动登录] 当前 token:', currentToken);
+        }
 
         // 如果有 initData 且未登录，执行自动登录
         if (initData && !currentToken) {
-          debugInfo.push('>>> 开始调用API...');
-          console.log('[Telegram自动登录] 条件满足，准备调用后端 API...');
+          if (isDevelopment) {
+            debugInfo.push('>>> 开始调用API...');
+            console.log('[Telegram自动登录] 条件满足，准备调用后端 API...');
+          }
 
           // 后端 API 地址
           const apiBaseUrl = 'https://botapi.leyu666.lol';
           const telegramAuthUrl = apiBaseUrl + '/api/telegram/webapp-auth';
-          debugInfo.push('API URL: ' + telegramAuthUrl.substring(0, 40) + '...');
-          console.log('[Telegram自动登录] API URL:', telegramAuthUrl);
+          if (isDevelopment) {
+            debugInfo.push('API URL: ' + telegramAuthUrl.substring(0, 40) + '...');
+            console.log('[Telegram自动登录] API URL:', telegramAuthUrl);
+          }
 
           // 直接用 fetch 调用，避免 axios 配置问题
           fetch(telegramAuthUrl, {
@@ -109,12 +120,16 @@ export default {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ init_data: initData })
           }).then(response => response.json()).then(res => {
-            console.log('[Telegram自动登录] API 响应:', res);
-            debugInfo.push('API响应: ' + JSON.stringify(res));
+            if (isDevelopment) {
+              console.log('[Telegram自动登录] API 响应:', res);
+              debugInfo.push('API响应: ' + JSON.stringify(res));
+            }
 
             if (res.code === 200) {
-              console.log('[Telegram自动登录] 登录成功！');
-              debugInfo.push('登录成功！');
+              if (isDevelopment) {
+                console.log('[Telegram自动登录] 登录成功！');
+                debugInfo.push('登录成功！');
+              }
 
               // 保存 token
               sessionStorage.setItem('token', res.data.api_token);
@@ -136,37 +151,47 @@ export default {
                 that.$notify({ type: 'success', message: 'Telegram自动登录成功！' });
               }
             } else {
-              console.error('[Telegram自动登录] 登录失败:', res.code, res.message);
-              debugInfo.push('登录失败: ' + res.message);
-              // 显示调试弹窗
-              alert(debugInfo.join('\n'));
+              if (isDevelopment) {
+                console.error('[Telegram自动登录] 登录失败:', res.code, res.message);
+                debugInfo.push('登录失败: ' + res.message);
+                // 开发模式下显示调试弹窗
+                alert(debugInfo.join('\n'));
+              }
             }
           }).catch(err => {
-            console.error('[Telegram自动登录] API 调用异常:', err);
-            debugInfo.push('API异常: ' + (err.message || JSON.stringify(err)));
-            // 显示调试弹窗
-            alert(debugInfo.join('\n'));
+            if (isDevelopment) {
+              console.error('[Telegram自动登录] API 调用异常:', err);
+              debugInfo.push('API异常: ' + (err.message || JSON.stringify(err)));
+              // 开发模式下显示调试弹窗
+              alert(debugInfo.join('\n'));
+            }
           });
         } else {
-          if (!initData) {
-            debugInfo.push('跳过: initData为空');
-            console.log('[Telegram自动登录] 跳过：initData 为空');
+          if (isDevelopment) {
+            if (!initData) {
+              debugInfo.push('跳过: initData为空');
+              console.log('[Telegram自动登录] 跳过：initData 为空');
+            }
+            if (currentToken) {
+              debugInfo.push('跳过: 已登录');
+              console.log('[Telegram自动登录] 跳过：用户已登录，token 存在');
+            }
+            // 开发模式下显示调试弹窗（没有initData或已登录时）
+            alert(debugInfo.join('\n'));
           }
-          if (currentToken) {
-            debugInfo.push('跳过: 已登录');
-            console.log('[Telegram自动登录] 跳过：用户已登录，token 存在');
-          }
-          // 显示调试弹窗（没有initData或已登录时）
-          alert(debugInfo.join('\n'));
         }
       } else {
-        debugInfo.push('跳过: 非Telegram环境');
-        console.log('[Telegram自动登录] 跳过：非 Telegram 环境');
-        // 在非Telegram环境也显示调试信息
-        alert(debugInfo.join('\n'));
+        if (isDevelopment) {
+          debugInfo.push('跳过: 非Telegram环境');
+          console.log('[Telegram自动登录] 跳过：非 Telegram 环境');
+          // 开发模式下在非Telegram环境也显示调试信息
+          alert(debugInfo.join('\n'));
+        }
       }
 
-      console.log('=== [Telegram自动登录] 检测结束 ===');
+      if (isDevelopment) {
+        console.log('=== [Telegram自动登录] 检测结束 ===');
+      }
     },
     getVisitUrl() {
       let that = this;
@@ -511,8 +536,8 @@ export default {
 /* 页眉 */
 
 .pageTop {
-  background-color: #ede9e7;
-  color: rgb(0, 0, 0);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: #ffffff;
   text-align: center;
   font-size: 16px;
   font-weight: 700;
@@ -526,10 +551,10 @@ export default {
 }
 
 .acts .van-tabs__line {
-  background-color: #cf886b !important;
+  background-color: #1890ff !important;
 }
 .acts .van-tab--active {
-  color: #cf886b !important;
+  color: #1890ff !important;
 }
 
 .van-nav-bar .van-icon {

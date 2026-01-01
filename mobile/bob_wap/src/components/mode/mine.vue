@@ -1,5 +1,5 @@
 <template>
-  <div style="background-color: #ede9e7; min-height: 100vh; box-sizing: border-box">
+  <div class="mine-container">
     <!-- title -->
     <div style="padding: 0 18px">
       <div class="mineTop">
@@ -243,6 +243,16 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
+.mine-container {
+  width: 100%;
+  min-height: 100vh;
+  box-sizing: border-box;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background-image: url('/static/image/diy/login_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
+}
 // @import '../../../static/css/chunk-4deac3d0.11461b5f.css';
 .mineTop {
   height: 60px;
@@ -399,8 +409,7 @@ export default {
   }
 }
 .uslis {
-  background: url(/static/image/bg2.16978ccb7fd03b3f524222a8425d3728.16978ccb.png) no-repeat;
-  background-size: 100% 100%;
+  background: rgba(0, 0, 0, 0.5);
   width: 100%;
   margin-top: -20px;
   z-index: 200;
@@ -432,28 +441,27 @@ export default {
     padding: 4px 12px;
     box-sizing: border-box;
     width: 100%;
-    background: url(/static/image/list_bg.3577119be3c948988e7d77700fa0cc7d.3577119b.png) no-repeat;
-    background-size: 100% 100%;
+    background: rgba(0, 0, 0, 0.45);
     -webkit-box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
     box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
-    .hgsw {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      height: 40px;
-      box-sizing: border-box;
-      border-bottom: 1px solid #f5f0f0;
+      .hgsw {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 40px;
+        box-sizing: border-box;
+        border-bottom: 1px solid rgba(24, 144, 255, 0.3);
       .firsimg {
         width: 24px;
       }
       .tit {
-        color: #4e6693;
+        color: rgba(255, 255, 255, 0.9);
         margin-left: 10px;
       }
       .tisf {
         flex: 1;
         margin: 0 12px;
-        color: #a2aec8;
+        color: rgba(255, 255, 255, 0.7);
         text-align: right;
       }
       .rigiong {

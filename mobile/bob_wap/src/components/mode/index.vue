@@ -491,6 +491,13 @@ export default {
 
 .page-wrapper {
   padding-bottom: 20px;
+  width: 100%;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  background-image: url('/static/image/diy/login_bg.jpg');
+  background-size: cover;
+  background-position: center;
+  background-blend-mode: overlay;
 }
 
 .login-btn {

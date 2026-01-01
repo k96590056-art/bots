@@ -1,5 +1,5 @@
 <template>
-  <van-tabbar v-model="type" @change="onChange" active-color="#cf866b" inactive-color="#000" style="border-top: 1px solid #d5d8e0; box-sizing: border-box; background-color: rgb(243, 246, 255); z-index: 200">
+  <van-tabbar v-model="type" @change="onChange" active-color="#1890ff" inactive-color="#cdcdcd" style="border-top: 1px solid #d5d8e0; box-sizing: border-box; background-color: rgb(243, 246, 255); z-index: 200">
     <van-tabbar-item>
       <span>首页</span>
       <template #icon="props">
