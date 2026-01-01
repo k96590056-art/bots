@@ -31,6 +31,7 @@ use App\Models\GameList;
 use App\Models\GameListApp;
 use App\Models\GameCategory;
 use App\Models\Sponsor;
+use Illuminate\Support\Facades\Log;
 
 class IndexController extends Controller
 {
@@ -391,18 +392,106 @@ class IndexController extends Controller
         if ($gameItem && (((int)$gameItem->site_state !== 1) || ((int)$gameItem->app_state !== 1))) {
             return $this->returnMsg(500, '', '该游戏已关闭');
         }
-        $withApi = $gameItem->with_api ?? 'pussy';
+        $withApi = $gameItem->with_api ?? 'dp';
+        
+        Log::info('=== getGameUrl 接口开始处理 ===', [
+            'api_code' => $api_code,
+            'game_code' => $gameCode,
+            'game_type' => $gameType,
+            'game_item_id' => $gameItem->id ?? null,
+            'game_item_with_api' => $gameItem->with_api ?? null,
+            'with_api_final' => $withApi,
+            'is_dp' => ($withApi === 'dp')
+        ]);
+        
         $serviceClass = '\\App\\Services\\' . ucfirst($withApi) . 'Service';
         if (!class_exists($serviceClass)) {
+            Log::error('接口服务类不存在', ['service_class' => $serviceClass, 'with_api' => $withApi]);
             return $this->returnMsg(500, '', '接口服务不存在');
         }
         $service = new $serviceClass();
         $token = $request->header('authorization');
         $token = str_replace('Bearer ', '', $token);
         $user = User::where('api_token', $token)->lockForUpdate()->first();
-        if ($withApi === 'tg') {
+        
+        // 如果是 dp 接口，从 user_api 表获取登录信息，如果没有则根据 game_code 生成
+        if ($withApi === 'dp') {
+            Log::info('DP接口 - 从 user_api 获取登录信息', [
+                'user_id' => $user->id ?? null,
+                'username' => $user->username ?? null,
+                'api_code' => $api_code,
+                'game_code' => $gameCode
+            ]);
+            
+            // 根据 api_code（platform_name）从 user_api 表获取登录信息
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            
+            if (!$User_Api || empty($User_Api->api_user)) {
+                // 如果 user_api 记录不存在或 api_user 为空，根据 game_code 生成登录用户名
+                Log::info('DP接口 - user_api 记录不存在，根据 game_code 生成登录用户名', [
+                    'user_id' => $user->id,
+                    'api_code' => $api_code,
+                    'game_code' => $gameCode
+                ]);
+                
+                // 生成 dp 登录用户名：从 venue_code 提取前缀 + 用户名
+                $venueCode = $gameItem->venue_code ?? $api_code;
+                $cleanGameCode = '';
+                
+                if (!empty($venueCode)) {
+                    // 提取前2位字母（忽略数字和其他字符）
+                    preg_match('/[a-zA-Z]{1,2}/', $venueCode, $matches);
+                    $cleanGameCode = isset($matches[0]) ? strtoupper($matches[0]) : '';
+                }
+                
+                // 如果提取不到字母，使用 gameCode 清理后的值作为后备
+                if (empty($cleanGameCode) && !empty($gameCode)) {
+                    if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
+                        $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
+                    } else {
+                        $cleanGameCode = $gameCode;
+                    }
+                }
+                
+                // 生成 dp 用户名：前缀 + 用户名
+                $dpUserName = $cleanGameCode . $user->username;
+                
+                // 创建或更新 user_api 记录
+                if ($User_Api) {
+                    $User_Api->api_user = $dpUserName;
+                    $User_Api->api_pass = '123456';
+                    $User_Api->save();
+                    Log::info('DP接口 - 更新 user_api 记录', [
+                        'user_id' => $user->id,
+                        'api_code' => $api_code,
+                        'api_user' => $dpUserName
+                    ]);
+                } else {
+                    $User_Api = User_Api::create([
+                        'user_id' => $user->id,
+                        'api_code' => $api_code,
+                        'api_user' => $dpUserName,
+                        'api_pass' => '123456',
+                        'api_money' => 0
+                    ]);
+                    Log::info('DP接口 - 创建 user_api 记录', [
+                        'user_id' => $user->id,
+                        'api_code' => $api_code,
+                        'api_user' => $dpUserName
+                    ]);
+                }
+            } else {
+                Log::info('DP接口 - 从 user_api 获取到登录信息', [
+                    'user_id' => $user->id,
+                    'api_code' => $api_code,
+                    'api_user' => $User_Api->api_user
+                ]);
+            }
+        } elseif ($withApi === 'tg') {
+            Log::info('TG接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
             $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
             if (!$User_Api) {
+                Log::info('TG接口 - User_Api不存在，调用注册接口', ['username' => $user->username, 'api_code' => $api_code]);
                 $result = $service->register($api_code, $user->username);
                 if ($result['code'] != 200) {
                     return $this->returnMsg(201, '', $result['message']);
@@ -416,27 +505,38 @@ class IndexController extends Controller
                 $User_Api = User_Api::create($arr);
             }
         } else {
-            $User_Api = User_Api::where('api_code', $withApi)->where('user_id', $user->id)->first();
-            if (!$User_Api) {
-                if ($withApi === 'dp') {
-                    $result = $service->register($user->username);
-                } elseif ($withApi === 'pussy') {
-                    // 调用Pussy注册接口，传入User对象
-                    // 新方法签名：register($password, $agent, $name, $tel, $memo, $userType, $userNamePrefix, $user, $platformName)
-                    $result = $service->register('123456', '', 'N/A', 'N/A', 'N/A', 1, 'c111111', $user, 'pussy');
-                } else {
-                    $result = ['code' => 200];
+            // 确保 dp 接口不会进入此分支
+            if ($withApi === 'dp') {
+                Log::warning('DP接口不应该进入 else 分支，跳过注册逻辑', [
+                    'with_api' => $withApi,
+                    'user_id' => $user->id ?? null,
+                    'controller' => 'IndexController'
+                ]);
+                // dp 接口跳过注册
+            } else {
+                Log::info('其他接口 - 检查User_Api并注册', ['with_api' => $withApi, 'user_id' => $user->id]);
+                $User_Api = User_Api::where('api_code', $withApi)->where('user_id', $user->id)->first();
+                if (!$User_Api) {
+                    if ($withApi === 'pussy') {
+                        Log::info('Pussy接口 - User_Api不存在，调用注册接口', ['username' => $user->username]);
+                        // 调用Pussy注册接口，传入User对象
+                        // 新方法签名：register($password, $agent, $name, $tel, $memo, $userType, $userNamePrefix, $user, $platformName)
+                        $result = $service->register('123456', '', 'N/A', 'N/A', 'N/A', 1, 'c111111', $user, 'pussy');
+                    } else {
+                        Log::info('其他接口 - User_Api不存在，跳过注册', ['with_api' => $withApi]);
+                        $result = ['code' => 200];
+                    }
+                    if ($result['code'] != 200) {
+                        return $this->returnMsg(201, '', $result['message'] ?? '注册失败');
+                    }
+                    $arr = [
+                        'user_id' => $user->id,
+                        'api_user' => $user->username,
+                        'api_pass' => 123456,
+                        'api_code' => $withApi,
+                    ];
+                    $User_Api = User_Api::create($arr);
                 }
-                if ($result['code'] != 200) {
-                    return $this->returnMsg(201, '', $result['message'] ?? '注册失败');
-                }
-                $arr = [
-                    'user_id' => $user->id,
-                    'api_user' => $user->username,
-                    'api_pass' => 123456,
-                    'api_code' => $withApi,
-                ];
-                $User_Api = User_Api::create($arr);
             }
         }
         $leixing = '1';
@@ -458,7 +558,91 @@ class IndexController extends Controller
         if ($gameType == 'fishing') {
             $leixing = '2';
         }
-        if ($withApi === 'tg') {
+        // 如果是 dp 接口，直接调用登录接口（使用上面从 user_api 获取的登录信息）
+        if ($withApi === 'dp') {
+            // 确保 $User_Api 变量存在（应该在上面的分支中已经处理）
+            if (!isset($User_Api) || empty($User_Api->api_user)) {
+                Log::error('DP接口 - user_api 记录未正确创建', [
+                    'user_id' => $user->id,
+                    'api_code' => $api_code
+                ]);
+                return $this->returnMsg(500, [], '用户登录信息获取失败');
+            }
+            
+            // 从 user_api 表获取登录用户名
+            $dpUserName = $User_Api->api_user;
+            
+            Log::info('DP接口 - 使用 user_api 中的登录信息进行登录', [
+                'user_id' => $user->id,
+                'users_username' => $user->username,
+                'user_api_api_user' => $dpUserName,
+                'api_code' => $api_code,
+                'game_code' => $gameCode
+            ]);
+            
+            // 确定 venueCode（场馆编码）
+            $venueCode = $gameItem->venue_code ?? $api_code;
+            // 确定 gameId，如果 gameCode 是数字则作为 gameId，否则为 0
+            $gameId = !empty($gameCode) && is_numeric($gameCode) ? (int)$gameCode : 0;
+            // 币种默认 USDT
+            $currency = 'USDT';
+            // 设备类型：1=PC, 2=H5
+            $deviceType = $is_mobile_url ? 2 : 1;
+            // 语言默认 zh_CN
+            $lang = 'zh_CN';
+            
+            Log::info('DP接口 - 准备调用登录接口', [
+                'user_id' => $user->id,
+                'users_username' => $user->username,
+                'user_api_api_user' => $dpUserName,
+                'venue_code' => $venueCode,
+                'game_code' => $gameCode,
+                'game_id' => $gameId,
+                'currency' => $currency,
+                'device_type' => $deviceType,
+                'lang' => $lang,
+                'client_ip' => $request->getClientIp()
+            ]);
+            
+            // 调用 DP 服务登录接口，使用 user_api 表中的 api_user
+            $res = $service->login($dpUserName, $venueCode, $currency, $gameId, $deviceType, $lang, $request->getClientIp());
+            
+            Log::info('DP接口 - 登录接口返回', [
+                'user_id' => $user->id,
+                'username' => $user->username,
+                'dp_user_name' => $dpUserName,
+                'response_code' => $res['code'] ?? 'unknown',
+                'response_message' => $res['message'] ?? 'unknown',
+                'has_data' => isset($res['data']),
+                'data_type' => isset($res['data']) ? gettype($res['data']) : 'null',
+                'data_length' => isset($res['data']) && is_string($res['data']) ? strlen($res['data']) : 0,
+                'data_preview' => isset($res['data']) && is_string($res['data']) ? substr($res['data'], 0, 200) : (isset($res['data']) ? json_encode($res['data']) : null),
+                'full_response' => $res
+            ]);
+            
+            // DpService::login() 成功返回格式: ['code' => 200, 'data' => $gameUrl] (data是字符串)
+            // 失败返回格式: ['code' => 201, 'message' => '错误信息']
+            if (isset($res['code']) && $res['code'] == 200 && !empty($res['data'])) {
+                Log::info('DP接口 - 获取游戏链接成功', [
+                    'user_id' => $user->id,
+                    'username' => $user->username,
+                    'game_url_length' => strlen($res['data']),
+                    'game_url_preview' => substr($res['data'], 0, 200)
+                ]);
+                return $this->returnMsg(200, ['url' => $res['data']]);
+            }
+            
+            // 如果登录失败，直接返回错误信息
+            Log::error('DP接口 - 获取游戏链接失败', [
+                'user_id' => $user->id,
+                'username' => $user->username,
+                'response_code' => $res['code'] ?? 'unknown',
+                'response_message' => $res['message'] ?? 'unknown',
+                'response_data' => $res['data'] ?? null,
+                'full_response' => $res
+            ]);
+            return $this->returnMsg(500, $res, $res['message'] ?? '获取游戏链接失败');
+        } elseif ($withApi === 'tg') {
             if ($user->transferstatus == 1) {
                 $mz = $this->allmz($api_code, $user->id);
                 if ($mz['code'] != 200) {
@@ -466,13 +650,6 @@ class IndexController extends Controller
                 }
             }
             $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameCode);
-        } elseif ($withApi === 'dp') {
-            $venueCode = $gameItem->venue_code ?? $api_code;
-            $deviceType = $is_mobile_url ? 2 : 1;
-            $res = $service->login($user->username, $venueCode, 'USDT', 0, $deviceType, 'zh_CN', $request->getClientIp());
-            if (isset($res['code']) && $res['code'] == 0 && isset($res['data']['content'])) {
-                return $this->returnMsg(200, ['url' => $res['data']['content']]);
-            }
         } elseif ($withApi === 'pussy') {
             $res = $service->login($user->username, $gameCode, $is_mobile_url ? 1 : 0);
         } else {

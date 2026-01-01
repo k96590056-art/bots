@@ -1400,20 +1400,53 @@ class AppController extends Controller
             }
             $res = $service->login($user->username, $api_code, $gameType, $is_mobile_url, $gameCode);
         } elseif ($withApi === 'dp') {
-            $User_Api = User_Api::where('api_code','dp')->where('user_id',$user->id)->first();
-            if(!$User_Api){
-                $result = $service->register($user->username);
-                if($result['code'] != 200){
-                    return $this->returnMsg(201, '', $result['message'] ?? '注册失败');
+            // DP接口不需要注册，直接从 user_api 表获取登录信息，如果没有则根据 game_code 生成
+            // 根据 api_code（platform_name）从 user_api 表获取登录信息
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            
+            if (!$User_Api || empty($User_Api->api_user)) {
+                // 如果 user_api 记录不存在或 api_user 为空，根据 game_code 生成登录用户名
+                // 生成 dp 登录用户名：从 venue_code 提取前缀 + 用户名
+                $venueCode = $gameItem->venue_code ?? $api_code;
+                $cleanGameCode = '';
+                
+                if (!empty($venueCode)) {
+                    // 提取前2位字母（忽略数字和其他字符）
+                    preg_match('/[a-zA-Z]{1,2}/', $venueCode, $matches);
+                    $cleanGameCode = isset($matches[0]) ? strtoupper($matches[0]) : '';
                 }
-                $arr = [
-                    'user_id' => $user->id,
-                    'api_user' => $user->username,
-                    'api_pass' => 123456,
-                    'api_code' => 'dp',
-                ];
-                $User_Api = User_Api::create($arr);		    
+                
+                // 如果提取不到字母，使用 gameCode 清理后的值作为后备
+                if (empty($cleanGameCode) && !empty($gameCode)) {
+                    if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
+                        $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
+                    } else {
+                        $cleanGameCode = $gameCode;
+                    }
+                }
+                
+                // 生成 dp 用户名：前缀 + 用户名
+                $dpUserName = $cleanGameCode . $user->username;
+                
+                // 创建或更新 user_api 记录
+                if ($User_Api) {
+                    $User_Api->api_user = $dpUserName;
+                    $User_Api->api_pass = '123456';
+                    $User_Api->save();
+                } else {
+                    $User_Api = User_Api::create([
+                        'user_id' => $user->id,
+                        'api_code' => $api_code,
+                        'api_user' => $dpUserName,
+                        'api_pass' => '123456',
+                        'api_money' => 0
+                    ]);
+                }
             }
+            
+            // 从 user_api 表获取登录用户名
+            $dpUserName = $User_Api->api_user;
+            
             $venueCode = $gameItem->venue_code ?? $api_code;
             // 如果是本地调试环境，根据设备类型判断；否则默认为手机端（deviceType=2）
             if (app()->environment('local')) {
@@ -1421,7 +1454,9 @@ class AppController extends Controller
             } else {
                 $deviceType = 2;
             }
-            $res = $service->login($user->username, $venueCode, 'USDT', 0, $deviceType, 'zh_CN', $request->getClientIp());
+            
+            // DP接口直接调用 login 接口，不需要注册
+            $res = $service->login($dpUserName, $venueCode, 'USDT', 0, $deviceType, 'zh_CN', $request->getClientIp());
         } elseif ($withApi === 'pussy') {
             $User_Api = User_Api::where('api_code','pussy')->where('user_id',$user->id)->first();
             if(!$User_Api){
