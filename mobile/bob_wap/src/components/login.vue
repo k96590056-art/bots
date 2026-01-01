@@ -118,7 +118,7 @@
     <ClickCaptcha
       :visible="showCaptcha"
       title="请在下图依次点击"
-      brand="燕窝酥1"
+      brand=""
       :pointCount="3"
       :generateUrl="generateUrl"
       :verifyUrl="verifyUrl"
