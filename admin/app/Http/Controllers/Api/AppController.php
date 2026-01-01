@@ -1435,7 +1435,7 @@ class AppController extends Controller
                     $User_Api->save();
                 } else {
                     $User_Api = User_Api::create([
-                        'user_id' => $user->id,
+                    'user_id' => $user->id,
                         'api_code' => $api_code,
                         'api_user' => $dpUserName,
                         'api_pass' => '123456',

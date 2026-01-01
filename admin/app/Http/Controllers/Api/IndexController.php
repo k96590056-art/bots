@@ -375,11 +375,8 @@ class IndexController extends Controller
         $gameType = $data['game_type'];
         
         // 如果是本地调试环境，根据设备类型判断；否则使用传入的参数
-        if (app()->environment('local')) {
-            $is_mobile_url = $this->isMobile() ? 1 : 0;
-        } else {
-            $is_mobile_url = $data['is_mobile_url'] ?? 1;
-        }
+        $is_mobile_url = isset($data['is_mobile_url']) && $data['is_mobile_url'] ? $data['is_mobile_url'] : $this->isMobile();
+        $is_mobile_url = $is_mobile_url ? $is_mobile_url : 1;
         $apiInfo = Api::where('api_code', $api_code)->first();
         if (!$apiInfo || (int)$apiInfo->state !== 1) {
             return $this->returnMsg(500, '', '该游戏接口已关闭');
@@ -515,27 +512,27 @@ class IndexController extends Controller
                 // dp 接口跳过注册
             } else {
                 Log::info('其他接口 - 检查User_Api并注册', ['with_api' => $withApi, 'user_id' => $user->id]);
-                $User_Api = User_Api::where('api_code', $withApi)->where('user_id', $user->id)->first();
-                if (!$User_Api) {
+            $User_Api = User_Api::where('api_code', $withApi)->where('user_id', $user->id)->first();
+            if (!$User_Api) {
                     if ($withApi === 'pussy') {
                         Log::info('Pussy接口 - User_Api不存在，调用注册接口', ['username' => $user->username]);
-                        // 调用Pussy注册接口，传入User对象
-                        // 新方法签名：register($password, $agent, $name, $tel, $memo, $userType, $userNamePrefix, $user, $platformName)
-                        $result = $service->register('123456', '', 'N/A', 'N/A', 'N/A', 1, 'c111111', $user, 'pussy');
-                    } else {
+                    // 调用Pussy注册接口，传入User对象
+                    // 新方法签名：register($password, $agent, $name, $tel, $memo, $userType, $userNamePrefix, $user, $platformName)
+                    $result = $service->register('123456', '', 'N/A', 'N/A', 'N/A', 1, 'c111111', $user, 'pussy');
+                } else {
                         Log::info('其他接口 - User_Api不存在，跳过注册', ['with_api' => $withApi]);
-                        $result = ['code' => 200];
-                    }
-                    if ($result['code'] != 200) {
-                        return $this->returnMsg(201, '', $result['message'] ?? '注册失败');
-                    }
-                    $arr = [
-                        'user_id' => $user->id,
-                        'api_user' => $user->username,
-                        'api_pass' => 123456,
-                        'api_code' => $withApi,
-                    ];
-                    $User_Api = User_Api::create($arr);
+                    $result = ['code' => 200];
+                }
+                if ($result['code'] != 200) {
+                    return $this->returnMsg(201, '', $result['message'] ?? '注册失败');
+                }
+                $arr = [
+                    'user_id' => $user->id,
+                    'api_user' => $user->username,
+                    'api_pass' => 123456,
+                    'api_code' => $withApi,
+                ];
+                $User_Api = User_Api::create($arr);
                 }
             }
         }
