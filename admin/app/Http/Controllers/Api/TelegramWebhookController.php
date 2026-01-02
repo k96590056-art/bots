@@ -2447,24 +2447,8 @@ class TelegramWebhookController extends Controller
      */
     protected function getUserFlowDetail($user)
     {
-        // 游戏类型映射：1=真人(视讯), 2=老虎机(电子), 3=彩票, 4=体育, 5=电竞, 6=捕鱼, 7=棋牌
-        // 注意：game_type 可能存储为字符串或数字
-        $gameTypeMap = [
-            '1' => '视讯',
-            '2' => '电子',
-            '3' => '彩票',
-            '4' => '体育',
-            '5' => '电竞',
-            '6' => '捕鱼',
-            '7' => '棋牌',
-            1 => '视讯',
-            2 => '电子',
-            3 => '彩票',
-            4 => '体育',
-            5 => '电竞',
-            6 => '捕鱼',
-            7 => '棋牌'
-        ];
+        // 从数据库读取游戏分类（按 order 排序）
+        $categories = GameCategory::orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
         
         // 今日开始和结束时间
         $todayStart = date('Y-m-d 00:00:00');
@@ -2474,39 +2458,56 @@ class TelegramWebhookController extends Controller
         $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
         $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
         
-        // 查询今日流水，按游戏类型分组（使用 CAST 确保类型一致）
-        $todayFlowsRaw = GameRecord::where('user_id', $user->id)
-            ->where('status', 1) // 只统计已结算的
-            ->whereBetween('bet_time', [$todayStart, $todayEnd])
-            ->select('game_type', DB::raw('SUM(valid_amount) as total_valid'))
-            ->groupBy('game_type')
-            ->get();
-        
+        // 初始化分类流水数组
         $todayFlows = [];
-        foreach ($todayFlowsRaw as $flow) {
-            $gameType = (string)$flow->game_type; // 转换为字符串以便统一处理
-            $todayFlows[$gameType] = [
-                'total_valid' => $flow->total_valid ?? 0
-            ];
-        }
-        
-        // 查询昨日流水，按游戏类型分组
-        $yesterdayFlowsRaw = GameRecord::where('user_id', $user->id)
-            ->where('status', 1) // 只统计已结算的
-            ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
-            ->select('game_type', DB::raw('SUM(valid_amount) as total_valid'))
-            ->groupBy('game_type')
-            ->get();
-        
         $yesterdayFlows = [];
-        foreach ($yesterdayFlowsRaw as $flow) {
-            $gameType = (string)$flow->game_type; // 转换为字符串以便统一处理
-            $yesterdayFlows[$gameType] = [
-                'total_valid' => $flow->total_valid ?? 0
+        
+        // 遍历每个分类，统计流水
+        foreach ($categories as $category) {
+            $categoryCode = $category->code;
+            $categoryName = $category->name;
+            
+            // 获取该分类下的所有平台名称（通过 game_lists 表的 category_id 字段关联）
+            $platformNames = GameList::where('category_id', $categoryCode)
+                ->where('app_state', 1)
+                ->pluck('platform_name')
+                ->toArray();
+            
+            if (empty($platformNames)) {
+                // 如果该分类下没有平台，流水为0
+                $todayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
+                $yesterdayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
+                continue;
+            }
+            
+            // 查询今日流水：通过 platform_type 关联到 game_lists.platform_name，再关联到分类
+            $todayFlow = GameRecord::where('user_id', $user->id)
+                ->where('status', 1) // 只统计已结算的
+                ->whereIn('platform_type', $platformNames)
+                ->whereBetween('bet_time', [$todayStart, $todayEnd])
+                ->select(DB::raw('SUM(valid_amount) as total_valid'))
+                ->first();
+            
+            $todayFlows[$categoryCode] = [
+                'total_valid' => $todayFlow->total_valid ?? 0,
+                'name' => $categoryName
+            ];
+            
+            // 查询昨日流水
+            $yesterdayFlow = GameRecord::where('user_id', $user->id)
+                ->where('status', 1) // 只统计已结算的
+                ->whereIn('platform_type', $platformNames)
+                ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
+                ->select(DB::raw('SUM(valid_amount) as total_valid'))
+                ->first();
+            
+            $yesterdayFlows[$categoryCode] = [
+                'total_valid' => $yesterdayFlow->total_valid ?? 0,
+                'name' => $categoryName
             ];
         }
         
-        // 今日总流水和输赢
+        // 今日总流水和输赢（所有分类）
         $todayTotal = GameRecord::where('user_id', $user->id)
             ->where('status', 1)
             ->whereBetween('bet_time', [$todayStart, $todayEnd])
@@ -2525,27 +2526,28 @@ class TelegramWebhookController extends Controller
         // 构建显示文本
         $text = '';
         
-        // 今日流水
+        // 今日流水（按分类显示）
         $text .= "💎 <b>今日流水</b>\n";
-        $typeOrder = [
-            ['key' => '1', 'name' => '视讯'],
-            ['key' => '2', 'name' => '电子'],
-            ['key' => '6', 'name' => '捕鱼'],
-            ['key' => '4', 'name' => '体育'],
-            ['key' => '7', 'name' => '棋牌'],
-            ['key' => '3', 'name' => '彩票']
-        ];
-        
-        foreach ($typeOrder as $type) {
-            $flowAmount = $todayFlows[$type['key']]['total_valid'] ?? 0;
-            $text .= "🔸 今日{$type['name']}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        foreach ($categories as $category) {
+            $categoryCode = $category->code;
+            $categoryName = $category->name;
+            // 移除emoji，只保留中文名称
+            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
+            $cleanName = trim($cleanName);
+            $flowAmount = $todayFlows[$categoryCode]['total_valid'] ?? 0;
+            $text .= "🔸 今日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
         }
         
-        // 昨日流水
+        // 昨日流水（按分类显示）
         $text .= "\n💎 <b>昨日流水</b>\n";
-        foreach ($typeOrder as $type) {
-            $flowAmount = $yesterdayFlows[$type['key']]['total_valid'] ?? 0;
-            $text .= "🔹 昨日{$type['name']}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        foreach ($categories as $category) {
+            $categoryCode = $category->code;
+            $categoryName = $category->name;
+            // 移除emoji，只保留中文名称
+            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
+            $cleanName = trim($cleanName);
+            $flowAmount = $yesterdayFlows[$categoryCode]['total_valid'] ?? 0;
+            $text .= "🔹 昨日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
         }
         
         // 提示信息
