@@ -315,14 +315,14 @@ class TelegramWebhookController extends Controller
                 
             case '🤷 在线客服':
                 // 显示在线客服（功能开发中）
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
+                // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
                 
             case '🤝 招商代理':
                 // 显示招商代理信息（功能开发中）
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
+                // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
@@ -432,11 +432,19 @@ class TelegramWebhookController extends Controller
 
             case 'transfer_in':
                 // 转入游戏
-                return $this->transferToGame($chatId, $messageId, $user, $param, $callbackQueryId);
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->transferToGame($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
             case 'transfer_out':
                 // 转回钱包
-                return $this->transferToWallet($chatId, $messageId, $user, $param, $callbackQueryId);
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->transferToWallet($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
             case 'refresh':
                 // 刷新账户信息
@@ -472,51 +480,75 @@ class TelegramWebhookController extends Controller
 
             case 'reclaim_balance':
                 // 回收余额（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'deposit_withdraw':
                 // 充值提现（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'invite_friends':
                 // 邀请好友（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'transaction_details':
                 // 流水明细（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'send_redpacket':
                 // 发红包（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'welfare_activities':
                 // 福利活动（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'language':
                 // 语言切换（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'official_channel':
                 // 官方频道（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
-                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-                return response()->json(['ok' => true]);
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             default:
                 // 未知操作
@@ -666,9 +698,10 @@ class TelegramWebhookController extends Controller
      * @param User $user
      * @param int|null $messageId 如果提供则编辑消息，否则发送新消息
      * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name、username 等）
+     * @param string|null $noticeMessage 可选的提示信息，会在文字区顶部显示
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null)
+    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null, $noticeMessage = null)
     {
         try {
             // 刷新用户对象，确保获取最新的 first_password 字段
@@ -683,6 +716,11 @@ class TelegramWebhookController extends Controller
             
             // 文字区 - 显示用户账户信息（作为图片的caption）
             $text = '';
+            
+            // 如果有提示信息，在顶部显示
+            if (!empty($noticeMessage)) {
+                $text .= "⏳ {$noticeMessage}\n\n";
+            }
             
             // 如果是首次进入，显示用户名和密码信息
             if ($isFirstLogin) {
@@ -803,13 +841,24 @@ class TelegramWebhookController extends Controller
                 'callback_data' => 'transaction_details'
             ]];
             
-            $inlineKeyboard[] = [[
-                'text' => '🧧 发红包',
-                'callback_data' => 'send_redpacket'
-            ], [
+            // 根据系统配置决定是否显示发红包按钮
+            $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
+            
+            // 构建红包和福利活动按钮行
+            $redpacketRow = [];
+            if ($redpacketEnabled) {
+                $redpacketRow[] = [
+                    'text' => '🧧 发红包',
+                    'callback_data' => 'send_redpacket'
+                ];
+            }
+            $redpacketRow[] = [
                 'text' => '🎁 福利活动',
                 'callback_data' => 'welfare_activities'
-            ]];
+            ];
+            
+            // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
+            $inlineKeyboard[] = $redpacketRow;
             
             $inlineKeyboard[] = [[
                 'text' => '🌐 Language',
@@ -1364,14 +1413,17 @@ class TelegramWebhookController extends Controller
      * @param string $gameData
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function transferToGame($chatId, $messageId, $user, $gameData, $callbackQueryId = '')
+    protected function transferToGame($chatId, $messageId, $user, $gameData, $callbackQueryId = '', $telegramUserInfo = null)
     {
         // TODO: 实现转入游戏逻辑
         if (!empty($callbackQueryId)) {
-            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+        } else {
+            // 如果没有callbackQueryId（非按钮触发），则发送消息
+            $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
+            return response()->json(['ok' => true]);
         }
-        $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-        return response()->json(['ok' => true]);
+        return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
     }
 
     /**
@@ -1384,14 +1436,17 @@ class TelegramWebhookController extends Controller
      * @param string $callbackQueryId
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function transferToWallet($chatId, $messageId, $user, $gameData, $callbackQueryId = '')
+    protected function transferToWallet($chatId, $messageId, $user, $gameData, $callbackQueryId = '', $telegramUserInfo = null)
     {
         // TODO: 实现转回钱包逻辑
         if (!empty($callbackQueryId)) {
-            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+        } else {
+            // 如果没有callbackQueryId（非按钮触发），则发送消息
+            $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
+            return response()->json(['ok' => true]);
         }
-        $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
-        return response()->json(['ok' => true]);
+        return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
     }
 
     /**
