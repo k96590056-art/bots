@@ -54,7 +54,6 @@ export default {
   },
   created() {
     this.init();
-    this.calculateMaxHeight();
   },
   methods: {
     init() {
@@ -84,7 +83,10 @@ export default {
     },
     
     calculateMaxHeight() {
-      this.maxHeight = window.innerHeight - 46; // 减去导航栏高度
+      // 动态获取导航栏的实际高度
+      const navBar = document.querySelector('.game-nav-bar');
+      const navBarHeight = navBar ? navBar.offsetHeight : 46;
+      this.maxHeight = window.innerHeight - navBarHeight;
     },
     
     isUrlAction(content) {
@@ -131,16 +133,9 @@ export default {
     
     setIframeHeight(iframe) {
       try {
-        const doc = iframe.contentWindow.document;
-        const bodyHeight = doc.body.scrollHeight;
-        const htmlHeight = doc.documentElement.scrollHeight;
-        const contentHeight = Math.max(bodyHeight, htmlHeight, this.maxHeight);
-        
-        // 应用高度限制
-        const finalHeight = Math.min(contentHeight, this.maxHeight);
-        
-        iframe.style.height = `${finalHeight}px`;
-        iframe.style.overflowY = contentHeight > this.maxHeight ? 'auto' : 'hidden';
+        // 直接使用 maxHeight 让 iframe 填满可用空间
+        iframe.style.height = `${this.maxHeight}px`;
+        iframe.style.minHeight = `${this.maxHeight}px`;
       } catch (e) {
         console.error('设置iframe高度出错:', e);
       }
@@ -192,6 +187,10 @@ export default {
           that.content = res.data.url;
           that.isUrl = true;
           that.isLoading = false;
+          // 确保在内容加载后重新计算高度
+          that.$nextTick(() => {
+            that.calculateMaxHeight();
+          });
         }
       });
     },
@@ -206,6 +205,10 @@ export default {
           that.content = res.data.url;
           that.isUrl = true;
           that.isLoading = false;
+          // 确保在内容加载后重新计算高度
+          that.$nextTick(() => {
+            that.calculateMaxHeight();
+          });
         }
       });
     },
@@ -240,6 +243,10 @@ export default {
               if (res.data && res.data.url) {
                 that.content = res.data.url;
                 that.isUrl = that.isUrlAction(res.data.url);
+                // 确保在内容加载后重新计算高度
+                that.$nextTick(() => {
+                  that.calculateMaxHeight();
+                });
               }
               that.isLoading = false;
             });
@@ -255,6 +262,10 @@ export default {
             if (res.data && res.data.url) {
               that.content = res.data.url;
               that.isUrl = that.isUrlAction(res.data.url);
+              // 确保在内容加载后重新计算高度
+              that.$nextTick(() => {
+                that.calculateMaxHeight();
+              });
             }
             that.isLoading = false;
           }
@@ -265,6 +276,9 @@ export default {
     },
   },
   mounted() {
+    this.$nextTick(() => {
+      this.calculateMaxHeight();
+    });
     window.addEventListener('resize', () => {
       this.calculateMaxHeight();
       this.adjustIframeHeight();
@@ -303,11 +317,12 @@ export default {
   margin-top: 46px;
   height: calc(100vh - 46px);
   position: relative;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .iframe-container {
   width: 100%;
+  height: 100%;
   background: white;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -315,11 +330,10 @@ export default {
 
 .game-iframe {
   width: 100%;
-  min-height: 100px;
+  height: 100%;
   border: none;
   border-radius: 8px;
   display: block;
-  overflow-y: auto;
 }
 
 .loading-container {

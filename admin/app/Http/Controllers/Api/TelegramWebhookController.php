@@ -240,7 +240,11 @@ class TelegramWebhookController extends Controller
                 'is_new_user' => $isNewUser
             ]);
             // showMainMenu会自动检查first_password并显示密码（如果是新用户）
-            $result = $this->showMainMenu($chatId, $user);
+            // 传递 Telegram 用户信息以获取最新的昵称
+            $telegramUserInfo = [
+                'first_name' => $firstName
+            ];
+            $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
             Log::info('showMainMenu返回结果', ['result' => $result]);
             return $result;
         }
@@ -273,11 +277,18 @@ class TelegramWebhookController extends Controller
         switch ($text) {
             case '🎮 游戏入口':
                 // 发送带 Inline Keyboard 的消息，用户点击后可自动登录
-                return $this->sendGameEntryMessage($chatId, $user);
+                $telegramUserInfo = [
+                    'first_name' => $message['from']['first_name'] ?? null
+                ];
+                return $this->sendGameEntryMessage($chatId, $user, $telegramUserInfo);
 
             case '💰 账户余额':
                 // 显示账户余额信息
-                return $this->showMainMenu($chatId, $user);
+                // 从 callbackQuery 中获取 Telegram 用户信息
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                ];
+                return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
                 
             case '🏅 官方频道':
             case '🏅 官方入口':
@@ -409,7 +420,10 @@ class TelegramWebhookController extends Controller
             case 'game_select':
                 // 点击具体游戏，显示游戏账户信息和操作菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
-                $result = $this->showGameInfo($chatId, $messageId, $user, $param);
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                ];
+                $result = $this->showGameInfo($chatId, $messageId, $user, $param, $telegramUserInfo);
                 return $result;
 
             case 'transfer_in':
@@ -422,7 +436,10 @@ class TelegramWebhookController extends Controller
 
             case 'refresh':
                 // 刷新账户信息
-                return $this->refreshGameInfo($chatId, $messageId, $user, $param, $callbackQueryId);
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                ];
+                return $this->refreshGameInfo($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
             case 'start_game':
                 // 开始游戏
@@ -431,7 +448,10 @@ class TelegramWebhookController extends Controller
             case 'back_main':
                 // 返回主菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
-                $result = $this->showMainMenu($chatId, $user, $messageId);
+                $telegramUserInfo = [
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                ];
+                $result = $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo);
                 return $result;
 
             case 'back_game_list':
@@ -609,14 +629,51 @@ class TelegramWebhookController extends Controller
     }
 
     /**
+     * 获取 Telegram 显示名称（昵称 + 系统用户名）
+     * 
+     * @param User $user
+     * @param string|null $telegramFirstName Telegram 的 first_name（可选，用于实时获取）
+     * @return string 返回格式：昵称 (系统用户名) 或 系统用户名
+     */
+    protected function getTelegramDisplayName($user, $telegramFirstName = null)
+    {
+        // 优先使用传入的 Telegram first_name（最新的）
+        $telegramName = $telegramFirstName;
+        
+        // 如果没有传入，尝试从 user 的 realname 获取
+        // realname 在注册时存储了 Telegram 的 first_name
+        if (empty($telegramName) && !empty($user->realname) && $user->realname != $user->username) {
+            $telegramName = $user->realname;
+        }
+        
+        // 对昵称进行 HTML 转义，防止特殊字符导致解析错误
+        // 特别处理 < > & 这些字符，避免被 Telegram 的 HTML 解析器误解析
+        if (!empty($telegramName)) {
+            $telegramName = htmlspecialchars($telegramName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+        
+        // 对系统用户名也进行转义（虽然用户名通常是数字，但为安全起见也转义）
+        $safeUsername = htmlspecialchars($user->username, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        
+        // 如果找到了 Telegram 昵称，显示为：昵称 (系统用户名)
+        if (!empty($telegramName) && $telegramName != $user->username) {
+            return "{$telegramName} ({$safeUsername})";
+        }
+        
+        // 否则只显示系统用户名
+        return $safeUsername;
+    }
+
+    /**
      * 显示主菜单（图一效果）
      *
      * @param int $chatId
      * @param User $user
      * @param int|null $messageId 如果提供则编辑消息，否则发送新消息
+     * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name 等）
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function showMainMenu($chatId, $user, $messageId = null)
+    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null)
     {
         try {
             // 刷新用户对象，确保获取最新的 first_password 字段
@@ -653,8 +710,13 @@ class TelegramWebhookController extends Controller
                     'username' => $user->username
                 ]);
             } else {
-                // 非首次登录，只显示用户名
-                $text .= "👋 Hi, {$user->username}\n";
+                // 非首次登录，显示 Telegram 昵称和系统用户名
+                $telegramFirstName = null;
+                if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
+                    $telegramFirstName = $telegramUserInfo['first_name'];
+                }
+                $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
+                $text .= "👋 Hi, {$displayName}\n";
             }
             
             $text .= "🆔 {$user->id}\n";
@@ -881,9 +943,10 @@ class TelegramWebhookController extends Controller
      * @param int $messageId
      * @param User $user
      * @param string $gameData 格式：platform_name:game_code
+     * @param array|null $telegramUserInfo Telegram 用户信息（可选）
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function showGameInfo($chatId, $messageId, $user, $gameData)
+    protected function showGameInfo($chatId, $messageId, $user, $gameData, $telegramUserInfo = null)
     {
         $parts = explode(':', $gameData);
         $platformName = $parts[0] ?? '';
@@ -908,7 +971,13 @@ class TelegramWebhookController extends Controller
 
         // 文字区 - 显示账户信息
         $walletBalance = number_format($user->balance, 2);
+        $telegramFirstName = null;
+        if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
+            $telegramFirstName = $telegramUserInfo['first_name'];
+        }
+        $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
         $text = "账户信息\n\n";
+        $text .= "用户: {$displayName}\n";
         $text .= "钱包余额: {$walletBalance} USDT\n";
         $text .= "游戏余额: " . number_format($gameBalance, 4) . " CNY\n";
         $text .= "当前游戏: {$game->name}\n";
@@ -1304,10 +1373,10 @@ class TelegramWebhookController extends Controller
      * @param string $callbackQueryId
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function refreshGameInfo($chatId, $messageId, $user, $gameData, $callbackQueryId = '')
+    protected function refreshGameInfo($chatId, $messageId, $user, $gameData, $callbackQueryId = '', $telegramUserInfo = null)
     {
         // 重新显示游戏信息
-        $result = $this->showGameInfo($chatId, $messageId, $user, $gameData);
+        $result = $this->showGameInfo($chatId, $messageId, $user, $gameData, $telegramUserInfo);
         return $result;
     }
 
@@ -1784,9 +1853,10 @@ class TelegramWebhookController extends Controller
      *
      * @param int $chatId
      * @param User $user
+     * @param array|null $telegramUserInfo Telegram 用户信息（可选）
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function sendGameEntryMessage($chatId, $user)
+    protected function sendGameEntryMessage($chatId, $user, $telegramUserInfo = null)
     {
         // 从系统配置读取游戏入口地址
         $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
@@ -1802,9 +1872,14 @@ class TelegramWebhookController extends Controller
         ]];
 
         // 发送消息
+        $telegramFirstName = null;
+        if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
+            $telegramFirstName = $telegramUserInfo['first_name'];
+        }
+        $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
         $result = $this->telegramBot->sendMessageWithInlineKeyboard(
             $chatId,
-            "🎮 点击下方按钮进入游戏\n\n欢迎回来，{$user->username}！",
+            "🎮 点击下方按钮进入游戏\n\n欢迎回来，{$displayName}！",
             $inlineKeyboard
         );
 
