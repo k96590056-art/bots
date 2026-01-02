@@ -10,6 +10,8 @@ use App\Models\GameCategory;
 use App\Models\Api;
 use App\Models\Usersmoney;
 use App\Models\SystemConfig;
+use App\Models\GameRecord;
+use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
 use App\Services\DpService;
 use App\Services\TgService;
@@ -248,6 +250,11 @@ class TelegramWebhookController extends Controller
             $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
             Log::info('showMainMenu返回结果', ['result' => $result]);
             return $result;
+        }
+        
+        // 处理/help命令
+        if ($text === '/help') {
+            return $this->showHelpMessage($chatId, $user);
         }
         
         // 如果是新注册用户且发送了其他指令，显示用户名和密码信息
@@ -506,13 +513,14 @@ class TelegramWebhookController extends Controller
                 return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'transaction_details':
-                // 流水明细（待实现）
+                // 流水明细
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
                 $telegramUserInfo = [
                     'first_name' => $callbackQuery['from']['first_name'] ?? null,
                     'username' => $callbackQuery['from']['username'] ?? null
                 ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                $flowDetail = $this->getUserFlowDetail($user);
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, null, $flowDetail);
 
             case 'send_redpacket':
                 // 发红包（待实现）
@@ -699,9 +707,10 @@ class TelegramWebhookController extends Controller
      * @param int|null $messageId 如果提供则编辑消息，否则发送新消息
      * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name、username 等）
      * @param string|null $noticeMessage 可选的提示信息，会在文字区顶部显示
+     * @param string|null $flowDetail 可选的流水明细内容，会在文字区显示
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null, $noticeMessage = null)
+    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null, $noticeMessage = null, $flowDetail = null)
     {
         try {
             // 刷新用户对象，确保获取最新的 first_password 字段
@@ -717,13 +726,17 @@ class TelegramWebhookController extends Controller
             // 文字区 - 显示用户账户信息（作为图片的caption）
             $text = '';
             
-            // 如果有提示信息，在顶部显示
-            if (!empty($noticeMessage)) {
-                $text .= "⏳ {$noticeMessage}\n\n";
-            }
-            
-            // 如果是首次进入，显示用户名和密码信息
-            if ($isFirstLogin) {
+            // 如果有流水明细，优先显示流水明细
+            if (!empty($flowDetail)) {
+                $text = $flowDetail;
+            } else {
+                // 如果有提示信息，在顶部显示
+                if (!empty($noticeMessage)) {
+                    $text .= "⏳ {$noticeMessage}\n\n";
+                }
+                
+                // 如果是首次进入，显示用户名和密码信息
+                if ($isFirstLogin) {
                 // 使用first_password字段，这是明文密码（不是加密后的password字段）
                 $firstPassword = $user->first_password;
                 // 使用HTML格式，用加粗和代码格式突出显示，并用警告符号引起注意
@@ -777,7 +790,8 @@ class TelegramWebhookController extends Controller
                 $text .= "🔗 <b>钱包地址：</b><code>{$safeAddress}</code>\n";
             }
             
-            $text .= "⏰ 当前时间: " . date('Y-m-d H:i:s');
+                $text .= "⏰ 当前时间: " . date('Y-m-d H:i:s');
+            }
 
             // 构建菜单按钮
             $inlineKeyboard = [];
@@ -2422,6 +2436,179 @@ class TelegramWebhookController extends Controller
                 'line' => $e->getLine()
             ]);
             return ['valid' => false, 'user' => null, 'error' => '验证异常：' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * 获取用户流水明细
+     * 
+     * @param User $user
+     * @return string 流水明细文本
+     */
+    protected function getUserFlowDetail($user)
+    {
+        // 游戏类型映射：1=真人(视讯), 2=老虎机(电子), 3=彩票, 4=体育, 5=电竞, 6=捕鱼, 7=棋牌
+        // 注意：game_type 可能存储为字符串或数字
+        $gameTypeMap = [
+            '1' => '视讯',
+            '2' => '电子',
+            '3' => '彩票',
+            '4' => '体育',
+            '5' => '电竞',
+            '6' => '捕鱼',
+            '7' => '棋牌',
+            1 => '视讯',
+            2 => '电子',
+            3 => '彩票',
+            4 => '体育',
+            5 => '电竞',
+            6 => '捕鱼',
+            7 => '棋牌'
+        ];
+        
+        // 今日开始和结束时间
+        $todayStart = date('Y-m-d 00:00:00');
+        $todayEnd = date('Y-m-d 23:59:59');
+        
+        // 昨日开始和结束时间
+        $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
+        $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
+        
+        // 查询今日流水，按游戏类型分组（使用 CAST 确保类型一致）
+        $todayFlowsRaw = GameRecord::where('user_id', $user->id)
+            ->where('status', 1) // 只统计已结算的
+            ->whereBetween('bet_time', [$todayStart, $todayEnd])
+            ->select('game_type', DB::raw('SUM(valid_amount) as total_valid'))
+            ->groupBy('game_type')
+            ->get();
+        
+        $todayFlows = [];
+        foreach ($todayFlowsRaw as $flow) {
+            $gameType = (string)$flow->game_type; // 转换为字符串以便统一处理
+            $todayFlows[$gameType] = [
+                'total_valid' => $flow->total_valid ?? 0
+            ];
+        }
+        
+        // 查询昨日流水，按游戏类型分组
+        $yesterdayFlowsRaw = GameRecord::where('user_id', $user->id)
+            ->where('status', 1) // 只统计已结算的
+            ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
+            ->select('game_type', DB::raw('SUM(valid_amount) as total_valid'))
+            ->groupBy('game_type')
+            ->get();
+        
+        $yesterdayFlows = [];
+        foreach ($yesterdayFlowsRaw as $flow) {
+            $gameType = (string)$flow->game_type; // 转换为字符串以便统一处理
+            $yesterdayFlows[$gameType] = [
+                'total_valid' => $flow->total_valid ?? 0
+            ];
+        }
+        
+        // 今日总流水和输赢
+        $todayTotal = GameRecord::where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('bet_time', [$todayStart, $todayEnd])
+            ->select(
+                DB::raw('SUM(valid_amount) as total_flow'),
+                DB::raw('SUM(win_loss) as total_winloss')
+            )
+            ->first();
+        
+        $todayTotalFlow = $todayTotal->total_flow ?? 0;
+        $todayWinLoss = $todayTotal->total_winloss ?? 0;
+        
+        // 注册时间
+        $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
+        
+        // 构建显示文本
+        $text = '';
+        
+        // 今日流水
+        $text .= "💎 <b>今日流水</b>\n";
+        $typeOrder = [
+            ['key' => '1', 'name' => '视讯'],
+            ['key' => '2', 'name' => '电子'],
+            ['key' => '6', 'name' => '捕鱼'],
+            ['key' => '4', 'name' => '体育'],
+            ['key' => '7', 'name' => '棋牌'],
+            ['key' => '3', 'name' => '彩票']
+        ];
+        
+        foreach ($typeOrder as $type) {
+            $flowAmount = $todayFlows[$type['key']]['total_valid'] ?? 0;
+            $text .= "🔸 今日{$type['name']}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        }
+        
+        // 昨日流水
+        $text .= "\n💎 <b>昨日流水</b>\n";
+        foreach ($typeOrder as $type) {
+            $flowAmount = $yesterdayFlows[$type['key']]['total_valid'] ?? 0;
+            $text .= "🔹 昨日{$type['name']}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        }
+        
+        // 提示信息
+        $text .= "\n💡 (流水更新大约有十分钟延迟哦~)\n\n";
+        
+        // 今日流水总计和输赢
+        $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
+        $text .= "🔸 今日输赢: " . number_format($todayWinLoss, 2) . " USDT\n";
+        $text .= "🔹 注册时间: {$registerTime}\n\n";
+        
+        // 预计反水、下级总流水、预计返佣、还需完成流水（暂时设为0，后续可根据实际需求实现）
+        $text .= "🔸 预计反水: 0.00 USDT\n";
+        $text .= "🔸 下级总流水: 0 USDT\n";
+        $text .= "🔸 预计返佣: 0.00 USDT\n";
+        $text .= "🔹 还需完成流水: 0.00 USDT";
+        
+        return $text;
+    }
+
+    /**
+     * 显示帮助信息（在线客服）
+     * 
+     * @param int $chatId
+     * @param User $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function showHelpMessage($chatId, $user)
+    {
+        try {
+            // 获取客服用户名（从系统配置获取，如果没有则使用默认值）
+            $serviceUsername = SystemConfig::getValue('kefu_username') ?: 'JZTYKF';
+            $currentTime = date('H:i');
+            
+            // 构建消息文本
+            $text = "💻 在线值班 @{$serviceUsername} {$currentTime}";
+            
+            // 构建内联键盘按钮
+            $inlineKeyboard = [
+                [
+                    [
+                        'text' => '🤖 双向客服',
+                        'url' => SystemConfig::getValue('kf_url') ?: 'https://www.baidu.com'
+                    ]
+                ],
+                [
+                    [
+                        'text' => '🏠 返回主菜单',
+                        'callback_data' => 'back_main'
+                    ]
+                ]
+            ];
+            
+            // 发送消息
+            $result = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示帮助信息失败', [
+                'chat_id' => $chatId,
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
         }
     }
 }
