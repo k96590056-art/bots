@@ -240,9 +240,10 @@ class TelegramWebhookController extends Controller
                 'is_new_user' => $isNewUser
             ]);
             // showMainMenu会自动检查first_password并显示密码（如果是新用户）
-            // 传递 Telegram 用户信息以获取最新的昵称
+            // 传递 Telegram 用户信息以获取最新的名称、用户名和ID
             $telegramUserInfo = [
-                'first_name' => $firstName
+                'first_name' => $firstName,
+                'username' => $username
             ];
             $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
             Log::info('showMainMenu返回结果', ['result' => $result]);
@@ -278,15 +279,17 @@ class TelegramWebhookController extends Controller
             case '🎮 游戏入口':
                 // 发送带 Inline Keyboard 的消息，用户点击后可自动登录
                 $telegramUserInfo = [
-                    'first_name' => $message['from']['first_name'] ?? null
+                    'first_name' => $message['from']['first_name'] ?? null,
+                    'username' => $message['from']['username'] ?? null
                 ];
                 return $this->sendGameEntryMessage($chatId, $user, $telegramUserInfo);
 
             case '💰 账户余额':
                 // 显示账户余额信息
-                // 从 callbackQuery 中获取 Telegram 用户信息
+                // 从 message 中获取 Telegram 用户信息
                 $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                    'first_name' => $message['from']['first_name'] ?? null,
+                    'username' => $message['from']['username'] ?? null
                 ];
                 return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
                 
@@ -311,15 +314,15 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
                 
             case '🤷 在线客服':
-                // 显示在线客服
-                $this->telegramBot->sendMessage($chatId, '💬 在线客服功能开发中...');
+                // 显示在线客服（功能开发中）
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
                 
             case '🤝 招商代理':
-                // 显示招商代理信息
-                $this->telegramBot->sendMessage($chatId, '🤝 招商代理功能开发中...');
+                // 显示招商代理信息（功能开发中）
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
@@ -421,7 +424,8 @@ class TelegramWebhookController extends Controller
                 // 点击具体游戏，显示游戏账户信息和操作菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
                 $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
                 ];
                 $result = $this->showGameInfo($chatId, $messageId, $user, $param, $telegramUserInfo);
                 return $result;
@@ -437,7 +441,8 @@ class TelegramWebhookController extends Controller
             case 'refresh':
                 // 刷新账户信息
                 $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
                 ];
                 return $this->refreshGameInfo($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
@@ -449,7 +454,8 @@ class TelegramWebhookController extends Controller
                 // 返回主菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
                 $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null
+                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                    'username' => $callbackQuery['from']['username'] ?? null
                 ];
                 $result = $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo);
                 return $result;
@@ -466,42 +472,50 @@ class TelegramWebhookController extends Controller
 
             case 'reclaim_balance':
                 // 回收余额（待实现）
-                $this->telegramBot->sendMessage($chatId, '回收余额功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'deposit_withdraw':
                 // 充值提现（待实现）
-                $this->telegramBot->sendMessage($chatId, '充值提现功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'invite_friends':
                 // 邀请好友（待实现）
-                $this->telegramBot->sendMessage($chatId, '邀请好友功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'transaction_details':
                 // 流水明细（待实现）
-                $this->telegramBot->sendMessage($chatId, '流水明细功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'send_redpacket':
                 // 发红包（待实现）
-                $this->telegramBot->sendMessage($chatId, '发红包功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'welfare_activities':
                 // 福利活动（待实现）
-                $this->telegramBot->sendMessage($chatId, '福利活动功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'language':
                 // 语言切换（待实现）
-                $this->telegramBot->sendMessage($chatId, '语言切换功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             case 'official_channel':
                 // 官方频道（待实现）
-                $this->telegramBot->sendMessage($chatId, '官方频道功能开发中...');
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+                $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
                 return response()->json(['ok' => true]);
 
             default:
@@ -549,50 +563,30 @@ class TelegramWebhookController extends Controller
     protected function registerUserFromTelegram($telegramId, $username = '', $firstName = '')
     {
         try {
-            // 生成唯一用户名：telegramId的MD5转换为8位数字
-            // 1. 对telegramId进行MD5哈希，得到32位十六进制字符串
-            $md5Hash = md5((string)$telegramId);
+            // 生成用户名：游戏编码的前2位 + telegram的用户id
+            // 默认使用"dp"作为游戏编码前缀（可以后续从配置中读取）
+            $defaultGameCode = 'dp'; // 默认游戏编码
+            $gameCodePrefix = substr($defaultGameCode, 0, 2); // 取前2位
             
-            // 2. 尝试不同的MD5部分来生成8位数字，直到找到唯一的值
-            $systemUsername = '';
-            $positions = [0, 8, 16, 24]; // MD5的4个位置：前8位、中前8位、中后8位、后8位
-            $foundUnique = false;
+            // 生成用户名：游戏编码前2位 + telegram_id
+            $systemUsername = $gameCodePrefix . $telegramId;
             
-            foreach ($positions as $position) {
-                // 从MD5的不同位置取8位十六进制字符
-                $hexPart = substr($md5Hash, $position, 8);
-                // 转换为十进制数字
-                $decimalNum = hexdec($hexPart);
-                // 确保是8位数字（取模100000000确保不超过8位，不足8位前面补0）
-                $systemUsername = str_pad($decimalNum % 100000000, 8, '0', STR_PAD_LEFT);
+            // 检查用户名是否已存在，如果存在则添加后缀
+            $counter = 1;
+            $originalUsername = $systemUsername;
+            while (User::where('username', $systemUsername)->exists()) {
+                $systemUsername = $originalUsername . $counter;
+                $counter++;
                 
-                // 检查是否唯一
-                if (!User::where('username', $systemUsername)->exists()) {
-                    $foundUnique = true;
-                    break; // 找到唯一用户名，退出循环
-                }
-            }
-            
-            // 如果所有位置都冲突，使用telegramId加计数器重新生成MD5
-            if (!$foundUnique) {
-                $counter = 1;
-                while (User::where('username', $systemUsername)->exists()) {
-                    $newHash = md5((string)$telegramId . $counter);
-                    $hexPart = substr($newHash, 0, 8);
-                    $decimalNum = hexdec($hexPart);
-                    $systemUsername = str_pad($decimalNum % 100000000, 8, '0', STR_PAD_LEFT);
-                    $counter++;
-                    
-                    // 防止无限循环（理论上不太可能，但安全起见）
-                    if ($counter > 1000) {
-                        Log::error('生成唯一用户名失败，冲突过多', [
-                            'telegram_id' => $telegramId,
-                            'attempts' => $counter
-                        ]);
-                        // 使用时间戳作为后备方案（确保是8位数字）
-                        $systemUsername = substr(str_replace('.', '', microtime(true)), -8);
-                        break;
-                    }
+                // 防止无限循环（理论上不太可能，但安全起见）
+                if ($counter > 1000) {
+                    Log::error('生成唯一用户名失败，冲突过多', [
+                        'telegram_id' => $telegramId,
+                        'attempts' => $counter
+                    ]);
+                    // 使用时间戳作为后备方案
+                    $systemUsername = $gameCodePrefix . $telegramId . substr(str_replace('.', '', microtime(true)), -6);
+                    break;
                 }
             }
 
@@ -629,35 +623,36 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * 获取 Telegram 显示名称（昵称 + 系统用户名）
+     * 获取 Telegram 显示名称（Telegram用户名 + 系统用户名）
      * 
      * @param User $user
-     * @param string|null $telegramFirstName Telegram 的 first_name（可选，用于实时获取）
-     * @return string 返回格式：昵称 (系统用户名) 或 系统用户名
+     * @param string|null $telegramUsername Telegram 的 username（可选，用于实时获取）
+     * @return string 返回格式：@username (系统用户名) 或 系统用户名
      */
-    protected function getTelegramDisplayName($user, $telegramFirstName = null)
+    protected function getTelegramDisplayName($user, $telegramUsername = null)
     {
-        // 优先使用传入的 Telegram first_name（最新的）
-        $telegramName = $telegramFirstName;
+        // 优先使用传入的 Telegram username（最新的）
+        $telegramUser = $telegramUsername;
         
-        // 如果没有传入，尝试从 user 的 realname 获取
-        // realname 在注册时存储了 Telegram 的 first_name
-        if (empty($telegramName) && !empty($user->realname) && $user->realname != $user->username) {
-            $telegramName = $user->realname;
-        }
+        // 如果没有传入username，尝试从user表中获取（如果有存储的话）
+        // 注意：这里可能需要根据实际情况调整，如果数据库中有存储telegram_username字段
         
-        // 对昵称进行 HTML 转义，防止特殊字符导致解析错误
+        // 对Telegram用户名进行 HTML 转义，防止特殊字符导致解析错误
         // 特别处理 < > & 这些字符，避免被 Telegram 的 HTML 解析器误解析
-        if (!empty($telegramName)) {
-            $telegramName = htmlspecialchars($telegramName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        if (!empty($telegramUser)) {
+            $telegramUser = htmlspecialchars($telegramUser, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            // 如果username不包含@符号，添加@前缀
+            if (strpos($telegramUser, '@') !== 0) {
+                $telegramUser = '@' . $telegramUser;
+            }
         }
         
         // 对系统用户名也进行转义（虽然用户名通常是数字，但为安全起见也转义）
         $safeUsername = htmlspecialchars($user->username, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         
-        // 如果找到了 Telegram 昵称，显示为：昵称 (系统用户名)
-        if (!empty($telegramName) && $telegramName != $user->username) {
-            return "{$telegramName} ({$safeUsername})";
+        // 如果找到了 Telegram 用户名，显示为：@username (系统用户名)
+        if (!empty($telegramUser) && $telegramUser != $user->username) {
+            return "{$telegramUser} ({$safeUsername})";
         }
         
         // 否则只显示系统用户名
@@ -670,7 +665,7 @@ class TelegramWebhookController extends Controller
      * @param int $chatId
      * @param User $user
      * @param int|null $messageId 如果提供则编辑消息，否则发送新消息
-     * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name 等）
+     * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name、username 等）
      * @return \Illuminate\Http\JsonResponse
      */
     protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null)
@@ -710,18 +705,40 @@ class TelegramWebhookController extends Controller
                     'username' => $user->username
                 ]);
             } else {
-                // 非首次登录，显示 Telegram 昵称和系统用户名
+                // 非首次登录，显示 Telegram 名称、用户名和ID
                 $telegramFirstName = null;
-                if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
-                    $telegramFirstName = $telegramUserInfo['first_name'];
+                $telegramUsername = null;
+                if ($telegramUserInfo) {
+                    $telegramFirstName = $telegramUserInfo['first_name'] ?? null;
+                    $telegramUsername = $telegramUserInfo['username'] ?? null;
                 }
-                $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
-                $text .= "👋 Hi, {$displayName}\n";
+                
+                // 显示Telegram名称（如果有）
+                if (!empty($telegramFirstName)) {
+                    $safeFirstName = htmlspecialchars($telegramFirstName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    $text .= "👤 <b>名称：</b>{$safeFirstName}\n";
+                }
+                
+                // 显示Telegram用户名（如果有）
+                if (!empty($telegramUsername)) {
+                    $safeUsername = htmlspecialchars($telegramUsername, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    $usernameDisplay = (strpos($safeUsername, '@') === 0) ? $safeUsername : '@' . $safeUsername;
+                    $text .= "📱 <b>用户名：</b>{$usernameDisplay}\n";
+                }
             }
             
-            $text .= "🆔 {$user->id}\n";
+            // 显示Telegram ID
+            $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
             $text .= "💰 钱包余额: {$walletBalance} USDT\n";
             $text .= "💵 游戏余额: {$gameBalance} CNY\n";
+            
+            // 显示钱包地址
+            $moneyAddress = $user->money_address ?? '';
+            if (!empty($moneyAddress)) {
+                $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $text .= "🔗 <b>钱包地址：</b><code>{$safeAddress}</code>\n";
+            }
+            
             $text .= "⏰ 当前时间: " . date('Y-m-d H:i:s');
 
             // 构建菜单按钮
@@ -971,15 +988,23 @@ class TelegramWebhookController extends Controller
 
         // 文字区 - 显示账户信息
         $walletBalance = number_format($user->balance, 2);
-        $telegramFirstName = null;
-        if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
-            $telegramFirstName = $telegramUserInfo['first_name'];
+        $telegramUsername = null;
+        if ($telegramUserInfo && isset($telegramUserInfo['username'])) {
+            $telegramUsername = $telegramUserInfo['username'];
         }
-        $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
+        $displayName = $this->getTelegramDisplayName($user, $telegramUsername);
         $text = "账户信息\n\n";
         $text .= "用户: {$displayName}\n";
         $text .= "钱包余额: {$walletBalance} USDT\n";
         $text .= "游戏余额: " . number_format($gameBalance, 4) . " CNY\n";
+        
+        // 显示钱包地址
+        $moneyAddress = $user->money_address ?? '';
+        if (!empty($moneyAddress)) {
+            $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+            $text .= "钱包地址: <code>{$safeAddress}</code>\n";
+        }
+        
         $text .= "当前游戏: {$game->name}\n";
         $text .= "当前时间: " . date('Y-m-d H:i:s');
 
@@ -1342,7 +1367,10 @@ class TelegramWebhookController extends Controller
     protected function transferToGame($chatId, $messageId, $user, $gameData, $callbackQueryId = '')
     {
         // TODO: 实现转入游戏逻辑
-        $this->telegramBot->sendMessage($chatId, '转入游戏功能开发中...');
+        if (!empty($callbackQueryId)) {
+            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+        }
+        $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
         return response()->json(['ok' => true]);
     }
 
@@ -1359,7 +1387,10 @@ class TelegramWebhookController extends Controller
     protected function transferToWallet($chatId, $messageId, $user, $gameData, $callbackQueryId = '')
     {
         // TODO: 实现转回钱包逻辑
-        $this->telegramBot->sendMessage($chatId, '转回钱包功能开发中...');
+        if (!empty($callbackQueryId)) {
+            $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态，不显示弹窗
+        }
+        $this->telegramBot->sendMessage($chatId, '⏳ 该功能正在开发中...');
         return response()->json(['ok' => true]);
     }
 
@@ -1872,11 +1903,11 @@ class TelegramWebhookController extends Controller
         ]];
 
         // 发送消息
-        $telegramFirstName = null;
-        if ($telegramUserInfo && isset($telegramUserInfo['first_name'])) {
-            $telegramFirstName = $telegramUserInfo['first_name'];
+        $telegramUsername = null;
+        if ($telegramUserInfo && isset($telegramUserInfo['username'])) {
+            $telegramUsername = $telegramUserInfo['username'];
         }
-        $displayName = $this->getTelegramDisplayName($user, $telegramFirstName);
+        $displayName = $this->getTelegramDisplayName($user, $telegramUsername);
         $result = $this->telegramBot->sendMessageWithInlineKeyboard(
             $chatId,
             "🎮 点击下方按钮进入游戏\n\n欢迎回来，{$displayName}！",
@@ -1903,11 +1934,11 @@ class TelegramWebhookController extends Controller
     {
         $replyKeyboard = $this->getPersistentKeyboard();
         
-        // 发送一条消息来设置键盘，使用简短提示文本
+        // 发送一条消息来设置键盘，使用空格作为文本（Telegram 不允许空文本，但可以用空格）
         // 注意：Telegram会自动显示键盘，即使消息被删除，键盘也会保留
         $keyboardResult = $this->telegramBot->sendMessageWithReplyKeyboard(
             $chatId,
-            '👇 请选择下方菜单',  // Telegram 不允许空文本
+            ' ',  // 使用空格，Telegram 不允许空文本但允许空格
             $replyKeyboard,
             true,  // resize_keyboard
             false  // one_time_keyboard (false表示常驻，键盘会一直显示)

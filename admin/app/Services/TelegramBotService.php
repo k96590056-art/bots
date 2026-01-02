@@ -889,21 +889,103 @@ class TelegramBotService
 
     /**
      * 回答回调查询
-     * 只传递callback_query_id，不显示任何视觉反馈（包括绿色图标）
-     *
+     * 
      * @param string $callbackQueryId 回调查询ID
-     * @param bool $showAlert 已废弃，不再使用（保留以兼容旧代码）
-     * @param string $text 已废弃，不再使用（保留以兼容旧代码）
+     * @param bool $showAlert 是否显示alert弹窗（true显示弹窗，false只消除加载状态）
+     * @param string $text alert弹窗显示的文本内容（仅在showAlert=true时有效）
      * @param string $url 已废弃，不再使用（保留以兼容旧代码）
      * @return array
      */
     public function answerCallbackQuery($callbackQueryId, $showAlert = false, $text = null, $url = '')
     {
-        // 完全禁用answerCallbackQuery，不执行任何API调用
-        // 这样可以避免显示绿色图标
-        // 注意：不调用answerCallbackQuery会导致按钮一直显示加载状态，但可以避免显示绿色图标
-        // 直接返回成功，不执行任何操作
-        return ['code' => 200, 'message' => '已禁用'];
+        // 如果需要显示alert，则调用API显示弹窗提示
+        if ($showAlert && !empty($text)) {
+            $data = [
+                'callback_query_id' => $callbackQueryId,
+                'text' => $text,
+                'show_alert' => true,
+            ];
+
+            try {
+                $ch = curl_init();
+                curl_setopt($ch, CURLOPT_URL, $this->apiUrl . 'answerCallbackQuery');
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($ch, CURLOPT_POST, 1);
+                curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+                curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+                curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+                $response = curl_exec($ch);
+                $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                $curlError = curl_error($ch);
+                curl_close($ch);
+
+                if ($curlError) {
+                    Log::error('Telegram answerCallbackQuery CURL错误', [
+                        'callback_query_id' => $callbackQueryId,
+                        'curl_error' => $curlError
+                    ]);
+                    return ['code' => 500, 'message' => '请求失败：' . $curlError];
+                }
+
+                $result = json_decode($response, true);
+                
+                if (!$result || !isset($result['ok']) || !$result['ok']) {
+                    Log::error('Telegram answerCallbackQuery失败', [
+                        'callback_query_id' => $callbackQueryId,
+                        'http_code' => $httpCode,
+                        'response' => $result
+                    ]);
+                    return ['code' => 500, 'message' => '显示提示失败', 'data' => $result];
+                }
+
+                return ['code' => 200, 'message' => '成功', 'data' => $result];
+            } catch (\Exception $e) {
+                Log::error('Telegram answerCallbackQuery异常', [
+                    'callback_query_id' => $callbackQueryId,
+                    'error' => $e->getMessage()
+                ]);
+                return ['code' => 500, 'message' => $e->getMessage()];
+            }
+        }
+        
+        // 如果不显示alert，只消除加载状态（不显示绿色图标）
+        $data = [
+            'callback_query_id' => $callbackQueryId,
+        ];
+
+        try {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->apiUrl . 'answerCallbackQuery');
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+            $response = curl_exec($ch);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                Log::error('Telegram answerCallbackQuery CURL错误', [
+                    'callback_query_id' => $callbackQueryId,
+                    'curl_error' => $curlError
+                ]);
+                return ['code' => 500, 'message' => '请求失败：' . $curlError];
+            }
+
+            $result = json_decode($response, true);
+            return ['code' => 200, 'message' => '成功', 'data' => $result];
+        } catch (\Exception $e) {
+            Log::error('Telegram answerCallbackQuery异常', [
+                'callback_query_id' => $callbackQueryId,
+                'error' => $e->getMessage()
+            ]);
+            return ['code' => 500, 'message' => $e->getMessage()];
+        }
     }
 
     /**
