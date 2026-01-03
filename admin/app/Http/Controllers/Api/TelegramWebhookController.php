@@ -11,8 +11,11 @@ use App\Models\Api;
 use App\Models\Usersmoney;
 use App\Models\SystemConfig;
 use App\Models\GameRecord;
+use App\Models\Recharge;
+use App\Models\Withdraw;
 use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
+use App\Services\TronUsdtService;
 use App\Services\DpService;
 use App\Services\TgService;
 use App\Services\PussyService;
@@ -232,6 +235,19 @@ class TelegramWebhookController extends Controller
                     'username' => $user->username
                 ]);
             }
+
+        // 检查用户是否在输入状态（充值/提现金额或地址）
+        $userState = $this->getUserState($telegramId);
+        if ($userState && !empty($text)) {
+            switch ($userState['action']) {
+                case self::STATE_WAITING_RECHARGE_AMOUNT:
+                    return $this->processRechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
+                case self::STATE_WAITING_WITHDRAW_AMOUNT:
+                    return $this->processWithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
+                case self::STATE_WAITING_WITHDRAW_ADDRESS:
+                    return $this->processWithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
+            }
+        }
 
         // 处理/start命令或首次进入
         if ($text === '/start' || empty($text)) {
@@ -495,13 +511,59 @@ class TelegramWebhookController extends Controller
                 return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'deposit_withdraw':
-                // 充值提现（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                // 充值提现二级菜单
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                $this->clearUserState($telegramId);
+                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
+
+            case 'recharge':
+                // 充值 - 显示网络选择
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                $this->clearUserState($telegramId);
+                return $this->showRechargeNetworkMenu($chatId, $messageId, $user);
+
+            case 'withdraw':
+                // 提现 - 显示网络选择
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                $this->clearUserState($telegramId);
+                return $this->showWithdrawNetworkMenu($chatId, $messageId, $user);
+
+            case 'recharge_trc20':
+                // TRC20 充值
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->handleRechargeTrc20($chatId, $messageId, $user, $telegramId);
+
+            case 'recharge_erc20':
+                // ERC20 充值 - 暂不支持
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20暂不支持，请选择TRC20');
+
+            case 'withdraw_trc20':
+                // TRC20 提现
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->handleWithdrawTrc20($chatId, $messageId, $user, $telegramId);
+
+            case 'withdraw_erc20':
+                // ERC20 提现 - 暂不支持
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20暂不支持，请选择TRC20');
+
+            case 'cancel_recharge_order':
+                // 取消充值订单
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->cancelRechargeOrder($chatId, $messageId, $user, $param, $telegramId);
+
+            case 'cancel_input':
+                // 取消输入操作
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                $this->clearUserState($telegramId);
+                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
+
+            case 'back_to_deposit_withdraw':
+                // 返回充值提现菜单
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                $this->clearUserState($telegramId);
+                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
 
             case 'invite_friends':
                 // 邀请好友（待实现）
@@ -700,6 +762,28 @@ class TelegramWebhookController extends Controller
     }
 
     /**
+     * 获取主菜单图片URL（用于所有需要显示图片消息的地方）
+     *
+     * @return string
+     */
+    protected function getMainMenuImageUrl()
+    {
+        $mainImagePath = SystemConfig::getValue('telegram_bot_main_image');
+        if ($mainImagePath) {
+            return env('APP_URL') . '/uploads/' . $mainImagePath;
+        }
+
+        // 如果没有配置Telegram Bot主图，使用系统logo作为默认图片
+        $appLogo = SystemConfig::getValue('app_logo');
+        if ($appLogo) {
+            return env('APP_URL') . '/uploads/' . $appLogo;
+        }
+
+        // 如果系统logo也没有，尝试使用默认路径（向后兼容）
+        return env('APP_URL') . '/images/telegram/main_banner.jpg';
+    }
+
+    /**
      * 显示主菜单（图一效果）
      *
      * @param int $chatId
@@ -843,7 +927,7 @@ class TelegramWebhookController extends Controller
                 'text' => '♻️ 回收余额',
                 'callback_data' => 'reclaim_balance'
             ], [
-                'text' => '💲 充值提现',
+                'text' => '💰 充值提现',
                 'callback_data' => 'deposit_withdraw'
             ]];
             
@@ -2610,6 +2694,703 @@ class TelegramWebhookController extends Controller
                 'user_id' => $user->id,
                 'error' => $e->getMessage()
             ]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    // ==================== 用户状态管理 ====================
+
+    // 状态常量
+    const STATE_WAITING_RECHARGE_AMOUNT = 'waiting_recharge_amount';
+    const STATE_WAITING_WITHDRAW_AMOUNT = 'waiting_withdraw_amount';
+    const STATE_WAITING_WITHDRAW_ADDRESS = 'waiting_withdraw_address';
+
+    /**
+     * 获取用户状态缓存键
+     */
+    protected function getUserStateCacheKey($telegramId)
+    {
+        return 'telegram_user_state:' . $telegramId;
+    }
+
+    /**
+     * 获取用户状态
+     */
+    protected function getUserState($telegramId)
+    {
+        return Cache::get($this->getUserStateCacheKey($telegramId));
+    }
+
+    /**
+     * 设置用户状态
+     */
+    protected function setUserState($telegramId, $state)
+    {
+        // 状态10分钟过期
+        Cache::put($this->getUserStateCacheKey($telegramId), $state, now()->addMinutes(10));
+    }
+
+    /**
+     * 清除用户状态
+     */
+    protected function clearUserState($telegramId)
+    {
+        Cache::forget($this->getUserStateCacheKey($telegramId));
+    }
+
+    // ==================== 充值提现菜单 ====================
+
+    /**
+     * 显示充值提现二级菜单
+     */
+    protected function showDepositWithdrawMenu($chatId, $messageId, $user, $notice = null)
+    {
+        try {
+            // 获取用户余额
+            $walletBalance = number_format($user->balance, 2);
+
+            $text = "💰 <b>充值提现</b>\n\n";
+            $text .= "💵 余额：<b>{$walletBalance}</b> 元";
+            if ($notice) {
+                $text .= "\n\n" . $notice;
+            }
+
+            $inlineKeyboard = [
+                [
+                    ['text' => '💵 充值', 'callback_data' => 'recharge'],
+                    ['text' => '💸 提现', 'callback_data' => 'withdraw']
+                ],
+                [
+                    ['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']
+                ]
+            ];
+
+            // 编辑主菜单的图片消息caption（保持在同一消息上）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                // 如果编辑caption失败，尝试编辑text
+                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    Log::error('显示充值提现菜单失败', ['result' => $result]);
+                }
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示充值提现菜单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示充值网络选择菜单
+     */
+    protected function showRechargeNetworkMenu($chatId, $messageId, $user, $notice = null)
+    {
+        try {
+            $text = "💵 <b>充值</b>\n\n";
+            $text .= "请选择充值网络：";
+            if ($notice) {
+                $text .= "\n" . $notice;
+            }
+
+            $inlineKeyboard = [
+                [
+                    ['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'recharge_trc20'],
+                    ['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'recharge_erc20']
+                ],
+                [
+                    ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
+                ]
+            ];
+
+            // 先尝试编辑caption（因为前一个消息是图片消息）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                // 如果编辑caption失败，尝试编辑text
+                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    // 如果编辑也失败，发送新的图片消息
+                    $mainImageUrl = $this->getMainMenuImageUrl();
+                    $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
+                    if ($result['code'] != 200) {
+                        Log::error('显示充值网络菜单失败', ['result' => $result]);
+                    }
+                }
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示充值网络菜单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示提现网络选择菜单
+     */
+    protected function showWithdrawNetworkMenu($chatId, $messageId, $user, $notice = null)
+    {
+        try {
+            $text = "💸 <b>提现</b>\n\n";
+            $text .= "当前余额：<b>" . number_format($user->balance, 2) . "</b> 元\n\n";
+            $text .= "请选择提现网络：";
+            if ($notice) {
+                $text .= "\n" . $notice;
+            }
+
+            $inlineKeyboard = [
+                [
+                    ['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'withdraw_trc20'],
+                    ['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'withdraw_erc20']
+                ],
+                [
+                    ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
+                ]
+            ];
+
+            // 先尝试编辑caption（因为前一个消息是图片消息）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                // 如果编辑caption失败，尝试编辑text
+                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    // 如果编辑也失败，发送新的图片消息
+                    $mainImageUrl = $this->getMainMenuImageUrl();
+                    $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
+                    if ($result['code'] != 200) {
+                        Log::error('显示提现网络菜单失败', ['result' => $result]);
+                    }
+                }
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示提现网络菜单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    // ==================== 充值流程 ====================
+
+    /**
+     * 处理TRC20充值
+     */
+    protected function handleRechargeTrc20($chatId, $messageId, $user, $telegramId)
+    {
+        try {
+            // 检查是否有待支付订单
+            $pendingOrder = Recharge::where('user_id', $user->id)
+                ->where('state', 1)
+                ->where('tron_network', 'TRC20')
+                ->where('created_at', '>=', now()->subMinutes(10))
+                ->first();
+
+            if ($pendingOrder) {
+                // 有待支付订单，直接显示
+                return $this->showPendingRechargeOrder($chatId, $messageId, $user, $pendingOrder);
+            }
+
+            // 检查1分钟内是否创建过订单（频率限制）
+            $recentOrder = Recharge::where('user_id', $user->id)
+                ->where('created_at', '>=', now()->subMinute())
+                ->first();
+
+            if ($recentOrder) {
+                $remainingSeconds = 60 - now()->diffInSeconds($recentOrder->created_at);
+                $text = "⏳ <b>操作太频繁</b>\n\n";
+                $text .= "请在 {$remainingSeconds} 秒后再试";
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                // 先尝试编辑caption（因为前一个消息是图片消息）
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
+            // 获取充值限额
+            $minAmount = SystemConfig::getValue('tron_min_amount') ?: 10;
+            $maxAmount = SystemConfig::getValue('tron_max_amount') ?: 50000;
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+
+            // 进入输入金额状态
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_RECHARGE_AMOUNT,
+                'network' => 'TRC20',
+                'message_id' => $messageId,
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $text = "💵 <b>TRC20 USDT 充值</b>\n\n";
+            $text .= "当前汇率：1 USDT = <b>{$exchangeRate}</b> 元\n";
+            $text .= "充值限额：<b>{$minAmount} - {$maxAmount}</b> USDT\n\n";
+            $text .= "📝 请输入充值金额（USDT）：";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            // 先尝试编辑caption（因为前一个消息是图片消息）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理TRC20充值异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示待支付充值订单
+     */
+    protected function showPendingRechargeOrder($chatId, $messageId, $user, $order)
+    {
+        try {
+            // 获取二维码图片URL
+            $qrcodeUrl = SystemConfig::getValue('tron_usdt_qrcode');
+            if ($qrcodeUrl) {
+                $qrcodeUrl = env('APP_URL') . '/uploads/' . $qrcodeUrl;
+            }
+
+            $tronAddress = SystemConfig::getValue('tron_usdt_address');
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+
+            $text = "📋 <b>待支付充值订单</b>\n\n";
+            $text .= "订单号：<code>{$order->out_trade_no}</code>\n";
+            $text .= "充值金额：<b>{$order->amount}</b> 元\n";
+            $text .= "需支付：<b>{$order->tron_usdt_amount}</b> USDT\n";
+            $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
+            $text .= "📮 收款地址(TRC20)：\n<code>{$tronAddress}</code>\n\n";
+            $text .= "⚠️ 请务必转账准确金额\n";
+            $text .= "⏰ 订单将在10分钟后过期";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]],
+                [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+            ];
+
+            // 如果有二维码图片，发送图片消息
+            if ($qrcodeUrl) {
+                $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $qrcodeUrl, $text, $inlineKeyboard);
+                // 如果图片发送失败，降级为纯文字消息
+                if ($result['code'] != 200) {
+                    Log::warning('待支付订单二维码图片发送失败，降级为纯文字', [
+                        'chat_id' => $chatId,
+                        'qrcode_url' => $qrcodeUrl,
+                        'result' => $result
+                    ]);
+                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                }
+            } else {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示待支付订单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 取消充值订单
+     */
+    protected function cancelRechargeOrder($chatId, $messageId, $user, $orderId, $telegramId)
+    {
+        try {
+            $order = Recharge::where('id', $orderId)
+                ->where('user_id', $user->id)
+                ->where('state', 1)
+                ->first();
+
+            if ($order) {
+                // 释放 Redis 金额占用
+                if (!empty($order->tron_usdt_amount)) {
+                    $tronService = new TronUsdtService();
+                    $tronService->releaseAmount((float)$order->tron_usdt_amount);
+                }
+
+                $order->state = 4;
+                $order->info = '用户取消订单';
+                $order->save();
+            }
+
+            $this->clearUserState($telegramId);
+            return $this->showDepositWithdrawMenu($chatId, $messageId, $user, '✅ 订单已取消');
+        } catch (\Exception $e) {
+            Log::error('取消充值订单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理充值金额输入
+     */
+    protected function processRechargeAmountInput($chatId, $user, $telegramId, $amount, $state)
+    {
+        try {
+            // 验证金额格式
+            if (!is_numeric($amount) || $amount <= 0) {
+                $this->telegramBot->sendMessage($chatId, '❌ 请输入有效的金额数字');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = floatval($amount);
+            $minAmount = floatval(SystemConfig::getValue('tron_min_amount') ?: 10);
+            $maxAmount = floatval(SystemConfig::getValue('tron_max_amount') ?: 50000);
+
+            if ($amount < $minAmount || $amount > $maxAmount) {
+                $this->telegramBot->sendMessage($chatId, "❌ 充值金额必须在 {$minAmount} - {$maxAmount} USDT 之间");
+                return response()->json(['ok' => true]);
+            }
+
+            // 调用 TronUsdtService 生成充值订单
+            $tronService = new TronUsdtService();
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+            // 将USDT金额转换为人民币金额
+            $amountCny = $amount * $exchangeRate;
+
+            $rechargeInfo = $tronService->generateRechargeInfo($amountCny, $user->id);
+
+            if (!$rechargeInfo['success']) {
+                $this->telegramBot->sendMessage($chatId, '❌ 生成订单失败：' . ($rechargeInfo['message'] ?? '未知错误'));
+                return response()->json(['ok' => true]);
+            }
+
+            // 创建充值记录
+            $order = Recharge::create([
+                'out_trade_no' => $rechargeInfo['data']['out_trade_no'],
+                'user_id' => $user->id,
+                'pay_way' => 5,  // USDT-TRC20
+                'amount' => $amountCny,
+                'cash_fee' => 0,
+                'real_money' => $amountCny,
+                'usdt_rate' => $exchangeRate,
+                'state' => 1,
+                'tron_network' => 'TRC20',
+                'tron_usdt_amount' => $rechargeInfo['data']['usdt_amount'],
+                'info' => 'Telegram TRC20充值'
+            ]);
+
+            // 清除状态
+            $this->clearUserState($telegramId);
+
+            // 显示充值信息
+            $qrcodeUrl = SystemConfig::getValue('tron_usdt_qrcode');
+            if ($qrcodeUrl) {
+                $qrcodeUrl = env('APP_URL') . '/uploads/' . $qrcodeUrl;
+            }
+
+            $tronAddress = SystemConfig::getValue('tron_usdt_address');
+            $expireTime = now()->addMinutes(10)->format('Y-m-d H:i:s');
+            $usdtAmount = $rechargeInfo['data']['usdt_amount'];
+
+            // 构建订单信息文本
+            $text = "📋 <b>充值订单</b>\n\n";
+            $text .= "编号：<code>{$order->id}</code>\n";
+            $text .= "金额：<b>{$usdtAmount} USDT</b>\n";
+            $text .= "过期：{$expireTime}\n\n";
+            $text .= "📮 收款地址（点击复制）\n";
+            $text .= "<code>{$tronAddress}</code>\n\n";
+            $text .= "⚠️ 请按金额精确转账\n";
+            $text .= "⚠️ 尾数必须一致\n";
+            $text .= "❓ 未到账请联系客服";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]]
+            ];
+
+            // 先发送二维码图片（如果有）
+            if ($qrcodeUrl) {
+                $result = $this->telegramBot->sendPhoto($chatId, $qrcodeUrl);
+                if ($result['code'] != 200) {
+                    Log::warning('充值订单二维码图片发送失败', [
+                        'chat_id' => $chatId,
+                        'qrcode_url' => $qrcodeUrl,
+                        'result' => $result
+                    ]);
+                }
+            }
+
+            // 发送订单信息和按钮
+            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理充值金额输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    // ==================== 提现流程 ====================
+
+    /**
+     * 处理TRC20提现
+     */
+    protected function handleWithdrawTrc20($chatId, $messageId, $user, $telegramId)
+    {
+        try {
+            // 检查是否有待审核提现订单
+            $pendingWithdraw = Withdraw::where('user_id', $user->id)
+                ->where('state', 1)
+                ->first();
+
+            if ($pendingWithdraw) {
+                $text = "⏳ <b>您有待审核的提现订单</b>\n\n";
+                $text .= "订单号：<code>{$pendingWithdraw->order_no}</code>\n";
+                $text .= "提现金额：<b>{$pendingWithdraw->amount}</b> 元\n";
+                $text .= "创建时间：{$pendingWithdraw->created_at}\n\n";
+                $text .= "请等待审核完成后再申请新的提现";
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                // 先尝试编辑caption（因为前一个消息是图片消息）
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
+            // 验证提现条件
+            $validateResult = $this->validateWithdraw($user);
+            if (!$validateResult['success']) {
+                $text = "❌ <b>无法提现</b>\n\n";
+                $text .= $validateResult['message'];
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                // 先尝试编辑caption（因为前一个消息是图片消息）
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
+            // 获取提现限额
+            $minWithdraw = SystemConfig::getValue('min_withdraw_money') ?: 100;
+            $maxWithdraw = SystemConfig::getValue('max_withdraw_money') ?: 50000;
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+
+            // 进入输入金额状态
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_WITHDRAW_AMOUNT,
+                'network' => 'TRC20',
+                'message_id' => $messageId,
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
+            $text .= "当前余额：<b>" . number_format($user->balance, 2) . "</b> 元\n";
+            $text .= "当前汇率：1 USDT = <b>{$exchangeRate}</b> 元\n";
+            $text .= "提现限额：<b>{$minWithdraw} - {$maxWithdraw}</b> 元\n\n";
+            $text .= "📝 请输入提现金额（元）：";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            // 先尝试编辑caption（因为前一个消息是图片消息）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理TRC20提现异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 验证提现条件
+     */
+    protected function validateWithdraw($user)
+    {
+        // 1. 每日提现次数限制
+        $dailyLimit = intval(SystemConfig::getValue('daily_withdraw_times') ?: 0);
+        if ($dailyLimit > 0) {
+            $todayCount = Withdraw::where('user_id', $user->id)
+                ->whereDate('created_at', today())
+                ->count();
+            if ($todayCount >= $dailyLimit) {
+                return ['success' => false, 'message' => "今日提现次数已达上限({$dailyLimit}次)"];
+            }
+        }
+
+        // 2. 提现时间限制
+        $beginTime = SystemConfig::getValue('withdraw_begin_time');
+        $endTime = SystemConfig::getValue('withdraw_end_time');
+        if ($beginTime && $endTime) {
+            $currentTime = date('H:i');
+            if ($currentTime < $beginTime || $currentTime > $endTime) {
+                return ['success' => false, 'message' => "提现时间为 {$beginTime} - {$endTime}"];
+            }
+        }
+
+        // 3. 打码量验证
+        $withdrawFee = floatval(SystemConfig::getValue('withdraw_fee') ?: 1);
+        if ($withdrawFee > 0) {
+            // 获取用户总充值金额
+            $totalRecharge = Recharge::where('user_id', $user->id)
+                ->where('state', 2)
+                ->sum('amount');
+            // 计算需要的打码量
+            $requiredBet = $totalRecharge * $withdrawFee;
+            // 获取用户实际打码量（这里简化处理，实际应该从游戏记录中统计）
+            $actualBet = $user->mbalance ?? 0;
+            if ($actualBet < $requiredBet) {
+                return ['success' => false, 'message' => "打码量不足，需要: {$requiredBet}，当前: {$actualBet}"];
+            }
+        }
+
+        // 4. 余额验证
+        if ($user->balance <= 0) {
+            return ['success' => false, 'message' => '账户余额不足'];
+        }
+
+        return ['success' => true];
+    }
+
+    /**
+     * 处理提现金额输入
+     */
+    protected function processWithdrawAmountInput($chatId, $user, $telegramId, $amount, $state)
+    {
+        try {
+            // 验证金额格式
+            if (!is_numeric($amount) || $amount <= 0) {
+                $this->telegramBot->sendMessage($chatId, '❌ 请输入有效的金额数字');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = floatval($amount);
+            $minWithdraw = floatval(SystemConfig::getValue('min_withdraw_money') ?: 100);
+            $maxWithdraw = floatval(SystemConfig::getValue('max_withdraw_money') ?: 50000);
+
+            if ($amount < $minWithdraw || $amount > $maxWithdraw) {
+                $this->telegramBot->sendMessage($chatId, "❌ 提现金额必须在 {$minWithdraw} - {$maxWithdraw} 元之间");
+                return response()->json(['ok' => true]);
+            }
+
+            if ($amount > $user->balance) {
+                $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
+                return response()->json(['ok' => true]);
+            }
+
+            // 更新状态，保存金额，等待输入地址
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_WITHDRAW_ADDRESS,
+                'network' => 'TRC20',
+                'amount' => $amount,
+                'message_id' => $state['message_id'],
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+            $usdtAmount = round($amount / $exchangeRate, 2);
+
+            $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
+            $text .= "提现金额：<b>{$amount}</b> 元\n";
+            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n";
+            $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
+            $text .= "📝 请输入 TRC20 钱包地址：\n";
+            $text .= "<i>（T开头，34个字符）</i>";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理提现金额输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理提现地址输入
+     */
+    protected function processWithdrawAddressInput($chatId, $user, $telegramId, $address, $state)
+    {
+        try {
+            // 验证TRC20地址格式（T开头，34个字符）
+            if (!preg_match('/^T[a-zA-Z0-9]{33}$/', $address)) {
+                $this->telegramBot->sendMessage($chatId, '❌ 钱包地址格式错误，TRC20地址应以 T 开头，共34个字符');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = $state['amount'];
+
+            // 再次验证余额（防止并发问题）
+            $user->refresh();
+            if ($amount > $user->balance) {
+                $this->clearUserState($telegramId);
+                $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
+                return response()->json(['ok' => true]);
+            }
+
+            // 计算手续费
+            $cashFee = 0;
+            $realMoney = $amount - $cashFee;
+
+            // 创建提现订单
+            $orderNo = 'W' . date('YmdHis') . $user->id . mt_rand(1000, 9999);
+            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+
+            $withdraw = Withdraw::create([
+                'order_no' => $orderNo,
+                'user_id' => $user->id,
+                'type' => 2,  // USDT-TRC20 提现
+                'card_id' => 0,
+                'amount' => $amount,
+                'cash_fee' => $cashFee,
+                'real_money' => $realMoney,
+                'usdt_rate' => $exchangeRate,
+                'state' => 1,
+                'usdt_address' => $address,
+                'usdt_network' => 'TRC20',
+                'info' => 'Telegram TRC20提现'
+            ]);
+
+            // 扣减余额
+            $user->balance -= $amount;
+            $user->save();
+
+            // 清除状态
+            $this->clearUserState($telegramId);
+
+            $usdtAmount = round($realMoney / $exchangeRate, 2);
+
+            $text = "✅ <b>提现申请已提交</b>\n\n";
+            $text .= "订单号：<code>{$orderNo}</code>\n";
+            $text .= "提现金额：<b>{$amount}</b> 元\n";
+            $text .= "手续费：<b>{$cashFee}</b> 元\n";
+            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n\n";
+            $text .= "📮 收款地址：\n<code>{$address}</code>\n\n";
+            $text .= "⏳ 请耐心等待审核";
+
+            $inlineKeyboard = [
+                [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+            ];
+
+            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理提现地址输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
         }
     }

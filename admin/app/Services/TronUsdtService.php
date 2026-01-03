@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Redis;
 use App\Models\Recharge;
 use App\Models\SystemConfig;
 use App\User;
@@ -86,9 +87,10 @@ class TronUsdtService
         try {
             $usdtRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
             $usdtAmount = round($amount / $usdtRate, 3);
-            $randomDecimal = mt_rand(1, 999) / 1000; // 0.001 ~ 0.999
-            // 统一按三位小数四舍五入，避免浮点误差导致前后不一致
-            $finalUsdtAmount = round($usdtAmount + $randomDecimal, 3);
+
+            // 使用 Redis 确保金额唯一（10分钟有效期）
+            $finalUsdtAmount = $this->generateUniqueAmount($usdtAmount);
+
             $tronAddress = SystemConfig::getValue('tron_usdt_address');
             if (empty($tronAddress)) {
                 throw new \Exception('TRON收款地址未配置');
@@ -101,7 +103,6 @@ class TronUsdtService
                     'usdt_amount' => $finalUsdtAmount,
                     'tron_address' => $tronAddress,
                     'exchange_rate' => $usdtRate,
-                    'random_decimal' => number_format($randomDecimal, 3, '.', ''),
                     'original_amount' => $amount
                 ]
             ];
@@ -115,6 +116,73 @@ class TronUsdtService
                 'success' => false,
                 'message' => '生成充值信息失败: ' . $e->getMessage()
             ];
+        }
+    }
+
+    /**
+     * 生成唯一的充值金额（使用Redis确保10分钟内不重复）
+     *
+     * @param float $baseAmount 基础金额
+     * @return float 唯一金额
+     */
+    private function generateUniqueAmount(float $baseAmount): float
+    {
+        $maxAttempts = 100; // 最大尝试次数
+        $expireSeconds = 660; // 11分钟过期，比订单有效期多1分钟
+
+        for ($i = 0; $i < $maxAttempts; $i++) {
+            // 生成随机小数 0.001 ~ 0.999
+            $randomDecimal = mt_rand(1, 999) / 1000;
+            $finalAmount = round($baseAmount + $randomDecimal, 3);
+
+            // Redis key 格式: tron_recharge_amount:{金额}
+            $redisKey = 'tron_recharge_amount:' . number_format($finalAmount, 3, '.', '');
+
+            try {
+                // 使用 SETNX 原子操作，只有 key 不存在时才设置成功
+                $result = Redis::set($redisKey, time(), 'EX', $expireSeconds, 'NX');
+
+                if ($result) {
+                    Log::info('生成唯一充值金额', [
+                        'base_amount' => $baseAmount,
+                        'final_amount' => $finalAmount,
+                        'attempts' => $i + 1
+                    ]);
+                    return $finalAmount;
+                }
+            } catch (\Exception $e) {
+                // Redis 不可用时降级为直接返回（有小概率重复风险）
+                Log::warning('Redis不可用，降级生成充值金额', [
+                    'error' => $e->getMessage(),
+                    'amount' => $finalAmount
+                ]);
+                return $finalAmount;
+            }
+        }
+
+        // 如果100次都没生成成功（极低概率），直接返回最后一次的金额
+        Log::warning('生成唯一金额达到最大尝试次数', [
+            'base_amount' => $baseAmount,
+            'attempts' => $maxAttempts
+        ]);
+        return round($baseAmount + (mt_rand(1, 999) / 1000), 3);
+    }
+
+    /**
+     * 释放充值金额占用（订单取消或完成时调用）
+     *
+     * @param float $amount 金额
+     */
+    public function releaseAmount(float $amount): void
+    {
+        try {
+            $redisKey = 'tron_recharge_amount:' . number_format($amount, 3, '.', '');
+            Redis::del($redisKey);
+        } catch (\Exception $e) {
+            Log::warning('释放充值金额占用失败', [
+                'error' => $e->getMessage(),
+                'amount' => $amount
+            ]);
         }
     }
 
@@ -199,6 +267,11 @@ class TronUsdtService
                 'tron_confirmations' => $confirmations ?? $recharge->tron_confirmations,
                 'tron_paid_at' => Carbon::now(),
             ]);
+
+            // 释放 Redis 金额占用
+            $usdtAmount = $recharge->tron_usdt_amount ?? $amount;
+            $this->releaseAmount((float)$usdtAmount);
+
             $user = User::find($recharge->user_id);
             if ($user) {
                 $user->balance += $recharge->amount;
@@ -300,7 +373,127 @@ class TronUsdtService
         return null;
     }
 
+    /**
+     * 获取指定地址最近收到的USDT转账记录
+     *
+     * @param string $address TRON地址
+     * @param int $limit 返回记录数量
+     * @return array 转账记录数组
+     */
+    public function getRecentUsdtTransfers(string $address, int $limit = 50): array
+    {
+        try {
+            $apiUrl = SystemConfig::getValue('tron_api_url') ?: 'https://apilist.tronscanapi.com';
+            $base = rtrim($apiUrl, '/');
+            $headers = $this->buildHeaders();
 
+            // USDT TRC20 合约地址
+            $usdtContract = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
 
+            // 查询该地址的TRC20转入记录
+            // API: /api/token_trc20/transfers
+            $url = $base . '/api/token_trc20/transfers?' . http_build_query([
+                'relatedAddress' => $address,
+                'toAddress' => $address,  // 只查收款记录
+                'contract_address' => $usdtContract,
+                'limit' => $limit,
+                'start' => 0,
+                'sort' => '-timestamp',  // 按时间倒序
+                'count' => 'true'
+            ]);
 
+            Log::info('查询USDT转账记录', ['url' => $url]);
+
+            $json = $this->httpGet($url, $headers);
+            $data = json_decode($json, true);
+
+            if (!is_array($data)) {
+                Log::warning('USDT转账记录查询返回非数组', ['response' => $json]);
+                return [];
+            }
+
+            $transfers = $data['token_transfers'] ?? $data['data'] ?? [];
+
+            if (empty($transfers)) {
+                Log::info('未找到USDT转账记录', ['address' => $address]);
+                return [];
+            }
+
+            Log::info('找到USDT转账记录', [
+                'address' => $address,
+                'count' => count($transfers)
+            ]);
+
+            // 格式化返回数据
+            $result = [];
+            foreach ($transfers as $transfer) {
+                $result[] = [
+                    'transaction_id' => $transfer['transaction_id'] ?? $transfer['hash'] ?? '',
+                    'from' => $transfer['from_address'] ?? $transfer['from'] ?? '',
+                    'to' => $transfer['to_address'] ?? $transfer['to'] ?? '',
+                    'value' => $transfer['quant'] ?? $transfer['value'] ?? $transfer['amount'] ?? 0,
+                    'block_timestamp' => $transfer['block_ts'] ?? $transfer['block_timestamp'] ?? $transfer['timestamp'] ?? 0,
+                    'confirmed' => $transfer['confirmed'] ?? true,
+                    'block' => $transfer['block'] ?? 0
+                ];
+            }
+
+            return $result;
+
+        } catch (\Exception $e) {
+            Log::error('查询USDT转账记录失败', [
+                'error' => $e->getMessage(),
+                'address' => $address
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * 获取交易确认数
+     *
+     * @param string $txHash 交易哈希
+     * @return int 确认数
+     */
+    public function getTransactionConfirmations(string $txHash): int
+    {
+        try {
+            $apiUrl = SystemConfig::getValue('tron_api_url') ?: 'https://apilist.tronscanapi.com';
+            $base = rtrim($apiUrl, '/');
+            $headers = $this->buildHeaders();
+
+            // 获取交易信息
+            $txJson = $this->httpGet($base . '/api/transaction-info?hash=' . urlencode($txHash), $headers);
+            $txData = json_decode($txJson, true) ?: [];
+
+            $blockNumber = null;
+            if (isset($txData['blockNumber'])) {
+                $blockNumber = (int)$txData['blockNumber'];
+            } elseif (isset($txData['block'])) {
+                $blockNumber = (int)$txData['block'];
+            }
+
+            if ($blockNumber === null) {
+                return 0;
+            }
+
+            // 获取最新区块
+            $latestJson = $this->httpGet($base . '/api/block?sort=-number&limit=1', $headers);
+            $latestData = json_decode($latestJson, true) ?: [];
+            $latestBlock = isset($latestData['data'][0]['number']) ? (int)$latestData['data'][0]['number'] : null;
+
+            if ($latestBlock !== null) {
+                return max(0, $latestBlock - $blockNumber);
+            }
+
+            return (int)($txData['confirmations'] ?? 0);
+
+        } catch (\Exception $e) {
+            Log::error('获取交易确认数失败', [
+                'error' => $e->getMessage(),
+                'tx_hash' => $txHash
+            ]);
+            return 0;
+        }
+    }
 }

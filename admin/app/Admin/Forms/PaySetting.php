@@ -36,6 +36,7 @@ class PaySetting extends Form
         $this->tab('TRC20 USDT充值配置', function () {
             $this->divider('TRON 链上充值');
             $this->text('tron_usdt_address','TRC20-USDT收款地址')->help('TRC20网络USDT收款地址');
+            $this->image('tron_usdt_qrcode','TRC20收款二维码')->help('TRC20网络USDT收款地址二维码图片');
 
             // 开关与密钥输入框（用前端脚本控制显示/隐藏）
             $this->switch('tron_api_key_enabled','启用API Key')
@@ -74,6 +75,7 @@ class PaySetting extends Form
         return [
             // TRON
             'tron_usdt_address' => SystemConfig::where('key','tron_usdt_address')->value('value') ?? '',
+            'tron_usdt_qrcode' => SystemConfig::where('key','tron_usdt_qrcode')->value('value') ?? '',
             'tron_api_key' => SystemConfig::where('key','tron_api_key')->value('value') ?? '',
             'tron_api_key_enabled' => (int)(SystemConfig::where('key','tron_api_key_enabled')->value('value') ?? 0),
             'tron_api_url' => SystemConfig::where('key','tron_api_url')->value('value') ?? 'https://apilist.tronscanapi.com',

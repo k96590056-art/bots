@@ -78,7 +78,17 @@ JS
             })->html();
             
             //$grid->column('bank_no');
-            $grid->column('state')->using([1 => '待审核', 2 => '已完成', 3 => '已拒绝']);
+            $grid->column('state')->using([
+                1 => '待支付',
+                2 => '已完成',
+                3 => '已拒绝',
+                4 => '已取消'
+            ])->label([
+                1 => 'warning',
+                2 => 'success',
+                3 => 'danger',
+                4 => 'default'
+            ]);
             $grid->column('created_at');
             
             $grid->footer(function ($collection) use ($grid) {
@@ -149,7 +159,7 @@ JS
             $show->field('bank_address');
             $show->field('bank_owner','姓名/USDT地址');
             $show->field('info');
-            $show->field('state')->using([1 => '待审核', 2 => '已完成', 3 => '已拒绝']);
+            $show->field('state')->using([1 => '待支付', 2 => '已完成', 3 => '已拒绝', 4 => '已取消']);
             $show->field('created_at');
 
             $show->panel()
