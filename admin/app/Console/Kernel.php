@@ -14,6 +14,7 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         Commands\CrawGameRecord::class,
+        Commands\CheckTronRecharge::class,
     ];
 
     /**
@@ -25,6 +26,9 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule)
     {
         $schedule->command('CrawGameRecord')->everyFiveMinutes();
+
+        // 每分钟检查TRON USDT充值订单
+        $schedule->command('tron:check-recharge')->everyMinute()->withoutOverlapping();
     }
 
     /**

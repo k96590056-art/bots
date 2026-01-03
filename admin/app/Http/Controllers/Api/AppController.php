@@ -483,6 +483,8 @@ class AppController extends Controller
 				return '已支付';
 			case 3:
 				return '已拒绝';
+			case 4:
+				return '已取消';
 			default:
 				return '未知状态';
 		}
@@ -655,7 +657,10 @@ class AppController extends Controller
 			}
 			if($value['state'] == 3){
 				$Recharge[$key]['state'] = '<font color="red">未通过</font>';
-			}			
+			}
+			if($value['state'] == 4){
+				$Recharge[$key]['state'] = '<font color="gray">已取消</font>';
+			}
 		}
 		return $this->returnMsg(200,$Recharge,'成功');
 	}

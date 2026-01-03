@@ -25,6 +25,8 @@ Route::group([
     $router->resource('code-pay','CodePayController');
 
     $router->resource('withdraws','WithdrawController');
+    // USDT 提现 TronLink 转账确认
+    $router->post('withdraw/confirm-transfer','WithdrawController@confirmTransfer');
     $router->resource('banks','BankController');
     $router->resource('syslog','SyslogController');
     $router->resource('pay-settings','PaySettingController');

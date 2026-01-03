@@ -510,11 +510,11 @@ class TgService
     public function getallbetgamelist()
     {
         $data = [
-            
+
         ];
         $res = $this->sendRequest($this->api_url."/api/getgamelistbet",$data);
-        
-        return $res['data'];
+
+        return $res['data'] ?? [];
     }      
     
     public function getallmoneygamelist()
@@ -558,11 +558,11 @@ class TgService
     public function engamelist()
     {
         $data = [
-            
+
         ];
         $res = $this->sendRequest($this->api_url."/api/engamelist",$data);
-        
-        return $res['data'];
+
+        return $res['data'] ?? [];
     }    
     
     /**
