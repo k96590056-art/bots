@@ -3020,7 +3020,29 @@ class TelegramWebhookController extends Controller
             }
 
             $this->clearUserState($telegramId);
-            return $this->showDepositWithdrawMenu($chatId, $messageId, $user, '✅ 订单已取消');
+            
+            // 删除二维码消息
+            $this->telegramBot->deleteMessage($chatId, $messageId);
+            
+            // 发送新的充值提现菜单（带主菜单图片）
+            $mainImageUrl = $this->getMainMenuImageUrl();
+            $walletBalance = number_format($user->balance, 2);
+            $text = "💰 <b>充值提现</b>\n\n";
+            $text .= "💵 余额：<b>{$walletBalance}</b> 元\n\n";
+            $text .= "✅ 订单已取消";
+            
+            $inlineKeyboard = [
+                [
+                    ["text" => "💵 充值", "callback_data" => "recharge"],
+                    ["text" => "💸 提现", "callback_data" => "withdraw"]
+                ],
+                [
+                    ["text" => "🏠 返回主菜单", "callback_data" => "back_main"]
+                ]
+            ];
+            
+            $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
+            return response()->json(["ok" => true]);
         } catch (\Exception $e) {
             Log::error('取消充值订单异常', ['error' => $e->getMessage()]);
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
