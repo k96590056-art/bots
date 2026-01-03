@@ -997,6 +997,11 @@ class TelegramWebhookController extends Controller
                     }
                 }
             } else {
+                // 先发送欢迎文字消息
+                $welcomeText = "欢迎来到MK体育飞投\n\n";
+                $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                $this->telegramBot->sendMessage($chatId, $welcomeText);
+                
                 // 发送图片消息，文字作为caption，按钮作为reply_markup
                 $photoResult = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
                 
@@ -2746,15 +2751,7 @@ class TelegramWebhookController extends Controller
     protected function showDepositWithdrawMenu($chatId, $messageId, $user, $notice = null)
     {
         try {
-            // 获取用户余额
-            $walletBalance = number_format($user->balance, 2);
-
-            $text = "💰 <b>充值提现</b>\n\n";
-            $text .= "💵 余额：<b>{$walletBalance}</b> 元";
-            if ($notice) {
-                $text .= "\n\n" . $notice;
-            }
-
+            // 只修改按钮，保持图片和用户信息不变
             $inlineKeyboard = [
                 [
                     ['text' => '💵 充值', 'callback_data' => 'recharge'],
@@ -2765,14 +2762,10 @@ class TelegramWebhookController extends Controller
                 ]
             ];
 
-            // 编辑主菜单的图片消息caption（保持在同一消息上）
-            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            // 只编辑按钮，保持原有的图片和文字
+            $result = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
             if ($result['code'] != 200) {
-                // 如果编辑caption失败，尝试编辑text
-                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    Log::error('显示充值提现菜单失败', ['result' => $result]);
-                }
+                Log::error('显示充值提现菜单失败', ['result' => $result]);
             }
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -2787,35 +2780,19 @@ class TelegramWebhookController extends Controller
     protected function showRechargeNetworkMenu($chatId, $messageId, $user, $notice = null)
     {
         try {
-            $text = "💵 <b>充值</b>\n\n";
-            $text .= "请选择充值网络：";
-            if ($notice) {
-                $text .= "\n" . $notice;
-            }
-
+            // 只修改按钮，保持图片和用户信息不变
             $inlineKeyboard = [
-                [
-                    ['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'recharge_trc20'],
-                    ['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'recharge_erc20']
-                ],
+                [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'recharge_trc20']],
+                [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'recharge_erc20']],
                 [
                     ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
                 ]
             ];
 
-            // 先尝试编辑caption（因为前一个消息是图片消息）
-            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            // 只编辑按钮，保持原有的图片和文字
+            $result = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
             if ($result['code'] != 200) {
-                // 如果编辑caption失败，尝试编辑text
-                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    // 如果编辑也失败，发送新的图片消息
-                    $mainImageUrl = $this->getMainMenuImageUrl();
-                    $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
-                    if ($result['code'] != 200) {
-                        Log::error('显示充值网络菜单失败', ['result' => $result]);
-                    }
-                }
+                Log::error('显示充值网络菜单失败', ['result' => $result]);
             }
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -2830,36 +2807,19 @@ class TelegramWebhookController extends Controller
     protected function showWithdrawNetworkMenu($chatId, $messageId, $user, $notice = null)
     {
         try {
-            $text = "💸 <b>提现</b>\n\n";
-            $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n\n";
-            $text .= "请选择提现网络：";
-            if ($notice) {
-                $text .= "\n" . $notice;
-            }
-
+            // 只修改按钮，保持图片和用户信息不变
             $inlineKeyboard = [
-                [
-                    ['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'withdraw_trc20'],
-                    ['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'withdraw_erc20']
-                ],
+                [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'withdraw_trc20']],
+                [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'withdraw_erc20']],
                 [
                     ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
                 ]
             ];
 
-            // 先尝试编辑caption（因为前一个消息是图片消息）
-            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            // 只编辑按钮，保持原有的图片和文字
+            $result = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
             if ($result['code'] != 200) {
-                // 如果编辑caption失败，尝试编辑text
-                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    // 如果编辑也失败，发送新的图片消息
-                    $mainImageUrl = $this->getMainMenuImageUrl();
-                    $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
-                    if ($result['code'] != 200) {
-                        Log::error('显示提现网络菜单失败', ['result' => $result]);
-                    }
-                }
+                Log::error('显示提现网络菜单失败', ['result' => $result]);
             }
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -2888,28 +2848,6 @@ class TelegramWebhookController extends Controller
                 return $this->showPendingRechargeOrder($chatId, $messageId, $user, $pendingOrder);
             }
 
-            // 检查1分钟内是否创建过订单（频率限制）
-            $recentOrder = Recharge::where('user_id', $user->id)
-                ->where('created_at', '>=', now()->subMinute())
-                ->first();
-
-            if ($recentOrder) {
-                $remainingSeconds = 60 - now()->diffInSeconds($recentOrder->created_at);
-                $text = "⏳ <b>操作太频繁</b>\n\n";
-                $text .= "请在 {$remainingSeconds} 秒后再试";
-
-                $inlineKeyboard = [
-                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
-                ];
-
-                // 先尝试编辑caption（因为前一个消息是图片消息）
-                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                }
-                return response()->json(['ok' => true]);
-            }
-
             // 获取充值限额
             $minAmount = SystemConfig::getValue('tron_min_amount') ?: 10;
             $maxAmount = SystemConfig::getValue('tron_max_amount') ?: 50000;
@@ -2923,20 +2861,14 @@ class TelegramWebhookController extends Controller
                 'created_at' => now()->toDateTimeString()
             ]);
 
-            $text = "💵 <b>TRC20 USDT 充值</b>\n\n";
-            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
-            $text .= "充值限额：{$minAmount} - {$maxAmount} USDT\n\n";
-            $text .= "📝 请输入充值金额（USDT）：";
-
+            // 只修改按钮，保持图片和用户信息不变
             $inlineKeyboard = [
+                [['text' => "📝 请输入充值金额（{$minAmount}-{$maxAmount} USDT）", 'callback_data' => 'noop']],
                 [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
             ];
 
-            // 先尝试编辑caption（因为前一个消息是图片消息）
-            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-            if ($result['code'] != 200) {
-                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-            }
+            // 只编辑按钮
+            $result = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('处理TRC20充值异常', ['error' => $e->getMessage()]);
@@ -3021,14 +2953,16 @@ class TelegramWebhookController extends Controller
 
             $this->clearUserState($telegramId);
             
-            // 删除二维码消息
-            $this->telegramBot->deleteMessage($chatId, $messageId);
-            
-            // 发送新的充值提现菜单（带主菜单图片）
+            // 使用 editMessageMedia 替换图片（无消失特效）
             $mainImageUrl = $this->getMainMenuImageUrl();
             $walletBalance = number_format($user->balance, 2);
-            $text = "💰 <b>充值提现</b>\n\n";
-            $text .= "💵 余额：<b>{$walletBalance}</b> 元\n\n";
+            $gameBalance = number_format(Usersmoney::getTotalAppUserBalance($user->id), 4);
+            
+            // 显示用户信息
+            $text = "🆔 <b>ID：</b>{$user->telegram_id}\n";
+            $text .= "💰 钱包余额: {$walletBalance} USDT\n";
+            $text .= "💵 游戏余额: {$gameBalance} CNY\n";
+            $text .= "⏰ 当前时间: " . date("Y-m-d H:i:s") . "\n\n";
             $text .= "✅ 订单已取消";
             
             $inlineKeyboard = [
@@ -3041,7 +2975,7 @@ class TelegramWebhookController extends Controller
                 ]
             ];
             
-            $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
+            $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $text, $inlineKeyboard);
             return response()->json(["ok" => true]);
         } catch (\Exception $e) {
             Log::error('取消充值订单异常', ['error' => $e->getMessage()]);
@@ -3215,21 +3149,14 @@ class TelegramWebhookController extends Controller
                 'created_at' => now()->toDateTimeString()
             ]);
 
-            $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
-            $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n";
-            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
-            $text .= "提现限额：{$minWithdraw} - {$maxWithdraw} 元\n\n";
-            $text .= "📝 请输入提现金额（元）：";
-
+            // 只修改按钮，保持图片和用户信息不变
             $inlineKeyboard = [
+                [['text' => "📝 请输入提现金额（{$minWithdraw}-{$maxWithdraw} 元）", 'callback_data' => 'noop']],
                 [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
             ];
 
-            // 先尝试编辑caption（因为前一个消息是图片消息）
-            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-            if ($result['code'] != 200) {
-                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-            }
+            // 只编辑按钮
+            $result = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('处理TRC20提现异常', ['error' => $e->getMessage()]);
