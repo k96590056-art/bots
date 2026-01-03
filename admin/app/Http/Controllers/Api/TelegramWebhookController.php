@@ -2831,7 +2831,7 @@ class TelegramWebhookController extends Controller
     {
         try {
             $text = "💸 <b>提现</b>\n\n";
-            $text .= "当前余额：<b>" . number_format($user->balance, 2) . "</b> 元\n\n";
+            $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n\n";
             $text .= "请选择提现网络：";
             if ($notice) {
                 $text .= "\n" . $notice;
@@ -2924,8 +2924,8 @@ class TelegramWebhookController extends Controller
             ]);
 
             $text = "💵 <b>TRC20 USDT 充值</b>\n\n";
-            $text .= "当前汇率：1 USDT = <b>{$exchangeRate}</b> 元\n";
-            $text .= "充值限额：<b>{$minAmount} - {$maxAmount}</b> USDT\n\n";
+            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
+            $text .= "充值限额：{$minAmount} - {$maxAmount} USDT\n\n";
             $text .= "📝 请输入充值金额（USDT）：";
 
             $inlineKeyboard = [
@@ -3089,35 +3089,38 @@ class TelegramWebhookController extends Controller
             $expireTime = now()->addMinutes(10)->format('Y-m-d H:i:s');
             $usdtAmount = $rechargeInfo['data']['usdt_amount'];
 
-            // 构建订单信息文本
-            $text = "📋 <b>充值订单</b>\n\n";
-            $text .= "编号：<code>{$order->id}</code>\n";
-            $text .= "金额：<b>{$usdtAmount} USDT</b>\n";
-            $text .= "过期：{$expireTime}\n\n";
-            $text .= "📮 收款地址（点击复制）\n";
-            $text .= "<code>{$tronAddress}</code>\n\n";
-            $text .= "⚠️ 请按金额精确转账\n";
-            $text .= "⚠️ 尾数必须一致\n";
-            $text .= "❓ 未到账请联系客服";
+            // 构建订单信息文本（紧接图片，无标题）
+            $text = "编号：{$order->id}\n";
+            $text .= "金额：{$usdtAmount} USDT\n";
+            $text .= "过期时间：{$expireTime}\n";
+            $text .= "--------------------------------\n";
+            $text .= "收款地址（点击复制）👇\n";
+            $text .= "<code>{$tronAddress}</code>\n";
+            $text .= "--------------------------------\n";
+            $text .= "⚠️ 支付金额可能会出现附加小数\n";
+            $text .= "⚠️ 尾数金额也必须正确\n";
+            $text .= "✅ 充值未到账，请联系客服";
 
             $inlineKeyboard = [
                 [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]]
             ];
 
-            // 先发送二维码图片（如果有）
+            // 发送二维码图片+订单信息+按钮（作为一条消息）
             if ($qrcodeUrl) {
-                $result = $this->telegramBot->sendPhoto($chatId, $qrcodeUrl);
-                if ($result['code'] != 200) {
-                    Log::warning('充值订单二维码图片发送失败', [
-                        'chat_id' => $chatId,
-                        'qrcode_url' => $qrcodeUrl,
-                        'result' => $result
+                $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $qrcodeUrl, $text, $inlineKeyboard);
+                if ($result["code"] != 200) {
+                    Log::warning("充值订单发送失败", [
+                        "chat_id" => $chatId,
+                        "qrcode_url" => $qrcodeUrl,
+                        "result" => $result
                     ]);
+                    // 降级：图片发送失败时只发文字
+                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
                 }
+            } else {
+                // 没有二维码时只发文字
+                $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
             }
-
-            // 发送订单信息和按钮
-            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
 
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -3191,9 +3194,9 @@ class TelegramWebhookController extends Controller
             ]);
 
             $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
-            $text .= "当前余额：<b>" . number_format($user->balance, 2) . "</b> 元\n";
-            $text .= "当前汇率：1 USDT = <b>{$exchangeRate}</b> 元\n";
-            $text .= "提现限额：<b>{$minWithdraw} - {$maxWithdraw}</b> 元\n\n";
+            $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n";
+            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
+            $text .= "提现限额：{$minWithdraw} - {$maxWithdraw} 元\n\n";
             $text .= "📝 请输入提现金额（元）：";
 
             $inlineKeyboard = [
