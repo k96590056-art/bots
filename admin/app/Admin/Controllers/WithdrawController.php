@@ -971,12 +971,12 @@ JS
                 $telegramBot = new \App\Services\TelegramBotService();
                 $usdtAmount = round($withdraw->real_money / ($withdraw->usdt_rate ?: 7), 2);
                 $text = "✅ <b>提现已完成</b>\n\n";
-                $text .= "━━━━━━━━━━━━━━━━━━━━\n";
+                $text .= "━━━━━━━━━━━━\n";
                 $text .= "📋 订单号：<code>{$withdraw->order_no}</code>\n";
                 $text .= "💰 提现金额：<b>{$withdraw->amount}</b> 元\n";
                 $text .= "💵 到账金额：<b>{$usdtAmount}</b> USDT\n";
                 $text .= "🔗 交易哈希：<code>{$txHash}</code>\n";
-                $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                $text .= "━━━━━━━━━━━━\n\n";
                 $text .= "感谢您的使用！";
                 $telegramBot->sendMessage($user->telegram_id, $text, ['parse_mode' => 'HTML']);
             } catch (\Exception $e) {

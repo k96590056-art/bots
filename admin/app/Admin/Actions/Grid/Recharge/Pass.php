@@ -22,6 +22,7 @@ use App\Models\RedEnvelopes;
 use App\Models\Userredpacket;
 
 use App\User;
+use App\Services\TelegramBotService;
 
 class Pass extends RowAction
 {
@@ -46,13 +47,17 @@ class Pass extends RowAction
         $user->paysum += $model->amount;
         $user->save();
         $model->state = 2;
+        // 如果是USDT充值且没有交易Hash，设置后台审核标识
+        if ($model->pay_way == 5 && empty($model->tron_tx_hash)) {
+            $model->tron_tx_hash = 'ADMIN_MANUAL_' . date('YmdHis') . '_' . $id;
+        }
         $model->save();
         $ip = $request->ip();
             $res = Lib::getIpAddress($ip);
             $res = json_decode($res, true);
             $ip_address = '';
-            if ($res['code'] == 200) {
-                $ip_address = $res['data']['country'] . $res['data']['province'] . $res['data']['city'];
+            if ($res && isset($res['code']) && $res['code'] == 200 && isset($res['data'])) {
+                $ip_address = ($res['data']['country'] ?? '') . ($res['data']['province'] ?? '') . ($res['data']['city'] ?? '');
             }
  UserOperateLog::insertLog($user->id, 7, $_SERVER['HTTP_USER_AGENT'], $ip, $ip_address, '管理员审核【' . $user->username . '】充值通过'.'充值金额'.$model->real_money);
 /*        $Gamereport = new GamereportService();
@@ -64,6 +69,10 @@ class Pass extends RowAction
         self::sendmoney($user,$model->amount);
         //self::checkredbao($user,$model->real_money);
         self::upuserlevel($model->user_id);  //会员升级
+        
+        // 发送Telegram充值成功通知
+        self::notifyUserRechargeSuccess($user, $model);
+        
         return $this->response()->success('审核成功')->refresh();
     }
 
@@ -158,8 +167,10 @@ class Pass extends RowAction
         $userinfo = Users::find($uid);
         // $uservip = UserVip::where("status",1)->orderBy("id","desc")->get();
         $uservip = UserVip::where('status',1)->where('recharge','<=',$userinfo->paysum)->where('flow','<=',$userinfo->totalgame)->orderBy('id','desc')->first();
-        $userinfo->vip = $uservip->id;
-        $userinfo->save();
+        if ($uservip) {
+            $userinfo->vip = $uservip->id;
+            $userinfo->save();
+        }
         // dd($uservip);
         // foreach ($uservip as $val){
         //     if($userinfo->paysum>=$val->recharge && $userinfo->totalgame>=$val->flow && $userinfo->vip>$val->id){
@@ -168,5 +179,68 @@ class Pass extends RowAction
         //         break;
         //     }
         // }
+    }
+
+    /**
+     * 发送Telegram充值成功通知
+     */
+    public static function notifyUserRechargeSuccess($user, $order)
+    {
+        try {
+            if (empty($user->telegram_id)) {
+                return;
+            }
+
+            $telegramBot = new TelegramBotService();
+
+            $walletBalance = number_format($user->balance, 2);
+            $text = "✅ <b>充值成功</b>\n\n";
+            $text .= "订单编号：<code>{$order->id}</code>\n";
+            $text .= "充值金额：<b>{$order->amount}</b> 元\n";
+            if ($order->tron_usdt_amount) {
+                $text .= "USDT金额：<b>{$order->tron_usdt_amount} USDT</b>\n";
+            }
+            $text .= "\n💵 余额：<b>{$walletBalance}</b> 元\n";
+            $text .= "\n💰 感谢使用！";
+
+            $inlineKeyboard = [
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+            ];
+
+            // 如果有保存消息ID，则编辑原消息；否则发送新消息
+            if (!empty($order->telegram_message_id)) {
+                // 获取主菜单图片用于编辑
+                $mainImageConfig = \App\Models\SystemConfig::getValue('telegram_bot_main_image');
+                $mainImagePath = null;
+                if ($mainImageConfig && file_exists(public_path('uploads/' . $mainImageConfig))) {
+                    $mainImagePath = public_path('uploads/' . $mainImageConfig);
+                } else {
+                    $defaultImage = public_path('images/telegram/main_banner.jpg');
+                    if (file_exists($defaultImage)) {
+                        $mainImagePath = $defaultImage;
+                    }
+                }
+                
+                if ($mainImagePath) {
+                    $telegramBot->editMessageMedia($user->telegram_id, $order->telegram_message_id, $mainImagePath, $text, $inlineKeyboard);
+                } else {
+                    $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
+                }
+            } else {
+                $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
+            }
+
+            \Illuminate\Support\Facades\Log::info('后台审核充值通知已发送', [
+                'user_id' => $user->id,
+                'telegram_id' => $user->telegram_id,
+                'order_id' => $order->id,
+                'edited_message' => !empty($order->telegram_message_id)
+            ]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('发送充值成功通知失败', [
+                'error' => $e->getMessage(),
+                'order_id' => $order->id
+            ]);
+        }
     }
 }

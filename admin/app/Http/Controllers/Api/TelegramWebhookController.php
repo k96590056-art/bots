@@ -238,7 +238,8 @@ class TelegramWebhookController extends Controller
 
         // 检查用户是否在输入状态（充值/提现金额或地址）
         $userState = $this->getUserState($telegramId);
-        if ($userState && !empty($text)) {
+        $isCommand = !empty($text) && strpos($text, '/') === 0;
+        if ($userState && !empty($text) && !$isCommand) {
             switch ($userState['action']) {
                 case self::STATE_WAITING_RECHARGE_AMOUNT:
                     return $this->processRechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
@@ -251,6 +252,9 @@ class TelegramWebhookController extends Controller
 
         // 处理/start命令或首次进入
         if ($text === '/start' || empty($text)) {
+            // 清除用户状态，避免残留状态影响
+            $this->clearUserState($telegramId);
+
             Log::info('触发显示主菜单', [
                 'chat_id' => $chatId,
                 'user_id' => $user->id,
@@ -285,7 +289,9 @@ class TelegramWebhookController extends Controller
             $welcomeText .= "您已成功注册，可以使用机器人功能了！\n\n";
             $welcomeText .= "请发送 /start 开始使用机器人。";
             
-            $this->telegramBot->sendMessage($chatId, $welcomeText);
+            // 发送欢迎消息时同时设置常驻键盘
+                $replyKeyboard = $this->getPersistentKeyboard();
+                $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
             
             // 清空first_password，确保后续不再显示
             $user->first_password = null;
@@ -420,7 +426,9 @@ class TelegramWebhookController extends Controller
                 $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
                 $welcomeText .= "您已成功注册，可以使用机器人功能了！";
                 
-                $this->telegramBot->sendMessage($chatId, $welcomeText);
+                // 发送欢迎消息时同时设置常驻键盘
+                $replyKeyboard = $this->getPersistentKeyboard();
+                $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                 
                 // 清空first_password，确保后续不再显示
                 $user->first_password = null;
@@ -864,7 +872,7 @@ class TelegramWebhookController extends Controller
             
             // 显示Telegram ID
             $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
-            $text .= "💰 钱包余额: {$walletBalance} USDT\n";
+            $text .= "💰 钱包余额: {$walletBalance} CNY\n";
             $text .= "💵 游戏余额: {$gameBalance} CNY\n";
             
             // 显示钱包地址
@@ -987,20 +995,31 @@ class TelegramWebhookController extends Controller
             }
 
             if ($messageId) {
-                // 编辑现有消息 - 先尝试编辑caption（图片消息），如果失败则尝试编辑text（文本消息）
-                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    // 如果编辑caption失败，尝试编辑text
-                    $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                // 返回主菜单时，把欢迎文字合并到caption中一起编辑
+                $welcomeText = "欢迎来到MK体育飞投\n\n";
+                $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！\n\n";
+                $fullText = $welcomeText . $text;
+
+                // 编辑原消息为图片消息（包含欢迎文字）
+                if ($mainImageUrl) {
+                    $result = $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $fullText, $inlineKeyboard);
                     if ($result['code'] != 200) {
-                        Log::error('编辑主菜单消息失败', ['result' => $result]);
+                        // 如果编辑失败（原消息是文本），发送新图片消息
+                        $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $fullText, $inlineKeyboard);
+                    }
+                } else {
+                    $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $fullText, $inlineKeyboard);
+                    if ($result['code'] != 200) {
+                        $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $fullText, $inlineKeyboard);
                     }
                 }
             } else {
                 // 先发送欢迎文字消息
                 $welcomeText = "欢迎来到MK体育飞投\n\n";
                 $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
-                $this->telegramBot->sendMessage($chatId, $welcomeText);
+                // 发送欢迎消息时同时设置常驻键盘
+                $replyKeyboard = $this->getPersistentKeyboard();
+                $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                 
                 // 发送图片消息，文字作为caption，按钮作为reply_markup
                 $photoResult = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
@@ -1023,8 +1042,7 @@ class TelegramWebhookController extends Controller
                 }
             }
 
-            // 设置常驻键盘菜单（ReplyKeyboardMarkup）
-            $this->setPersistentKeyboard($chatId);
+            // 常驻键盘已在欢迎消息中设置，无需再单独发送
 
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -1147,7 +1165,7 @@ class TelegramWebhookController extends Controller
         $displayName = $this->getTelegramDisplayName($user, $telegramUsername);
         $text = "账户信息\n\n";
         $text .= "用户: {$displayName}\n";
-        $text .= "钱包余额: {$walletBalance} USDT\n";
+        $text .= "钱包余额: {$walletBalance} CNY\n";
         $text .= "游戏余额: " . number_format($gameBalance, 4) . " CNY\n";
         
         // 显示钱包地址
@@ -2096,7 +2114,7 @@ class TelegramWebhookController extends Controller
         // 注意：Telegram会自动显示键盘，即使消息被删除，键盘也会保留
         $keyboardResult = $this->telegramBot->sendMessageWithReplyKeyboard(
             $chatId,
-            ' ',  // 使用空格，Telegram 不允许空文本但允许空格
+            '\u200B',  // 零宽空格，Telegram 接受但不显示
             $replyKeyboard,
             true,  // resize_keyboard
             false  // one_time_keyboard (false表示常驻，键盘会一直显示)
@@ -3092,20 +3110,35 @@ class TelegramWebhookController extends Controller
             ];
 
             // 发送二维码图片+订单信息+按钮（作为一条消息）
+            $sentMessageId = null;
             if ($qrcodeUrl) {
                 $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $qrcodeUrl, $text, $inlineKeyboard);
-                if ($result["code"] != 200) {
+                if ($result["code"] == 200 && isset($result["data"]["result"]["message_id"])) {
+                    $sentMessageId = $result["data"]["result"]["message_id"];
+                } elseif ($result["code"] != 200) {
                     Log::warning("充值订单发送失败", [
                         "chat_id" => $chatId,
                         "qrcode_url" => $qrcodeUrl,
                         "result" => $result
                     ]);
                     // 降级：图片发送失败时只发文字
-                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                    $textResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                    if (isset($textResult["data"]["result"]["message_id"])) {
+                        $sentMessageId = $textResult["data"]["result"]["message_id"];
+                    }
                 }
             } else {
                 // 没有二维码时只发文字
-                $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                $textResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                if (isset($textResult["data"]["result"]["message_id"])) {
+                    $sentMessageId = $textResult["data"]["result"]["message_id"];
+                }
+            }
+            
+            // 保存消息ID到订单
+            if ($sentMessageId) {
+                $order->telegram_message_id = $sentMessageId;
+                $order->save();
             }
 
             return response()->json(['ok' => true]);
@@ -3182,7 +3215,7 @@ class TelegramWebhookController extends Controller
             $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
             $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n";
             $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
-            $text .= "提现限额：<code>{$minWithdraw}</code> - <code>{$maxWithdraw}</code> 元\n\n";
+            $text .= "提现限额：{$minWithdraw} - {$maxWithdraw} 元\n\n";
             $text .= "📝 请输入提现金额（元）：";
 
             $inlineKeyboard = [
@@ -3292,6 +3325,8 @@ class TelegramWebhookController extends Controller
             $text = "💸 <b>TRC20 USDT 提现</b>\n\n";
             $text .= "提现金额：<b>{$amount}</b> 元\n";
             $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n";
+            $remainingBalance = number_format($user->balance, 2);
+            $text .= "剩余余额：<b>{$remainingBalance}</b> 元\n\n";
             $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
             $text .= "📝 请输入 TRC20 钱包地址：\n";
             $text .= "<i>（T开头，34个字符）</i>";
@@ -3300,7 +3335,21 @@ class TelegramWebhookController extends Controller
                 [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
             ];
 
-            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            // 编辑原消息而不是发送新消息（保留主菜单图片）
+            $messageId = $state['message_id'] ?? null;
+            if ($messageId) {
+                // 获取主菜单图片URL
+                $mainImageUrl = SystemConfig::getValue('telegram_bot_main_image');
+                if ($mainImageUrl) {
+                    $mainImageUrl = env('APP_URL') . '/uploads/' . $mainImageUrl;
+                } else {
+                    $mainImageUrl = env('APP_URL') . '/images/telegram/main_banner.jpg';
+                }
+
+                $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $text, $inlineKeyboard);
+            } else {
+                $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            }
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('处理提现金额输入异常', ['error' => $e->getMessage()]);
@@ -3367,12 +3416,14 @@ class TelegramWebhookController extends Controller
             $text .= "订单号：<code>{$orderNo}</code>\n";
             $text .= "提现金额：<b>{$amount}</b> 元\n";
             $text .= "手续费：<b>{$cashFee}</b> 元\n";
-            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n\n";
+            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n";
+            $remainingBalance = number_format($user->balance, 2);
+            $text .= "剩余余额：<b>{$remainingBalance}</b> 元\n\n";
             $text .= "📮 收款地址：\n<code>{$address}</code>\n\n";
             $text .= "⏳ 请耐心等待审核";
 
             $inlineKeyboard = [
-                [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
             ];
 
             $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);

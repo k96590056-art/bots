@@ -220,23 +220,39 @@ class CheckTronRecharge extends Command
 
             $telegramBot = new TelegramBotService();
 
+            $walletBalance = number_format($user->balance, 2);
             $text = "✅ <b>充值成功</b>\n\n";
             $text .= "订单编号：<code>{$order->id}</code>\n";
             $text .= "充值金额：<b>{$amount} USDT</b>\n";
             $text .= "到账金额：<b>{$order->amount}</b> 元\n";
-            $text .= "交易哈希：<code>" . substr($txHash, 0, 20) . "...</code>\n\n";
-            $text .= "💰 您的余额已更新，感谢使用！";
+            $text .= "交易哈希：<code>" . substr($txHash, 0, 20) . "...</code>\n";
+            $text .= "\n💵 余额：<b>{$walletBalance}</b> 元\n";
+            $text .= "\n💰 感谢使用！";
 
             $inlineKeyboard = [
                 [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
             ];
 
-            $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
+            // 如果有保存消息ID，则编辑原消息；否则发送新消息
+            if (!empty($order->telegram_message_id)) {
+                // 获取主菜单图片URL
+                $mainImageUrl = SystemConfig::getValue('telegram_bot_main_image');
+                if ($mainImageUrl) {
+                    $mainImageUrl = env('APP_URL') . '/uploads/' . $mainImageUrl;
+                } else {
+                    $mainImageUrl = env('APP_URL') . '/images/telegram/main_banner.jpg';
+                }
+
+                $telegramBot->editMessageMedia($user->telegram_id, $order->telegram_message_id, $mainImageUrl, $text, $inlineKeyboard);
+            } else {
+                $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
+            }
 
             Log::info('充值成功通知已发送', [
                 'user_id' => $user->id,
                 'telegram_id' => $user->telegram_id,
-                'order_id' => $order->id
+                'order_id' => $order->id,
+                'edited_message' => !empty($order->telegram_message_id)
             ]);
 
         } catch (\Exception $e) {

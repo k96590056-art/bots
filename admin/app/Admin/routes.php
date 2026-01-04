@@ -24,9 +24,16 @@ Route::group([
     $router->resource('red-envelopes','RedEnvelopesController');
     $router->resource('code-pay','CodePayController');
 
-    $router->resource('withdraws','WithdrawController');
+    // 批量操作（必须在 resource 路由之前定义，否则会被 {id} 匹配）
+    $router->post('withdraws/batch-info','WithdrawController@batchInfo');
+    $router->post('withdraws/batch-pass','WithdrawController@batchPass');
+    $router->post('withdraws/batch-refuse','WithdrawController@batchRefuse');
     // USDT 提现 TronLink 转账确认
     $router->post('withdraw/confirm-transfer','WithdrawController@confirmTransfer');
+    // 提现审核：通过和拒绝
+    $router->post('withdraws/{id}/pass','WithdrawController@pass');
+    $router->post('withdraws/{id}/refuse','WithdrawController@refuse');
+    $router->resource('withdraws','WithdrawController');
     $router->resource('banks','BankController');
     $router->resource('syslog','SyslogController');
     $router->resource('pay-settings','PaySettingController');
