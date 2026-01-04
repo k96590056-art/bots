@@ -15,7 +15,11 @@ class WithdrawController extends AdminController
 
     protected function grid()
     {
+        $adminUrl = rtrim(admin_url('/'), '/') . '/';
         Admin::script(<<<JS
+            // 管理后台URL前缀
+            const ADMIN_URL = '{$adminUrl}';
+
             $('.copyClick').click(function(){
                 var text = $(this).children('.copyValue');
                 text.unbind();
@@ -223,36 +227,42 @@ class WithdrawController extends AdminController
                         showConfirmButton: false
                     });
 
-                    $.post('/admin/withdraw/confirm-transfer', {
-                        _token: Dcat.token,
-                        id: orderId,
-                        tx_hash: tx
-                    }, function(r) {
-                        // 移除处理中标记
-                        processingOrders.delete(orderId);
-                        if (r.status) {
+                    $.ajax({
+                        url: ADMIN_URL + 'withdraw/confirm-transfer',
+                        type: 'POST',
+                        data: {
+                            _token: Dcat.token,
+                            id: orderId,
+                            tx_hash: tx
+                        },
+                        success: function(r) {
+                            // 移除处理中标记
+                            processingOrders.delete(orderId);
+                            if (r.status) {
+                                Swal.fire({
+                                    title: '转账成功',
+                                    text: '订单已完成',
+                                    type: 'success'
+                                }).then(() => {
+                                    Dcat.reload();
+                                });
+                            } else {
+                                Swal.fire({
+                                    title: '更新失败',
+                                    text: r.message || '更新订单状态失败，请手动处理',
+                                    type: 'error'
+                                });
+                            }
+                        },
+                        error: function() {
+                            // 移除处理中标记
+                            processingOrders.delete(orderId);
                             Swal.fire({
-                                title: '转账成功',
-                                text: '订单已完成',
-                                type: 'success'
-                            }).then(() => {
-                                Dcat.reload();
-                            });
-                        } else {
-                            Swal.fire({
-                                title: '更新失败',
-                                text: r.message || '更新订单状态失败，请手动处理',
+                                title: '请求失败',
+                                text: '网络错误，请手动处理订单',
                                 type: 'error'
                             });
                         }
-                    }).fail(function() {
-                        // 移除处理中标记
-                        processingOrders.delete(orderId);
-                        Swal.fire({
-                            title: '请求失败',
-                            text: '网络错误，请手动处理订单',
-                            type: 'error'
-                        });
                     });
 
                 } catch (error) {
@@ -298,9 +308,14 @@ class WithdrawController extends AdminController
                         cancelButtonText: '取消'
                     }).then((result) => {
                         if (result.isConfirmed) {
-                            $.post('/admin/withdraws/' + id + '/pass', {_token: Dcat.token}, function(r) {
-                                if (r.status) { Dcat.success(r.message); Dcat.reload(); }
-                                else { Dcat.error(r.message); }
+                            $.ajax({
+                                url: ADMIN_URL + 'withdraws/' + id + '/pass',
+                                type: 'POST',
+                                data: {_token: Dcat.token},
+                                success: function(r) {
+                                    if (r.status) { Dcat.success(r.message); Dcat.reload(); }
+                                    else { Dcat.error(r.message); }
+                                }
                             });
                         }
                     });
@@ -318,9 +333,14 @@ class WithdrawController extends AdminController
                     cancelButtonText: '取消'
                 }).then((result) => {
                     if (result.isConfirmed || result.value) {
-                        $.post('/admin/withdraws/' + id + '/refuse', {_token: Dcat.token}, function(r) {
-                            if (r.status) { Dcat.success(r.message); Dcat.reload(); }
-                            else { Dcat.error(r.message); }
+                        $.ajax({
+                            url: ADMIN_URL + 'withdraws/' + id + '/refuse',
+                            type: 'POST',
+                            data: {_token: Dcat.token},
+                            success: function(r) {
+                                if (r.status) { Dcat.success(r.message); Dcat.reload(); }
+                                else { Dcat.error(r.message); }
+                            }
                         });
                     }
                 });
@@ -396,13 +416,13 @@ class WithdrawController extends AdminController
                     var checkbox = row.find('input[type="checkbox"]');
 
                     if (!isPending) {
-                        // 不是待审核状态，隐藏 checkbox 单元格
-                        checkboxCell.hide();
-                        checkbox.prop('disabled', true).data('pending', false);
-                    } else {
-                        // 待审核状态，显示 checkbox 单元格
+                        // 不是待审核状态，显示 checkbox 单元格但隐藏 checkbox（保持td存在以维持表格布局）
                         checkboxCell.show();
-                        checkbox.prop('disabled', false).data('pending', true);
+                        checkbox.hide().prop('disabled', true).data('pending', false);
+                    } else {
+                        // 待审核状态，显示 checkbox 单元格和 checkbox
+                        checkboxCell.show();
+                        checkbox.show().prop('disabled', false).data('pending', true);
                         pendingCount++;
                     }
                 });
@@ -423,7 +443,9 @@ class WithdrawController extends AdminController
 
                 // 切换按钮显示，隐藏刷新和筛选按钮
                 $(this).hide();
-                $('.grid-refresh, .grid-filter-btn, button[data-action="filter"], .filter-btn, [data-toggle="filter"]').hide();
+                $('.grid-refresh, .grid-filter-btn, button[data-action="filter"], .filter-btn, [data-toggle="filter"], .btn-filter, .dropdown-filter, a[data-toggle="collapse"]').hide();
+                // Dcat Admin 筛选按钮
+                $('button:contains("筛选"), a:contains("筛选")').hide();
 
                 // 禁用每行的通过和拒绝按钮
                 $('table tbody tr').find('button').each(function() {
@@ -440,11 +462,11 @@ class WithdrawController extends AdminController
 
             // 退出批量操作模式
             $('#exit-batch-mode-btn').click(function() {
+                // 取消所有选中，恢复 checkbox 状态和显示
+                $('table input[type="checkbox"]').prop('checked', false).prop('disabled', false).removeData('pending').show();
+
                 // 隐藏 checkbox 列
                 hideCheckboxColumn();
-
-                // 取消所有选中，恢复 checkbox 状态
-                $('table input[type="checkbox"]').prop('checked', false).prop('disabled', false).removeData('pending');
 
                 // 移除事件绑定
                 $('table input[type="checkbox"]').off('change.batch');
@@ -452,7 +474,9 @@ class WithdrawController extends AdminController
                 // 切换按钮显示，恢复刷新和筛选按钮
                 $(this).hide();
                 $('#batch-pass-btn, #batch-refuse-btn, #batch-selected-count').hide();
-                $('.grid-refresh, .grid-filter-btn, button[data-action="filter"], .filter-btn, [data-toggle="filter"]').show();
+                $('.grid-refresh, .grid-filter-btn, button[data-action="filter"], .filter-btn, [data-toggle="filter"], .btn-filter, .dropdown-filter, a[data-toggle="collapse"]').show();
+                // Dcat Admin 筛选按钮
+                $('button:contains("筛选"), a:contains("筛选")').show();
 
                 // 恢复每行的通过和拒绝按钮
                 $('table tbody tr').find('button.batch-disabled').each(function() {
@@ -463,19 +487,52 @@ class WithdrawController extends AdminController
                 Dcat.info('已退出批量操作模式');
             });
 
+            // 手动获取选中的订单ID
+            function getSelectedIds() {
+                var ids = [];
+                $('table tbody input[type="checkbox"]:checked').each(function() {
+                    // 尝试多种方式获取ID
+                    var val = $(this).val();
+                    var dataId = $(this).data('id');
+                    var rowId = $(this).closest('tr').data('key') || $(this).closest('tr').data('id');
+                    var name = $(this).attr('name');
+
+                    console.log('checkbox信息:', {val: val, dataId: dataId, rowId: rowId, name: name});
+
+                    // 优先使用 data-id，其次是 tr 的 data-key，然后是 value
+                    var id = dataId || rowId || (val && val !== 'on' && val !== '' ? val : null);
+
+                    // 如果 name 是 _row_selector_[] 格式，尝试从 value 获取
+                    if (!id && name && name.indexOf('_row_selector_') >= 0 && val) {
+                        id = val;
+                    }
+
+                    if (id) {
+                        ids.push(id);
+                    }
+                });
+                console.log('最终获取的IDs:', ids);
+                return ids;
+            }
+
             // 批量通过按钮点击
             $('#batch-pass-btn').click(function() {
-                var ids = Dcat.grid.selected();
+                var ids = getSelectedIds();
+                console.log('选中的ID:', ids);
                 if (!ids || ids.length === 0) {
                     Dcat.warning('请先选择要通过的订单');
                     return;
                 }
 
                 // 获取选中订单的数据
-                $.post('/admin/withdraws/batch-info', {
-                    _token: Dcat.token,
-                    ids: ids
-                }, function(res) {
+                $.ajax({
+                    url: ADMIN_URL + 'withdraws/batch-info',
+                    type: 'POST',
+                    data: {
+                        _token: Dcat.token,
+                        ids: ids
+                    },
+                    success: function(res) {
                     if (!res.status) {
                         Dcat.error(res.message);
                         return;
@@ -514,14 +571,19 @@ class WithdrawController extends AdminController
                             // 先处理普通提现
                             if (otherOrders.length > 0) {
                                 var otherIds = otherOrders.map(o => o.id);
-                                $.post('/admin/withdraws/batch-pass', {
-                                    _token: Dcat.token,
-                                    ids: otherIds
-                                }, function(r) {
-                                    if (r.status) {
-                                        Dcat.success(r.message);
-                                    } else {
-                                        Dcat.error(r.message);
+                                $.ajax({
+                                    url: ADMIN_URL + 'withdraws/batch-pass',
+                                    type: 'POST',
+                                    data: {
+                                        _token: Dcat.token,
+                                        ids: otherIds
+                                    },
+                                    success: function(r) {
+                                        if (r.status) {
+                                            Dcat.success(r.message);
+                                        } else {
+                                            Dcat.error(r.message);
+                                        }
                                     }
                                 });
                             }
@@ -536,7 +598,7 @@ class WithdrawController extends AdminController
                             }
                         }
                     });
-                });
+                }});
             });
 
             // 处理批量 TRC20 转账
@@ -628,15 +690,20 @@ class WithdrawController extends AdminController
                     });
 
                     // 更新订单状态
-                    $.post('/admin/withdraw/confirm-transfer', {
-                        _token: Dcat.token,
-                        id: order.id,
-                        tx_hash: tx
-                    }, function(r) {
-                        if (r.status) {
-                            Dcat.success('订单 #' + order.id + ' 转账成功');
+                    $.ajax({
+                        url: ADMIN_URL + 'withdraw/confirm-transfer',
+                        type: 'POST',
+                        data: {
+                            _token: Dcat.token,
+                            id: order.id,
+                            tx_hash: tx
+                        },
+                        success: function(r) {
+                            if (r.status) {
+                                Dcat.success('订单 #' + order.id + ' 转账成功');
+                            }
+                            callback();
                         }
-                        callback();
                     });
                 } catch (error) {
                     if (error.message && error.message.includes('cancel')) {
@@ -650,7 +717,8 @@ class WithdrawController extends AdminController
 
             // 批量拒绝按钮点击
             $('#batch-refuse-btn').click(function() {
-                var ids = Dcat.grid.selected();
+                var ids = getSelectedIds();
+                console.log('选中的ID:', ids);
                 if (!ids || ids.length === 0) {
                     Dcat.warning('请先选择要拒绝的订单');
                     return;
@@ -667,15 +735,20 @@ class WithdrawController extends AdminController
                     cancelButtonText: '取消'
                 }).then((result) => {
                     if (result.isConfirmed || result.value) {
-                        $.post('/admin/withdraws/batch-refuse', {
-                            _token: Dcat.token,
-                            ids: ids
-                        }, function(r) {
-                            if (r.status) {
-                                Dcat.success(r.message);
-                                Dcat.reload();
-                            } else {
-                                Dcat.error(r.message);
+                        $.ajax({
+                            url: ADMIN_URL + 'withdraws/batch-refuse',
+                            type: 'POST',
+                            data: {
+                                _token: Dcat.token,
+                                ids: ids
+                            },
+                            success: function(r) {
+                                if (r.status) {
+                                    Dcat.success(r.message);
+                                    Dcat.reload();
+                                } else {
+                                    Dcat.error(r.message);
+                                }
                             }
                         });
                     }
@@ -775,21 +848,25 @@ JS
         }
         $user = \App\Models\User::find($withdraw->user_id);
         if ($user) {
-            $user->money = bcadd($user->money, $withdraw->amount, 2);
-            $user->save();
+            // 使用 increment 原子操作避免并发问题
+            \App\Models\User::where('id', $user->id)->increment('balance', $withdraw->amount);
+            $user->refresh();
 
             // 发送Telegram通知
             if ($user->telegram_id) {
                 try {
                     $telegramBot = new \App\Services\TelegramBotService();
                     $text = "❌ <b>提现申请被拒绝</b>\n\n";
-                    $text .= "━━━━━━━━━━━━━━━━━━━━\n";
+                    $text .= "━━━━━━━━━━━━\n";
                     $text .= "📋 订单号：<code>{$withdraw->order_no}</code>\n";
                     $text .= "💰 提现金额：<b>{$withdraw->amount}</b> 元\n";
                     $text .= "💵 已退回余额：<b>{$withdraw->amount}</b> 元\n";
-                    $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    $text .= "━━━━━━━━━━━━\n\n";
                     $text .= "如有疑问请联系客服。";
-                    $telegramBot->sendMessage($user->telegram_id, $text, ['parse_mode' => 'HTML']);
+                    $inlineKeyboard = [
+                        [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+                    ];
+                    $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
                 } catch (\Exception $e) {
                     \Log::error('发送提现拒绝通知失败', ['error' => $e->getMessage()]);
                 }
@@ -1047,12 +1124,8 @@ JS
                 ->get();
 
             foreach ($withdraws as $withdraw) {
-                // 退款给用户
-                $user = \App\Models\User::where('id', $withdraw->user_id)->lockForUpdate()->first();
-                if ($user) {
-                    $user->money = bcadd($user->money, $withdraw->amount, 2);
-                    $user->save();
-                }
+                // 退款给用户 - 使用 increment 原子操作
+                \App\Models\User::where('id', $withdraw->user_id)->increment('balance', $withdraw->amount);
 
                 $withdraw->state = 3;
                 $withdraw->info = '管理员批量拒绝';
