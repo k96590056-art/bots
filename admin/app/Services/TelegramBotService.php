@@ -499,6 +499,83 @@ class TelegramBotService
     }
 
     /**
+     * 编辑消息的媒体内容（替换图片）
+     *
+     * @param int $chatId
+     * @param int $messageId
+     * @param string $photoUrl
+     * @param string $caption
+     * @param array $inlineKeyboard
+     * @return array
+     */
+    public function editMessageMedia($chatId, $messageId, $photoUrl, $caption = "", $inlineKeyboard = [])
+    {
+        $media = [
+            "type" => "photo",
+            "media" => $photoUrl,
+            "caption" => $caption,
+            "parse_mode" => "HTML"
+        ];
+
+        $data = [
+            "chat_id" => $chatId,
+            "message_id" => $messageId,
+            "media" => json_encode($media)
+        ];
+
+        if (!empty($inlineKeyboard)) {
+            $data["reply_markup"] = json_encode(["inline_keyboard" => $inlineKeyboard]);
+        }
+
+        try {
+            $ch = curl_init();
+            curl_setopt($ch, CURLOPT_URL, $this->apiUrl . "editMessageMedia");
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+            curl_setopt($ch, CURLOPT_POST, 1);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+            $response = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            if ($curlError) {
+                Log::error("Telegram editMessageMedia CURL错误", [
+                    "chat_id" => $chatId,
+                    "message_id" => $messageId,
+                    "curl_error" => $curlError
+                ]);
+                return ["code" => 500, "message" => "请求失败：" . $curlError];
+            }
+
+            $result = json_decode($response, true);
+            
+            if (!$result || !isset($result["ok"]) || !$result["ok"]) {
+                Log::error("Telegram editMessageMedia失败", [
+                    "chat_id" => $chatId,
+                    "message_id" => $messageId,
+                    "http_code" => $httpCode,
+                    "response" => $result
+                ]);
+                return ["code" => 500, "message" => "编辑消息媒体失败", "data" => $result];
+            }
+
+            return ["code" => 200, "message" => "成功", "data" => $result];
+        } catch (\Exception $e) {
+            Log::error("Telegram editMessageMedia异常", [
+                "chat_id" => $chatId,
+                "message_id" => $messageId,
+                "error" => $e->getMessage()
+            ]);
+            return ["code" => 500, "message" => $e->getMessage()];
+        }
+    }
+
+
+    /**
      * 编辑带内联键盘的消息
      *
      * @param int $chatId

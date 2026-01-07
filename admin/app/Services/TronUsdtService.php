@@ -375,6 +375,7 @@ class TronUsdtService
 
     /**
      * 获取指定地址最近收到的USDT转账记录
+     * 使用 TronGrid API（官方免费）
      *
      * @param string $address TRON地址
      * @param int $limit 返回记录数量
@@ -382,44 +383,41 @@ class TronUsdtService
      */
     public function getRecentUsdtTransfers(string $address, int $limit = 50): array
     {
+        // USDT TRC20 合约地址
+        $usdtContract = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
+
+        return $this->getTransfersFromTronGrid($address, $usdtContract, $limit);
+    }
+
+    /**
+     * 从 TronGrid API 获取转账记录（官方免费API）
+     */
+    private function getTransfersFromTronGrid(string $address, string $usdtContract, int $limit): array
+    {
         try {
-            $apiUrl = SystemConfig::getValue('tron_api_url') ?: 'https://apilist.tronscanapi.com';
-            $base = rtrim($apiUrl, '/');
-            $headers = $this->buildHeaders();
-
-            // USDT TRC20 合约地址
-            $usdtContract = 'TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t';
-
-            // 查询该地址的TRC20转入记录
-            // API: /api/token_trc20/transfers
-            $url = $base . '/api/token_trc20/transfers?' . http_build_query([
-                'relatedAddress' => $address,
-                'toAddress' => $address,  // 只查收款记录
+            $url = 'https://api.trongrid.io/v1/accounts/' . urlencode($address) . '/transactions/trc20?' . http_build_query([
+                'only_to' => 'true',
                 'contract_address' => $usdtContract,
                 'limit' => $limit,
-                'start' => 0,
-                'sort' => '-timestamp',  // 按时间倒序
-                'count' => 'true'
             ]);
 
-            Log::info('查询USDT转账记录', ['url' => $url]);
+            Log::info('TronGrid查询USDT转账记录', ['url' => $url]);
 
-            $json = $this->httpGet($url, $headers);
+            $json = $this->httpGet($url, $this->buildHeaders());
             $data = json_decode($json, true);
 
-            if (!is_array($data)) {
-                Log::warning('USDT转账记录查询返回非数组', ['response' => $json]);
+            if (!is_array($data) || !isset($data['success']) || $data['success'] !== true) {
+                Log::warning('TronGrid返回异常', ['response' => substr($json, 0, 500)]);
                 return [];
             }
 
-            $transfers = $data['token_transfers'] ?? $data['data'] ?? [];
-
+            $transfers = $data['data'] ?? [];
             if (empty($transfers)) {
-                Log::info('未找到USDT转账记录', ['address' => $address]);
+                Log::info('TronGrid未找到USDT转账记录', ['address' => $address]);
                 return [];
             }
 
-            Log::info('找到USDT转账记录', [
+            Log::info('TronGrid找到USDT转账记录', [
                 'address' => $address,
                 'count' => count($transfers)
             ]);
@@ -428,20 +426,20 @@ class TronUsdtService
             $result = [];
             foreach ($transfers as $transfer) {
                 $result[] = [
-                    'transaction_id' => $transfer['transaction_id'] ?? $transfer['hash'] ?? '',
-                    'from' => $transfer['from_address'] ?? $transfer['from'] ?? '',
-                    'to' => $transfer['to_address'] ?? $transfer['to'] ?? '',
-                    'value' => $transfer['quant'] ?? $transfer['value'] ?? $transfer['amount'] ?? 0,
-                    'block_timestamp' => $transfer['block_ts'] ?? $transfer['block_timestamp'] ?? $transfer['timestamp'] ?? 0,
-                    'confirmed' => $transfer['confirmed'] ?? true,
-                    'block' => $transfer['block'] ?? 0
+                    'transaction_id' => $transfer['transaction_id'] ?? '',
+                    'from' => $transfer['from'] ?? '',
+                    'to' => $transfer['to'] ?? '',
+                    'value' => $transfer['value'] ?? 0,
+                    'block_timestamp' => $transfer['block_timestamp'] ?? 0,
+                    'confirmed' => true,
+                    'block' => 0
                 ];
             }
 
             return $result;
 
         } catch (\Exception $e) {
-            Log::error('查询USDT转账记录失败', [
+            Log::warning('TronGrid查询失败，将回退到TronScan', [
                 'error' => $e->getMessage(),
                 'address' => $address
             ]);
