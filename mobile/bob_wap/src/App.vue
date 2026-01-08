@@ -50,7 +50,7 @@ export default {
     // 检测 Telegram 环境并自动登录
     checkTelegramAutoLogin() {
       let that = this;
-      
+
       // 判断是否为开发模式
       const isDevelopment = process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
@@ -234,10 +234,10 @@ export default {
           let sportList = [];
           let lotteryList = [];
           let conciseList = [];
-          
+
           console.log('接口返回的原始数据:', res.data);
           console.log('解析后的list:', list, '长度:', list.length);
-          
+
           // 先遍历所有数据，分类存储
           if (Array.isArray(list)) {
             list.forEach(el => {
@@ -263,7 +263,7 @@ export default {
           } else {
             console.warn('游戏列表数据格式错误，不是数组:', list);
           }
-          
+
           // 循环结束后，一次性保存到 localStorage
           localStorage.setItem('realbetList', JSON.stringify(realbetList));
           localStorage.setItem('jokerList', JSON.stringify(jokerList));
@@ -271,10 +271,10 @@ export default {
           localStorage.setItem('sportList', JSON.stringify(sportList));
           localStorage.setItem('lotteryList', JSON.stringify(lotteryList));
           localStorage.setItem('conciseList', JSON.stringify(conciseList));
-          
+
           // 更新 store
           that.$store.commit('changGameList');
-          
+
           console.log('游戏列表数据已加载:', {
             realbetList: realbetList.length,
             jokerList: jokerList.length,
@@ -435,7 +435,14 @@ export default {
           localStorage.setItem('userInfo', JSON.stringify(userInfo));
           that.userInfo = userInfo;
           that.$store.commit('changUserInfo');
+        } else if (res.code === 401 || res.code === 403) {
+          // token 无效，清除并触发自动登录
+          sessionStorage.removeItem('token');
+          that.checkTelegramAutoLogin();
         }
+      }).catch(() => {
+        // 请求异常时也清除 token
+        sessionStorage.removeItem('token');
       });
     },
     // 刷新页面更新信息

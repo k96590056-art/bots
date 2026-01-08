@@ -347,8 +347,18 @@ class WithdrawController extends AdminController
             };
 
             // 批量通过队列
-            var batchTransferQueue = [];
+            var batchTRC20Queue = [];
+            var batchERC20Queue = [];
             var batchTransferIndex = 0;
+            // 批量转账统计
+            var batchStats = {
+                trc20Success: 0,
+                trc20Failed: 0,
+                trc20Skipped: 0,
+                erc20Success: 0,
+                erc20Failed: 0,
+                erc20Skipped: 0
+            };
 
             // 页面加载后立即隐藏 checkbox 列（多次尝试确保生效）
             function hideCheckboxColumn() {
@@ -541,7 +551,20 @@ class WithdrawController extends AdminController
                     var orders = res.data;
                     var skipped = res.skipped || 0;
                     var trc20Orders = orders.filter(o => o.type == 2);
-                    var otherOrders = orders.filter(o => o.type != 2);
+                    var erc20Orders = orders.filter(o => o.type == 3);
+                    var otherOrders = orders.filter(o => o.type != 2 && o.type != 3);
+
+                    // 检测钱包安装情况
+                    var hasTron = hasTronWallet();
+                    var hasEth = hasEthWallet();
+                    var walletWarnings = [];
+
+                    if (trc20Orders.length > 0 && !hasTron) {
+                        walletWarnings.push('<span style="color:#dc3545;">⚠️ 未检测到 TRON 钱包，TRC20订单将无法转账</span>');
+                    }
+                    if (erc20Orders.length > 0 && !hasEth) {
+                        walletWarnings.push('<span style="color:#dc3545;">⚠️ 未检测到 ETH 钱包，ERC20订单将无法转账</span>');
+                    }
 
                     var html = '<div style="text-align:left;padding:10px;">' +
                                '<p>可处理待审核订单：<b>' + orders.length + '</b> 个</p>';
@@ -553,7 +576,21 @@ class WithdrawController extends AdminController
                         html += '<p style="color:#28a745;">✓ 普通提现：<b>' + otherOrders.length + '</b> 个（直接通过）</p>';
                     }
                     if (trc20Orders.length > 0) {
-                        html += '<p style="color:#1e88e5;">⟐ TRC20提现：<b>' + trc20Orders.length + '</b> 个（需逐个转账）</p>';
+                        var tronStatus = hasTron ? '✓' : '✗';
+                        var tronColor = hasTron ? '#1e88e5' : '#999';
+                        html += '<p style="color:' + tronColor + ';">' + tronStatus + ' TRC20提现：<b>' + trc20Orders.length + '</b> 个（需TRON钱包逐个转账）</p>';
+                    }
+                    if (erc20Orders.length > 0) {
+                        var ethStatus = hasEth ? '✓' : '✗';
+                        var ethColor = hasEth ? '#f39c12' : '#999';
+                        html += '<p style="color:' + ethColor + ';">' + ethStatus + ' ERC20提现：<b>' + erc20Orders.length + '</b> 个（需ETH钱包逐个转账）</p>';
+                    }
+
+                    // 显示钱包警告
+                    if (walletWarnings.length > 0) {
+                        html += '<hr style="margin:10px 0;border-top:1px dashed #ccc;">';
+                        html += walletWarnings.join('<br>');
+                        html += '<p style="color:#666;font-size:12px;margin-top:8px;">推荐安装 <a href="https://www.okx.com/zh-hans/web3" target="_blank">OKX Wallet</a>（同时支持TRC20和ERC20）</p>';
                     }
                     html += '</div>';
 
@@ -588,11 +625,22 @@ class WithdrawController extends AdminController
                                 });
                             }
 
-                            // 处理 TRC20 提现（需要逐个转账）
-                            if (trc20Orders.length > 0) {
-                                batchTransferQueue = trc20Orders;
+                            // 处理 USDT 提现（需要逐个钱包转账）
+                            if (trc20Orders.length > 0 || erc20Orders.length > 0) {
+                                // 重置统计
+                                batchStats = {
+                                    trc20Success: 0, trc20Failed: 0, trc20Skipped: 0,
+                                    erc20Success: 0, erc20Failed: 0, erc20Skipped: 0
+                                };
+                                // 先处理 TRC20，再处理 ERC20
+                                batchTRC20Queue = trc20Orders;
+                                batchERC20Queue = erc20Orders;
                                 batchTransferIndex = 0;
-                                processBatchTRC20Transfer();
+                                if (trc20Orders.length > 0) {
+                                    processBatchTRC20Transfer();
+                                } else {
+                                    processBatchERC20Transfer();
+                                }
                             } else {
                                 setTimeout(() => Dcat.reload(), 1000);
                             }
@@ -601,21 +649,48 @@ class WithdrawController extends AdminController
                 }});
             });
 
+            // 生成批量转账结果摘要
+            function getBatchSummary() {
+                var summary = [];
+                if (batchTRC20Queue.length > 0) {
+                    var trc20Parts = [];
+                    if (batchStats.trc20Success > 0) trc20Parts.push('<span style="color:#28a745;">成功 ' + batchStats.trc20Success + '</span>');
+                    if (batchStats.trc20Failed > 0) trc20Parts.push('<span style="color:#dc3545;">失败 ' + batchStats.trc20Failed + '</span>');
+                    if (batchStats.trc20Skipped > 0) trc20Parts.push('<span style="color:#6c757d;">跳过 ' + batchStats.trc20Skipped + '</span>');
+                    summary.push('<p><b>TRC20：</b>' + trc20Parts.join('，') + '</p>');
+                }
+                if (batchERC20Queue.length > 0) {
+                    var erc20Parts = [];
+                    if (batchStats.erc20Success > 0) erc20Parts.push('<span style="color:#28a745;">成功 ' + batchStats.erc20Success + '</span>');
+                    if (batchStats.erc20Failed > 0) erc20Parts.push('<span style="color:#dc3545;">失败 ' + batchStats.erc20Failed + '</span>');
+                    if (batchStats.erc20Skipped > 0) erc20Parts.push('<span style="color:#6c757d;">跳过 ' + batchStats.erc20Skipped + '</span>');
+                    summary.push('<p><b>ERC20：</b>' + erc20Parts.join('，') + '</p>');
+                }
+                return summary.join('');
+            }
+
             // 处理批量 TRC20 转账
             function processBatchTRC20Transfer() {
-                if (batchTransferIndex >= batchTransferQueue.length) {
-                    Swal.fire({
-                        title: '批量转账完成',
-                        text: '共处理 ' + batchTransferQueue.length + ' 个TRC20订单',
-                        type: 'success'
-                    }).then(() => {
-                        Dcat.reload();
-                    });
+                if (batchTransferIndex >= batchTRC20Queue.length) {
+                    // TRC20 处理完毕，检查是否有 ERC20 需要处理
+                    if (batchERC20Queue.length > 0) {
+                        batchTransferIndex = 0;
+                        processBatchERC20Transfer();
+                    } else {
+                        // 显示最终结果
+                        Swal.fire({
+                            title: '批量转账完成',
+                            html: getBatchSummary(),
+                            type: 'success'
+                        }).then(() => {
+                            Dcat.reload();
+                        });
+                    }
                     return;
                 }
 
-                var order = batchTransferQueue[batchTransferIndex];
-                var progress = (batchTransferIndex + 1) + '/' + batchTransferQueue.length;
+                var order = batchTRC20Queue[batchTransferIndex];
+                var progress = (batchTransferIndex + 1) + '/' + batchTRC20Queue.length;
 
                 Swal.fire({
                     title: 'TRC20 批量转账 (' + progress + ')',
@@ -652,13 +727,31 @@ class WithdrawController extends AdminController
                 }).then((result) => {
                     if (result.isConfirmed || result.value) {
                         // 执行转账
-                        executeBatchTransfer(order, function() {
+                        executeBatchTransfer(order, function(success) {
+                            if (success) {
+                                batchStats.trc20Success++;
+                            } else {
+                                batchStats.trc20Failed++;
+                            }
                             batchTransferIndex++;
                             processBatchTRC20Transfer();
                         });
                     } else {
-                        // 跳过剩余
-                        Dcat.reload();
+                        // 跳过剩余 - 统计跳过的数量
+                        batchStats.trc20Skipped = batchTRC20Queue.length - batchTransferIndex;
+                        // 检查是否还有 ERC20 需要处理
+                        if (batchERC20Queue.length > 0) {
+                            batchTransferIndex = 0;
+                            processBatchERC20Transfer();
+                        } else {
+                            Swal.fire({
+                                title: '批量转账完成',
+                                html: getBatchSummary(),
+                                type: 'success'
+                            }).then(() => {
+                                Dcat.reload();
+                            });
+                        }
                     }
                 });
             }
@@ -701,17 +794,251 @@ class WithdrawController extends AdminController
                         success: function(r) {
                             if (r.status) {
                                 Dcat.success('订单 #' + order.id + ' 转账成功');
+                                callback(true);
+                            } else {
+                                // 后端更新失败，显示交易哈希供手动处理
+                                Swal.fire({
+                                    title: '转账已完成，但更新订单失败',
+                                    html: '<p>请保存以下交易哈希，在订单详情中手动填写：</p>' +
+                                          '<p style="word-break:break-all;background:#f5f5f5;padding:10px;border-radius:4px;"><code>' + tx + '</code></p>' +
+                                          '<p style="color:#dc3545;margin-top:10px;">错误：' + (r.message || '未知错误') + '</p>',
+                                    type: 'warning'
+                                });
+                                callback(false);
                             }
-                            callback();
+                        },
+                        error: function() {
+                            // 网络错误，显示交易哈希
+                            Swal.fire({
+                                title: '网络错误，请手动处理',
+                                html: '<p>转账已发送，但无法更新订单状态。</p>' +
+                                      '<p>请复制交易哈希，在订单详情中手动填写：</p>' +
+                                      '<p style="word-break:break-all;background:#f5f5f5;padding:10px;border-radius:4px;"><code>' + tx + '</code></p>',
+                                type: 'error'
+                            });
+                            callback(false);
                         }
                     });
                 } catch (error) {
-                    if (error.message && error.message.includes('cancel')) {
+                    var errorMsg = error.message || '未知错误';
+                    if (errorMsg.includes('cancel') || errorMsg.includes('Cancel')) {
                         Dcat.warning('已取消转账');
+                    } else if (errorMsg.includes('balance') || errorMsg.includes('insufficient')) {
+                        Dcat.error('钱包 USDT 余额不足');
+                    } else if (errorMsg.includes('bandwidth') || errorMsg.includes('energy')) {
+                        Dcat.error('钱包 TRX 不足（需要支付手续费）');
                     } else {
-                        Dcat.error('转账失败: ' + error.message);
+                        Dcat.error('转账失败: ' + errorMsg);
                     }
-                    callback();
+                    callback(false);
+                }
+            }
+
+            // ============ ERC20 批量转账相关 ============
+            const ERC20_USDT_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+            const ETH_MAINNET_CHAIN_ID = '0x1';
+
+            // 获取 EVM 兼容钱包 Provider（支持 MetaMask、OKX、TokenPocket 等）
+            function getEthereumProvider() {
+                // 多钱包共存时，优先选择 MetaMask，否则用第一个可用的
+                if (window.ethereum && window.ethereum.providers && Array.isArray(window.ethereum.providers)) {
+                    const metamask = window.ethereum.providers.find(p => p.isMetaMask && !p.isBraveWallet);
+                    if (metamask) return metamask;
+                    // 没有 MetaMask，返回第一个
+                    return window.ethereum.providers[0] || null;
+                }
+                // 单钱包情况（MetaMask、OKX Wallet 等都会注入 window.ethereum）
+                if (window.ethereum) {
+                    return window.ethereum;
+                }
+                return null;
+            }
+
+            // 检测 TRON 钱包（TronLink、OKX Wallet 等）
+            function hasTronWallet() {
+                return !!(window.tronWeb || window.tronLink);
+            }
+
+            // 检测 ETH 钱包
+            function hasEthWallet() {
+                return !!getEthereumProvider();
+            }
+
+            // 处理批量 ERC20 转账
+            function processBatchERC20Transfer() {
+                if (batchTransferIndex >= batchERC20Queue.length) {
+                    // 显示最终结果
+                    Swal.fire({
+                        title: '批量转账完成',
+                        html: getBatchSummary(),
+                        type: 'success'
+                    }).then(() => {
+                        Dcat.reload();
+                    });
+                    return;
+                }
+
+                var order = batchERC20Queue[batchTransferIndex];
+                var progress = (batchTransferIndex + 1) + '/' + batchERC20Queue.length;
+
+                Swal.fire({
+                    title: 'ERC20 批量转账 (' + progress + ')',
+                    html: '<div style="padding:15px;text-align:left;">' +
+                          '<div style="margin-bottom:12px;">' +
+                          '<span style="color:#666;">收款地址：</span>' +
+                          '<code style="font-size:11px;">' + order.usdt_address + '</code>' +
+                          '</div>' +
+                          '<div style="background:#fff3e0;border-radius:8px;padding:12px;margin-bottom:12px;">' +
+                          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
+                          '<span style="color:#666;font-size:13px;">实际提款金额</span>' +
+                          '<span style="font-weight:600;">' + order.real_money + ' 元</span>' +
+                          '</div>' +
+                          '<div style="display:flex;justify-content:space-between;margin-bottom:6px;">' +
+                          '<span style="color:#666;font-size:13px;">汇率</span>' +
+                          '<span>' + order.usdt_rate + '</span>' +
+                          '</div>' +
+                          '<div style="color:#e65100;font-size:12px;text-align:right;">' +
+                          'USDT = ' + order.real_money + ' ÷ ' + order.usdt_rate + ' ≈ ' + order.usdt_amount +
+                          '</div>' +
+                          '</div>' +
+                          '<div style="text-align:center;">' +
+                          '<span style="font-size:24px;font-weight:700;color:#f39c12;">' + order.usdt_amount + '</span>' +
+                          '<span style="color:#666;margin-left:5px;">USDT</span>' +
+                          '</div>' +
+                          '</div>',
+                    type: 'info',
+                    showCancelButton: true,
+                    confirmButtonColor: '#f39c12',
+                    cancelButtonColor: '#6c757d',
+                    confirmButtonText: '转账此订单',
+                    cancelButtonText: '跳过剩余',
+                    width: '420px'
+                }).then((result) => {
+                    if (result.isConfirmed || result.value) {
+                        executeBatchERC20Transfer(order, function(success) {
+                            if (success) {
+                                batchStats.erc20Success++;
+                            } else {
+                                batchStats.erc20Failed++;
+                            }
+                            batchTransferIndex++;
+                            processBatchERC20Transfer();
+                        });
+                    } else {
+                        // 跳过剩余 - 统计跳过的数量
+                        batchStats.erc20Skipped = batchERC20Queue.length - batchTransferIndex;
+                        Swal.fire({
+                            title: '批量转账完成',
+                            html: getBatchSummary(),
+                            type: 'success'
+                        }).then(() => {
+                            Dcat.reload();
+                        });
+                    }
+                });
+            }
+
+            // 执行单个 ERC20 批量转账
+            async function executeBatchERC20Transfer(order, callback) {
+                const provider = getEthereumProvider();
+                if (!provider) {
+                    Dcat.error('请先安装支持 ETH 的钱包（如 OKX Wallet、MetaMask）');
+                    callback(false);
+                    return;
+                }
+
+                Swal.fire({
+                    title: '正在转账...',
+                    html: '<p>请在钱包中确认交易</p>',
+                    allowOutsideClick: false,
+                    showConfirmButton: false,
+                    onBeforeOpen: () => { Swal.showLoading(); }
+                });
+
+                try {
+                    const accounts = await provider.request({ method: 'eth_requestAccounts' });
+                    if (!accounts || accounts.length === 0) {
+                        Dcat.warning('请先在钱包中授权');
+                        callback(false);
+                        return;
+                    }
+
+                    const chainId = await provider.request({ method: 'eth_chainId' });
+                    if (chainId !== ETH_MAINNET_CHAIN_ID) {
+                        try {
+                            await provider.request({
+                                method: 'wallet_switchEthereumChain',
+                                params: [{ chainId: ETH_MAINNET_CHAIN_ID }],
+                            });
+                        } catch (switchError) {
+                            Dcat.error('请切换到以太坊主网');
+                            callback(false);
+                            return;
+                        }
+                    }
+
+                    const amountHex = (BigInt(Math.floor(order.usdt_amount * 1e6))).toString(16).padStart(64, '0');
+                    const toAddressHex = order.usdt_address.toLowerCase().replace('0x', '').padStart(64, '0');
+                    const data = '0xa9059cbb' + toAddressHex + amountHex;
+
+                    const txHash = await provider.request({
+                        method: 'eth_sendTransaction',
+                        params: [{
+                            from: accounts[0],
+                            to: ERC20_USDT_CONTRACT,
+                            data: data,
+                            gas: '0x186A0',
+                        }],
+                    });
+
+                    $.ajax({
+                        url: ADMIN_URL + 'withdraw/confirm-transfer',
+                        type: 'POST',
+                        data: {
+                            _token: Dcat.token,
+                            id: order.id,
+                            tx_hash: txHash
+                        },
+                        success: function(r) {
+                            if (r.status) {
+                                Dcat.success('订单 #' + order.id + ' 转账成功');
+                                callback(true);
+                            } else {
+                                // 后端更新失败，显示交易哈希供手动处理
+                                Swal.fire({
+                                    title: '转账已完成，但更新订单失败',
+                                    html: '<p>请保存以下交易哈希，在订单详情中手动填写：</p>' +
+                                          '<p style="word-break:break-all;background:#f5f5f5;padding:10px;border-radius:4px;"><code>' + txHash + '</code></p>' +
+                                          '<p style="color:#dc3545;margin-top:10px;">错误：' + (r.message || '未知错误') + '</p>',
+                                    type: 'warning'
+                                });
+                                callback(false);
+                            }
+                        },
+                        error: function() {
+                            // 网络错误，显示交易哈希
+                            Swal.fire({
+                                title: '网络错误，请手动处理',
+                                html: '<p>转账已发送，但无法更新订单状态。</p>' +
+                                      '<p>请复制交易哈希，在订单详情中手动填写：</p>' +
+                                      '<p style="word-break:break-all;background:#f5f5f5;padding:10px;border-radius:4px;"><code>' + txHash + '</code></p>',
+                                type: 'error'
+                            });
+                            callback(false);
+                        }
+                    });
+                } catch (error) {
+                    var errorMsg = error.message || '未知错误';
+                    if (error.code === 4001) {
+                        Dcat.warning('已取消转账');
+                    } else if (errorMsg.includes('insufficient funds') || errorMsg.includes('balance')) {
+                        Dcat.error('钱包余额不足（ETH 或 USDT）');
+                    } else if (errorMsg.includes('gas')) {
+                        Dcat.error('ETH 余额不足以支付 Gas 费用');
+                    } else {
+                        Dcat.error('转账失败: ' + errorMsg);
+                    }
+                    callback(false);
                 }
             }
 
@@ -827,9 +1154,12 @@ JS
         if ($withdraw->state != 1 && $withdraw->state != 4) {
             return response()->json(['status' => false, 'message' => '订单状态异常']);
         }
-        // TRC20 提现不能直接通过，必须通过 TronLink 转账
+        // USDT 提现不能直接通过，必须通过钱包转账
         if ($withdraw->type == 2) {
             return response()->json(['status' => false, 'message' => 'TRC20提现请使用TronLink转账']);
+        }
+        if ($withdraw->type == 3) {
+            return response()->json(['status' => false, 'message' => 'ERC20提现请使用MetaMask转账']);
         }
         $withdraw->state = 2;
         $withdraw->info = '管理员审核通过';
@@ -926,6 +1256,25 @@ JS
             return response()->json(['status' => false, 'message' => '参数错误']);
         }
 
+        // 先查询订单类型以验证 tx_hash 格式
+        $withdrawForCheck = \App\Models\Withdraw::find($id);
+        if (!$withdrawForCheck) {
+            return response()->json(['status' => false, 'message' => '订单不存在']);
+        }
+
+        // 验证 tx_hash 格式
+        if ($withdrawForCheck->type == 3) {
+            // ERC20: 0x 开头，共 66 个字符
+            if (!preg_match('/^0x[a-fA-F0-9]{64}$/', $txHash)) {
+                return response()->json(['status' => false, 'message' => 'ERC20 交易哈希格式错误，应为 0x 开头的 66 位字符']);
+            }
+        } elseif ($withdrawForCheck->type == 2) {
+            // TRC20: 64 位十六进制
+            if (!preg_match('/^[a-fA-F0-9]{64}$/', $txHash)) {
+                return response()->json(['status' => false, 'message' => 'TRC20 交易哈希格式错误，应为 64 位十六进制字符']);
+            }
+        }
+
         // 检查 tx_hash 是否已被使用（防止重复提交相同交易）
         $existingWithTxHash = \App\Models\Withdraw::where('info', 'like', '%' . $txHash . '%')
             ->where('state', 2)
@@ -954,7 +1303,9 @@ JS
             }
 
             $withdraw->state = 2;
-            $withdraw->info = 'TronLink转账成功，交易哈希：' . $txHash;
+            // 根据类型区分网络
+            $networkName = $withdraw->type == 3 ? 'ERC20' : 'TRC20';
+            $withdraw->info = "{$networkName}转账成功，交易哈希：" . $txHash;
             $withdraw->save();
 
             \DB::commit();
@@ -970,15 +1321,23 @@ JS
             try {
                 $telegramBot = new \App\Services\TelegramBotService();
                 $usdtAmount = round($withdraw->real_money / ($withdraw->usdt_rate ?: 7), 2);
+                $networkName = $withdraw->type == 3 ? 'ERC20' : 'TRC20';
+                $explorerUrl = $withdraw->type == 3
+                    ? "https://etherscan.io/tx/{$txHash}"
+                    : "https://tronscan.org/#/transaction/{$txHash}";
                 $text = "✅ <b>提现已完成</b>\n\n";
                 $text .= "━━━━━━━━━━━━\n";
                 $text .= "📋 订单号：<code>{$withdraw->order_no}</code>\n";
                 $text .= "💰 提现金额：<b>{$withdraw->amount}</b> 元\n";
-                $text .= "💵 到账金额：<b>{$usdtAmount}</b> USDT\n";
+                $text .= "💵 到账金额：<b>{$usdtAmount}</b> USDT ({$networkName})\n";
                 $text .= "🔗 交易哈希：<code>{$txHash}</code>\n";
                 $text .= "━━━━━━━━━━━━\n\n";
                 $text .= "感谢您的使用！";
-                $telegramBot->sendMessage($user->telegram_id, $text, ['parse_mode' => 'HTML']);
+                $inlineKeyboard = [
+                    [['text' => '🔍 查看交易详情', 'url' => $explorerUrl]],
+                    [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+                ];
+                $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
             } catch (\Exception $e) {
                 \Log::error('发送提现成功通知失败', ['error' => $e->getMessage()]);
             }
@@ -1049,24 +1408,17 @@ JS
         $totalCount = count($ids);
         $passedCount = 0;
         $skippedCount = 0;
-        $trc20Count = 0;
 
         try {
             \DB::beginTransaction();
 
-            // 只处理待审核(state=1)且非TRC20的订单
+            // 只处理待审核(state=1)的订单
             $withdraws = \App\Models\Withdraw::whereIn('id', $ids)
                 ->where('state', 1)
                 ->lockForUpdate()
                 ->get();
 
             foreach ($withdraws as $withdraw) {
-                // TRC20 订单不能批量通过，需要单独转账
-                if ($withdraw->type == 2) {
-                    $trc20Count++;
-                    continue;
-                }
-
                 $withdraw->state = 2;
                 $withdraw->info = '管理员批量审核通过';
                 $withdraw->save();
@@ -1086,16 +1438,12 @@ JS
         if ($skippedCount > 0) {
             $message .= "，跳过已处理：{$skippedCount} 个";
         }
-        if ($trc20Count > 0) {
-            $message .= "，TRC20需单独转账：{$trc20Count} 个";
-        }
 
         return response()->json([
             'status' => true,
             'message' => $message,
             'count' => $passedCount,
-            'skipped' => $skippedCount,
-            'trc20' => $trc20Count
+            'skipped' => $skippedCount
         ]);
     }
 
@@ -1113,6 +1461,7 @@ JS
         $totalCount = count($ids);
         $refusedCount = 0;
         $skippedCount = 0;
+        $refusedWithdraws = [];
 
         try {
             \DB::beginTransaction();
@@ -1131,6 +1480,7 @@ JS
                 $withdraw->info = '管理员批量拒绝';
                 $withdraw->save();
                 $refusedCount++;
+                $refusedWithdraws[] = $withdraw;
             }
 
             $skippedCount = $totalCount - $withdraws->count();
@@ -1140,6 +1490,29 @@ JS
             \DB::rollBack();
             \Log::error('批量拒绝失败', ['error' => $e->getMessage()]);
             return response()->json(['status' => false, 'message' => '操作失败，请重试']);
+        }
+
+        // 发送 Telegram 通知（在事务外执行，不影响主流程）
+        foreach ($refusedWithdraws as $withdraw) {
+            try {
+                $user = \App\Models\User::find($withdraw->user_id);
+                if ($user && $user->telegram_id) {
+                    $telegramBot = new \App\Services\TelegramBotService();
+                    $text = "❌ <b>提现申请被拒绝</b>\n\n";
+                    $text .= "━━━━━━━━━━━━\n";
+                    $text .= "📋 订单号：<code>{$withdraw->order_no}</code>\n";
+                    $text .= "💰 提现金额：<b>{$withdraw->amount}</b> 元\n";
+                    $text .= "💵 已退回余额：<b>{$withdraw->amount}</b> 元\n";
+                    $text .= "━━━━━━━━━━━━\n\n";
+                    $text .= "如有疑问请联系客服。";
+                    $inlineKeyboard = [
+                        [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+                    ];
+                    $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
+                }
+            } catch (\Exception $e) {
+                \Log::error('发送批量拒绝通知失败', ['error' => $e->getMessage(), 'withdraw_id' => $withdraw->id]);
+            }
         }
 
         $message = "批量拒绝成功：{$refusedCount} 个，已退款";

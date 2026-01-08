@@ -69,10 +69,10 @@ class Pass extends RowAction
         self::sendmoney($user,$model->amount);
         //self::checkredbao($user,$model->real_money);
         self::upuserlevel($model->user_id);  //会员升级
-        
+
         // 发送Telegram充值成功通知
         self::notifyUserRechargeSuccess($user, $model);
-        
+
         return $this->response()->success('审核成功')->refresh();
     }
 
@@ -209,23 +209,16 @@ class Pass extends RowAction
 
             // 如果有保存消息ID，则编辑原消息；否则发送新消息
             if (!empty($order->telegram_message_id)) {
-                // 获取主菜单图片用于编辑
+                // 获取主菜单图片URL用于编辑
                 $mainImageConfig = \App\Models\SystemConfig::getValue('telegram_bot_main_image');
-                $mainImagePath = null;
-                if ($mainImageConfig && file_exists(public_path('uploads/' . $mainImageConfig))) {
-                    $mainImagePath = public_path('uploads/' . $mainImageConfig);
+                $mainImageUrl = null;
+                if ($mainImageConfig) {
+                    $mainImageUrl = env('APP_URL') . '/uploads/' . $mainImageConfig;
                 } else {
-                    $defaultImage = public_path('images/telegram/main_banner.jpg');
-                    if (file_exists($defaultImage)) {
-                        $mainImagePath = $defaultImage;
-                    }
+                    $mainImageUrl = env('APP_URL') . '/images/telegram/main_banner.jpg';
                 }
-                
-                if ($mainImagePath) {
-                    $telegramBot->editMessageMedia($user->telegram_id, $order->telegram_message_id, $mainImagePath, $text, $inlineKeyboard);
-                } else {
-                    $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
-                }
+
+                $telegramBot->editMessageMedia($user->telegram_id, $order->telegram_message_id, $mainImageUrl, $text, $inlineKeyboard);
             } else {
                 $telegramBot->sendMessageWithInlineKeyboard($user->telegram_id, $text, $inlineKeyboard);
             }

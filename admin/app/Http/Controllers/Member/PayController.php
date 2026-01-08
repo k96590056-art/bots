@@ -33,11 +33,11 @@ class PayController extends Controller
         $lang = Cookie::get("userlang");
         $this->showlang = $lang;
         if($lang=="en"){
-            $path = 'web.template.e_mb10';    
+            $path = 'web.template.e_mb10';
         }else{
             $path = Template::where('client_type',1)->where('state',2)->first();
-            $path = $path ? 'web.template.'.$path->template_id : 'web';            
-        }   
+            $path = $path ? 'web.template.'.$path->template_id : 'web';
+        }
         $this->path = $path;
     }
 
@@ -531,7 +531,7 @@ class PayController extends Controller
                 $bet_amount = GameRecord::where('user_id',$user->id)->sum('valid_amount');
             }
 
-            if($recharge_amount > 0 && $bet_amount/$recharge_amount<$withdraw_fee){
+            if($withdraw_fee > 0 && $recharge_amount > 0 && $bet_amount/$recharge_amount<$withdraw_fee){
                 return $this->returnMsg(214,[],'打码量达没有达到充值的'.$withdraw_fee.'倍,无法正常提现');
             }
             if (isset($min_withdraw_money) && !empty($min_withdraw_money)) {
@@ -555,7 +555,7 @@ class PayController extends Controller
                 }
 
             }
-            
+
 
             if ($data['amount'] > $user->balance) return $this->returnMsg(208);
             //提现
@@ -627,7 +627,7 @@ class PayController extends Controller
         $result = $tg->recoverallbalance($user->username);
         \Illuminate\Support\Facades\Log::info("前端一键回收结果".$user->username);
 
-        \Illuminate\Support\Facades\Log::info($result);        
+        \Illuminate\Support\Facades\Log::info($result);
         //$result = json_decode($result,true);
         $blance = 0;
         if($result['code']==0){
@@ -636,18 +636,18 @@ class PayController extends Controller
                      $user->AllAccounttranso($val['gamecode'], $val['blance']);
                      //Usersmoney::kouinfo($this->id, $plat_name, $money);
                       Usersmoney::setmoneyinit($user->id, $val['gamecode']);
-                     $blance +=$val['blance']; 
+                     $blance +=$val['blance'];
                 }elseif($val['success']=="ok" && $val['blance']==0){
                       Usersmoney::setmoneyinit($user->id, $val['gamecode']);
                 }
             }*/
-            $blance = round($result['data']['userblance'],2);            
+            $blance = round($result['data']['userblance'],2);
             if($blance>0){
-             return $this->returnMsg(200,'','共回收金额：'.$blance);    
+             return $this->returnMsg(200,'','共回收金额：'.$blance);
             }else{
-             return $this->returnMsg(200,'','没有可回收的金额'.$blance);    
+             return $this->returnMsg(200,'','没有可回收的金额'.$blance);
             }
-             
+
         }else{
              return $this->returnMsg(500,[],$result['msg']);
         }

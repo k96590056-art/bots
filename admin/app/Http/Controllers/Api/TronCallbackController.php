@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use App\Services\TronUsdtService;
+use GuzzleHttp\Client;
 
 /**
  * TRON区块链回调控制器
@@ -137,17 +138,20 @@ class TronCallbackController extends Controller
         try {
             $apiUrl = config('services.tron.api_url', 'https://api.trongrid.io');
             $apiKey = config('services.tron.api_key');
-            
+
             // 获取最新区块信息
-            $response = \Illuminate\Support\Facades\Http::withHeaders([
-                'TRON-PRO-API-KEY' => $apiKey
-            ])->get($apiUrl . '/v1/blocks/latest');
-            
-            if (!$response->successful()) {
-                throw new \Exception('TRON API请求失败: ' . $response->status());
+            $client = new Client();
+            $response = $client->get($apiUrl . '/v1/blocks/latest', [
+                'headers' => [
+                    'TRON-PRO-API-KEY' => $apiKey
+                ]
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                throw new \Exception('TRON API请求失败: ' . $response->getStatusCode());
             }
-            
-            $blockData = $response->json();
+
+            $blockData = json_decode($response->getBody()->getContents(), true);
             
             $status = [
                 'network' => 'TRON',

@@ -8,6 +8,7 @@ use Dcat\Admin\Traits\HasPermissions;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
+use GuzzleHttp\Client;
 
 class Close extends Action
 {
@@ -26,20 +27,23 @@ class Close extends Action
     public function handle(Request $request)
     {
         $workOrderId = $this->getKey();
-        
+
         try {
             // 发送关闭请求
-            $response = \Illuminate\Support\Facades\Http::withHeaders([
-                'X-CSRF-TOKEN' => csrf_token(),
-            ])->post("/admin/work-orders/{$workOrderId}/close");
-            
-            if ($response->successful()) {
-                $data = $response->json();
+            $client = new Client();
+            $response = $client->post(url("/admin/work-orders/{$workOrderId}/close"), [
+                'headers' => [
+                    'X-CSRF-TOKEN' => csrf_token(),
+                ]
+            ]);
+
+            if ($response->getStatusCode() === 200) {
+                $data = json_decode($response->getBody()->getContents(), true);
                 return $this->response()
                     ->success($data['message'] ?? '工单关闭成功')
                     ->refresh();
             } else {
-                $data = $response->json();
+                $data = json_decode($response->getBody()->getContents(), true);
                 return $this->response()
                     ->error($data['message'] ?? '工单关闭失败');
             }

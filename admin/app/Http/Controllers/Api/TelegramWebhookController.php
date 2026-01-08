@@ -13,6 +13,7 @@ use App\Models\SystemConfig;
 use App\Models\GameRecord;
 use App\Models\Recharge;
 use App\Models\Withdraw;
+use App\Models\TelegramRebindToken;
 use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
 use App\Services\TronUsdtService;
@@ -39,7 +40,7 @@ class TelegramWebhookController extends Controller
         $this->tgService = new TgService();
         $this->pussyService = new PussyService();
     }
-    
+
     /**
      * 初始化Bot命令菜单（设置/start命令在输入框左侧常驻显示）
      * 使用缓存确保只设置一次，避免重复调用API
@@ -89,7 +90,7 @@ class TelegramWebhookController extends Controller
         $logEntry .= 'All Input: ' . json_encode($request->all(), JSON_UNESCAPED_UNICODE) . PHP_EOL;
         $logEntry .= '---' . PHP_EOL;
         @file_put_contents($logFile, $logEntry, FILE_APPEND);
-        
+
         // 立即记录请求，确保即使后续出错也能看到日志
         try {
             Log::info('=== Telegram Webhook 开始处理 ===', [
@@ -105,7 +106,7 @@ class TelegramWebhookController extends Controller
             // 如果Log facade失败，至少文件日志已经写入
             @file_put_contents($logFile, 'Log facade error: ' . $logError->getMessage() . PHP_EOL, FILE_APPEND);
         }
-        
+
         try {
             // 初始化Bot命令菜单（只在第一次或缓存过期时执行）
             try {
@@ -115,7 +116,7 @@ class TelegramWebhookController extends Controller
                 $logFile = storage_path('logs/telegram_webhook.log');
                 @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === Bot命令初始化失败 ===' . PHP_EOL . 'Error: ' . $initError->getMessage() . PHP_EOL . '---' . PHP_EOL, FILE_APPEND);
             }
-            
+
             $update = $request->all();
             Log::info('Telegram Webhook接收', [
                 'request_all' => $update,
@@ -154,7 +155,7 @@ class TelegramWebhookController extends Controller
             $errorLog .= 'Request: ' . json_encode($request->all(), JSON_UNESCAPED_UNICODE) . PHP_EOL;
             $errorLog .= '---' . PHP_EOL;
             @file_put_contents($logFile, $errorLog, FILE_APPEND);
-            
+
             try {
                 Log::error('Telegram Webhook处理异常', [
                     'error' => $e->getMessage(),
@@ -167,7 +168,7 @@ class TelegramWebhookController extends Controller
                 // 忽略日志错误，至少文件日志已经写入
                 @file_put_contents($logFile, 'Log facade error: ' . $logError->getMessage() . PHP_EOL, FILE_APPEND);
             }
-            
+
             // 确保返回有效的JSON响应（Telegram要求返回200 OK）
             try {
                 return response()->json(['ok' => false, 'error' => 'Internal server error'], 200);
@@ -210,6 +211,17 @@ class TelegramWebhookController extends Controller
                 'username' => $username
             ]);
 
+            // 【重要】优先处理换绑Telegram命令 /start rebind_xxx
+            // 必须在自动注册之前处理，避免用户新飞机号被自动注册成新账户
+            if (strpos($text, '/start rebind_') === 0) {
+                $token = substr($text, 14); // 提取 rebind_ 后面的 token
+                Log::info('检测到换绑命令，跳过自动注册', [
+                    'telegram_id' => $telegramId,
+                    'token' => $token
+                ]);
+                return $this->handleTelegramRebind($chatId, $telegramId, $token, $firstName, $username);
+            }
+
             // 检查用户是否存在，如果不存在则自动注册
             $user = User::where('telegram_id', $telegramId)->first();
             $isNewUser = false;
@@ -241,12 +253,20 @@ class TelegramWebhookController extends Controller
         $isCommand = !empty($text) && strpos($text, '/') === 0;
         if ($userState && !empty($text) && !$isCommand) {
             switch ($userState['action']) {
+                // TRC20
                 case self::STATE_WAITING_RECHARGE_AMOUNT:
                     return $this->processRechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
                 case self::STATE_WAITING_WITHDRAW_AMOUNT:
                     return $this->processWithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
                 case self::STATE_WAITING_WITHDRAW_ADDRESS:
                     return $this->processWithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
+                // ERC20
+                case self::STATE_WAITING_ERC20_RECHARGE_AMOUNT:
+                    return $this->processErc20RechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
+                case self::STATE_WAITING_ERC20_WITHDRAW_AMOUNT:
+                    return $this->processErc20WithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
+                case self::STATE_WAITING_ERC20_WITHDRAW_ADDRESS:
+                    return $this->processErc20WithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
             }
         }
 
@@ -271,12 +291,12 @@ class TelegramWebhookController extends Controller
             Log::info('showMainMenu返回结果', ['result' => $result]);
             return $result;
         }
-        
+
         // 处理/help命令
         if ($text === '/help') {
             return $this->showHelpMessage($chatId, $user);
         }
-        
+
         // 如果是新注册用户且发送了其他指令，显示用户名和密码信息
         if ($isNewUser && !empty($user->first_password)) {
             // 使用first_password字段，这是明文密码（不是加密后的password字段）
@@ -288,15 +308,15 @@ class TelegramWebhookController extends Controller
             $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
             $welcomeText .= "您已成功注册，可以使用机器人功能了！\n\n";
             $welcomeText .= "请发送 /start 开始使用机器人。";
-            
+
             // 发送欢迎消息时同时设置常驻键盘
                 $replyKeyboard = $this->getPersistentKeyboard();
                 $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
-            
+
             // 清空first_password，确保后续不再显示
             $user->first_password = null;
             $user->save();
-            
+
             Log::info('新注册用户显示密码信息', [
                 'user_id' => $user->id,
                 'username' => $user->username
@@ -321,7 +341,7 @@ class TelegramWebhookController extends Controller
                     'username' => $message['from']['username'] ?? null
                 ];
                 return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
-                
+
             case '🏅 官方频道':
             case '🏅 官方入口':
                 // 显示官方频道
@@ -341,21 +361,21 @@ class TelegramWebhookController extends Controller
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
-                
+
             case '🤷 在线客服':
                 // 显示在线客服（功能开发中）
                 // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
-                
+
             case '🤝 招商代理':
                 // 显示招商代理信息（功能开发中）
                 // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
                 // 设置键盘，确保键盘始终显示
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
-                
+
             default:
                 // 其他消息，忽略或显示提示
                 Log::info('收到未知消息', ['text' => $text, 'user_id' => $user->id]);
@@ -394,7 +414,7 @@ class TelegramWebhookController extends Controller
 
         $user = User::where('telegram_id', $telegramId)->first();
         $isNewUser = false;
-        
+
         if (!$user) {
             // 自动注册用户（从callbackQuery中获取用户信息）
             $telegramUsername = $callbackQuery['from']['username'] ?? '';
@@ -414,7 +434,7 @@ class TelegramWebhookController extends Controller
                 'user_id' => $user->id,
                 'username' => $user->username
             ]);
-            
+
             // 如果是新注册用户，显示用户名和密码信息
             if (!empty($user->first_password)) {
                 // 使用first_password字段，这是明文密码（不是加密后的password字段）
@@ -425,15 +445,15 @@ class TelegramWebhookController extends Controller
                 $welcomeText .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
                 $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
                 $welcomeText .= "您已成功注册，可以使用机器人功能了！";
-                
+
                 // 发送欢迎消息时同时设置常驻键盘
                 $replyKeyboard = $this->getPersistentKeyboard();
                 $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
-                
+
                 // 清空first_password，确保后续不再显示
                 $user->first_password = null;
                 $user->save();
-                
+
                 Log::info('回调查询时新注册用户显示密码信息', [
                     'user_id' => $user->id,
                     'username' => $user->username
@@ -537,24 +557,36 @@ class TelegramWebhookController extends Controller
                 return $this->showWithdrawNetworkMenu($chatId, $messageId, $user);
 
             case 'recharge_trc20':
-                // TRC20 充值
+                // TRC20 充值 - 检查通道是否开启
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                if (SystemConfig::getValue('recharge_trc20_enabled', '1') != '1') {
+                    return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20充值通道已关闭');
+                }
                 return $this->handleRechargeTrc20($chatId, $messageId, $user, $telegramId);
 
             case 'recharge_erc20':
-                // ERC20 充值 - 暂不支持
+                // ERC20 充值 - 检查通道是否开启
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20暂不支持，请选择TRC20');
+                if (SystemConfig::getValue('recharge_erc20_enabled', '1') != '1') {
+                    return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20充值通道已关闭');
+                }
+                return $this->handleRechargeErc20($chatId, $messageId, $user, $telegramId);
 
             case 'withdraw_trc20':
-                // TRC20 提现
+                // TRC20 提现 - 检查通道是否开启
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                if (SystemConfig::getValue('withdraw_trc20_enabled', '1') != '1') {
+                    return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20提现通道已关闭');
+                }
                 return $this->handleWithdrawTrc20($chatId, $messageId, $user, $telegramId);
 
             case 'withdraw_erc20':
-                // ERC20 提现 - 暂不支持
+                // ERC20 提现 - 检查通道是否开启
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20暂不支持，请选择TRC20');
+                if (SystemConfig::getValue('withdraw_erc20_enabled', '1') != '1') {
+                    return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20提现通道已关闭');
+                }
+                return $this->handleWithdrawErc20($chatId, $messageId, $user, $telegramId);
 
             case 'cancel_recharge_order':
                 // 取消充值订单
@@ -642,7 +674,7 @@ class TelegramWebhookController extends Controller
             $errorLog .= 'CallbackQuery: ' . json_encode($callbackQuery ?? [], JSON_UNESCAPED_UNICODE) . PHP_EOL;
             $errorLog .= '---' . PHP_EOL;
             @file_put_contents($logFile, $errorLog, FILE_APPEND);
-            
+
             try {
                 Log::error('处理Telegram回调查询异常', [
                     'callback_query' => $callbackQuery ?? null,
@@ -655,9 +687,9 @@ class TelegramWebhookController extends Controller
                 // 忽略日志错误，至少文件日志已经写入
                 @file_put_contents($logFile, 'Log facade error: ' . $logError->getMessage() . PHP_EOL, FILE_APPEND);
             }
-            
+
             // 不调用answerCallbackQuery以避免显示绿色图标
-            
+
             return response()->json(['ok' => false, 'error' => 'Internal server error'], 200);
         }
     }
@@ -677,17 +709,17 @@ class TelegramWebhookController extends Controller
             // 默认使用"dp"作为游戏编码前缀（可以后续从配置中读取）
             $defaultGameCode = 'dp'; // 默认游戏编码
             $gameCodePrefix = substr($defaultGameCode, 0, 2); // 取前2位
-            
+
             // 生成用户名：游戏编码前2位 + telegram_id
             $systemUsername = $gameCodePrefix . $telegramId;
-            
+
             // 检查用户名是否已存在，如果存在则添加后缀
             $counter = 1;
             $originalUsername = $systemUsername;
             while (User::where('username', $systemUsername)->exists()) {
                 $systemUsername = $originalUsername . $counter;
                 $counter++;
-                
+
                 // 防止无限循环（理论上不太可能，但安全起见）
                 if ($counter > 1000) {
                     Log::error('生成唯一用户名失败，冲突过多', [
@@ -702,7 +734,7 @@ class TelegramWebhookController extends Controller
 
             // 生成随机密码明文
             $plainPassword = Str::random(32);
-            
+
             // 创建用户
             $user = User::create([
                 'username' => $systemUsername,
@@ -734,7 +766,7 @@ class TelegramWebhookController extends Controller
 
     /**
      * 获取 Telegram 显示名称（Telegram用户名 + 系统用户名）
-     * 
+     *
      * @param User $user
      * @param string|null $telegramUsername Telegram 的 username（可选，用于实时获取）
      * @return string 返回格式：@username (系统用户名) 或 系统用户名
@@ -743,10 +775,10 @@ class TelegramWebhookController extends Controller
     {
         // 优先使用传入的 Telegram username（最新的）
         $telegramUser = $telegramUsername;
-        
+
         // 如果没有传入username，尝试从user表中获取（如果有存储的话）
         // 注意：这里可能需要根据实际情况调整，如果数据库中有存储telegram_username字段
-        
+
         // 对Telegram用户名进行 HTML 转义，防止特殊字符导致解析错误
         // 特别处理 < > & 这些字符，避免被 Telegram 的 HTML 解析器误解析
         if (!empty($telegramUser)) {
@@ -756,15 +788,15 @@ class TelegramWebhookController extends Controller
                 $telegramUser = '@' . $telegramUser;
             }
         }
-        
+
         // 对系统用户名也进行转义（虽然用户名通常是数字，但为安全起见也转义）
         $safeUsername = htmlspecialchars($user->username, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-        
+
         // 如果找到了 Telegram 用户名，显示为：@username (系统用户名)
         if (!empty($telegramUser) && $telegramUser != $user->username) {
             return "{$telegramUser} ({$safeUsername})";
         }
-        
+
         // 否则只显示系统用户名
         return $safeUsername;
     }
@@ -807,17 +839,17 @@ class TelegramWebhookController extends Controller
         try {
             // 刷新用户对象，确保获取最新的 first_password 字段
             $user->refresh();
-            
+
             // 获取用户余额
             $walletBalance = number_format($user->balance, 2);
             $gameBalance = number_format(Usersmoney::getTotalAppUserBalance($user->id), 4);
-            
+
             // 检查是否是首次进入（判断 first_password 是否存在）
             $isFirstLogin = !empty($user->first_password);
-            
+
             // 文字区 - 显示用户账户信息（作为图片的caption）
             $text = '';
-            
+
             // 如果有流水明细，优先显示流水明细
             if (!empty($flowDetail)) {
                 $text = $flowDetail;
@@ -826,7 +858,7 @@ class TelegramWebhookController extends Controller
                 if (!empty($noticeMessage)) {
                     $text .= "⏳ {$noticeMessage}\n\n";
                 }
-                
+
                 // 如果是首次进入，显示用户名和密码信息
                 if ($isFirstLogin) {
                 // 使用first_password字段，这是明文密码（不是加密后的password字段）
@@ -838,11 +870,11 @@ class TelegramWebhookController extends Controller
                 $text .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
                 $text .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
                 $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-                
+
                 // 显示完密码后，清空 first_password 字段，确保后续不再显示
                 $user->first_password = null;
                 $user->save();
-                
+
                 Log::info('首次登录显示密码信息', [
                     'user_id' => $user->id,
                     'username' => $user->username
@@ -855,13 +887,13 @@ class TelegramWebhookController extends Controller
                     $telegramFirstName = $telegramUserInfo['first_name'] ?? null;
                     $telegramUsername = $telegramUserInfo['username'] ?? null;
                 }
-                
+
                 // 显示Telegram名称（如果有）
                 if (!empty($telegramFirstName)) {
                     $safeFirstName = htmlspecialchars($telegramFirstName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
                     $text .= "👤 <b>名称：</b>{$safeFirstName}\n";
                 }
-                
+
                 // 显示Telegram用户名（如果有）
                 if (!empty($telegramUsername)) {
                     $safeUsername = htmlspecialchars($telegramUsername, ENT_QUOTES | ENT_HTML5, 'UTF-8');
@@ -869,19 +901,19 @@ class TelegramWebhookController extends Controller
                     $text .= "📱 <b>用户名：</b>{$usernameDisplay}\n";
                 }
             }
-            
+
             // 显示Telegram ID
             $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
             $text .= "💰 钱包余额: {$walletBalance} CNY\n";
             $text .= "💵 游戏余额: {$gameBalance} CNY\n";
-            
+
             // 显示钱包地址
             $moneyAddress = $user->money_address ?? '';
             if (!empty($moneyAddress)) {
                 $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
                 $text .= "🔗 <b>钱包地址：</b><code>{$safeAddress}</code>\n";
             }
-            
+
                 $text .= "⏰ 当前时间: " . date('Y-m-d H:i:s');
             }
 
@@ -904,7 +936,7 @@ class TelegramWebhookController extends Controller
                     'url' => $gameUrl
                 ]
             ]];
-            
+
             // 获取游戏分类按钮
             Log::info('开始获取游戏类目列表');
             $gameCategories = $this->getGameCategories();
@@ -912,7 +944,7 @@ class TelegramWebhookController extends Controller
                 'count' => count($gameCategories),
                 'categories' => $gameCategories
             ]);
-            
+
             // 游戏分类按钮（每行两个）
             $row = [];
             foreach ($gameCategories as $category) {
@@ -929,7 +961,7 @@ class TelegramWebhookController extends Controller
             if (!empty($row)) {
                 $inlineKeyboard[] = $row;
             }
-            
+
             // 其他功能按钮（两列）
             $inlineKeyboard[] = [[
                 'text' => '♻️ 回收余额',
@@ -938,7 +970,7 @@ class TelegramWebhookController extends Controller
                 'text' => '💰 充值提现',
                 'callback_data' => 'deposit_withdraw'
             ]];
-            
+
             $inlineKeyboard[] = [[
                 'text' => '👋 邀请好友',
                 'callback_data' => 'invite_friends'
@@ -946,10 +978,10 @@ class TelegramWebhookController extends Controller
                 'text' => '📊 流水明细',
                 'callback_data' => 'transaction_details'
             ]];
-            
+
             // 根据系统配置决定是否显示发红包按钮
             $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
-            
+
             // 构建红包和福利活动按钮行
             $redpacketRow = [];
             if ($redpacketEnabled) {
@@ -962,10 +994,10 @@ class TelegramWebhookController extends Controller
                 'text' => '🎁 福利活动',
                 'callback_data' => 'welfare_activities'
             ];
-            
+
             // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
             $inlineKeyboard[] = $redpacketRow;
-            
+
             $inlineKeyboard[] = [[
                 'text' => '🌐 Language',
                 'callback_data' => 'language'
@@ -1014,16 +1046,15 @@ class TelegramWebhookController extends Controller
                     }
                 }
             } else {
-                // 先发送欢迎文字消息
+                // 先发送欢迎文字消息（带常驻键盘）
                 $welcomeText = "欢迎来到MK体育飞投\n\n";
                 $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
-                // 发送欢迎消息时同时设置常驻键盘
                 $replyKeyboard = $this->getPersistentKeyboard();
                 $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
-                
+
                 // 发送图片消息，文字作为caption，按钮作为reply_markup
                 $photoResult = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
-                
+
                 // 如果图片发送失败，降级为文字消息
                 if ($photoResult['code'] != 200) {
                     Log::warning('发送主菜单图片失败，降级为文字消息', [
@@ -1052,14 +1083,14 @@ class TelegramWebhookController extends Controller
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             // 即使出错也尝试发送一条简单的欢迎消息
             try {
                 $this->telegramBot->sendMessage($chatId, '欢迎使用Mkgaming智能投注系统！');
             } catch (\Exception $e2) {
                 Log::error('发送错误提示消息也失败', ['error' => $e2->getMessage()]);
             }
-            
+
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
         }
     }
@@ -1167,14 +1198,14 @@ class TelegramWebhookController extends Controller
         $text .= "用户: {$displayName}\n";
         $text .= "钱包余额: {$walletBalance} CNY\n";
         $text .= "游戏余额: " . number_format($gameBalance, 4) . " CNY\n";
-        
+
         // 显示钱包地址
         $moneyAddress = $user->money_address ?? '';
         if (!empty($moneyAddress)) {
             $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
             $text .= "钱包地址: <code>{$safeAddress}</code>\n";
         }
-        
+
         $text .= "当前游戏: {$game->name}\n";
         $text .= "当前时间: " . date('Y-m-d H:i:s');
 
@@ -1299,7 +1330,7 @@ class TelegramWebhookController extends Controller
                 $cleanGameCode = $gameCode;
             }
             $dpUserName = $cleanGameCode . $user->username; // 拼接用户名
-            
+
             // 使用DP服务时，不需要先调用register接口，直接调用login接口
             // DP服务支持自动注册（如果用户不存在，login时会自动创建）
             Log::info('开始游戏 - 使用DP服务，跳过注册步骤，直接登录', [
@@ -1403,14 +1434,14 @@ class TelegramWebhookController extends Controller
                         ->where('game_code', $gameCode)
                         ->first();
                 }
-                
+
                 // 获取用户余额等信息，用于构建按钮（根据游戏免转状态）
                 $gameBalance = $this->getUserGameBalance($user, $platformName, $game);
                 $categoryCode = $this->getCategoryCodeByPlatform($platformName);
-                
+
                 // 构建新的按钮：将"开始游戏"按钮改为web_app类型
                 $inlineKeyboard = [];
-                
+
                 // 检查是否为免转游戏（transferstatus == 0表示免转，== 1表示非免转）
                 // 注意：这里的$game变量在之前已经获取过，可以直接使用
                 if ($game && $game->transferstatus == 1) {
@@ -1426,7 +1457,7 @@ class TelegramWebhookController extends Controller
                         ]
                     ];
                 }
-                
+
                 // 刷新和返回按钮
                 $inlineKeyboard[] = [
                     [
@@ -1438,7 +1469,7 @@ class TelegramWebhookController extends Controller
                         'callback_data' => 'back_game_list:' . $categoryCode
                     ]
                 ];
-                
+
                 // "开始游戏"按钮改为web_app类型，直接打开游戏
                 $inlineKeyboard[] = [[
                     'text' => '🎮 开始游戏',
@@ -1446,10 +1477,10 @@ class TelegramWebhookController extends Controller
                         'url' => $gameUrl
                     ]
                 ]];
-                
+
                 // 编辑消息的按钮
                 $editResult = $this->telegramBot->editMessageReplyMarkup($chatId, $messageId, $inlineKeyboard);
-                
+
                 Log::info('开始游戏 - 编辑消息按钮为web_app类型', [
                     'user_id' => $user->id,
                     'chat_id' => $chatId,
@@ -1459,14 +1490,14 @@ class TelegramWebhookController extends Controller
                     'game_url' => $gameUrl,
                     'edit_result' => $editResult
                 ]);
-                
+
                 // 如果编辑失败，降级为发送消息方式
                 if ($editResult['code'] != 200) {
                     Log::warning('编辑消息按钮失败，降级为发送消息方式', [
                         'user_id' => $user->id,
                         'edit_result' => $editResult
                     ]);
-                    
+
                     $inlineKeyboard = [[
                         [
                             'text' => '🎮 开始游戏',
@@ -1475,9 +1506,9 @@ class TelegramWebhookController extends Controller
                             ]
                         ]
                     ]];
-                    
+
                     $sendResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, "点击下方按钮开始游戏：", $inlineKeyboard);
-                    
+
                     Log::info('开始游戏 - 降级为发送消息方式', [
                         'user_id' => $user->id,
                         'chat_id' => $chatId,
@@ -1494,9 +1525,9 @@ class TelegramWebhookController extends Controller
                         ]
                     ]
                 ]];
-                
+
                 $sendResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, "点击下方按钮开始游戏：", $inlineKeyboard);
-                
+
                 Log::info('开始游戏 - 发送游戏链接到Telegram', [
                     'user_id' => $user->id,
                     'chat_id' => $chatId,
@@ -1618,7 +1649,7 @@ class TelegramWebhookController extends Controller
                 'count' => $categories->count(),
                 'categories' => $categories->toArray()
             ]);
-            
+
             $result = [];
             foreach ($categories as $category) {
                 $result[] = [
@@ -1626,7 +1657,7 @@ class TelegramWebhookController extends Controller
                     'code' => $category->code
                 ];
             }
-            
+
             Log::info('返回游戏类目结果', ['result' => $result]);
             return $result;
         } catch (\Exception $e) {
@@ -1676,7 +1707,7 @@ class TelegramWebhookController extends Controller
             if ($game && isset($game->transferstatus)) {
                 $isFreeTransfer = ($game->transferstatus == 0); // 0=免转，1=非免转
             }
-            
+
             if ($isFreeTransfer) {
                 // 免转游戏：使用用户的主钱包余额
                 return (float)$user->balance;
@@ -1685,11 +1716,11 @@ class TelegramWebhookController extends Controller
                 $userApi = User_Api::where('user_id', $user->id)
                     ->where('api_code', $platformName)
                     ->first();
-                
+
                 if ($userApi) {
                     return (float)$userApi->api_money;
                 }
-                
+
                 // 如果user_api记录不存在，返回0
                 return 0;
             }
@@ -1840,13 +1871,13 @@ class TelegramWebhookController extends Controller
     /**
      * 测试接口
      * 访问方式：GET/POST /api/telegram/test
-     * 
+     *
      * 测试DP游戏列表获取：action=list（或默认）
      * 参数：venueCode, currency, pageNum, pageSize
-     * 
+     *
      * 测试DP游戏登录接口：action=login
      * 参数：userName, venueCode, currency, gameId, deviceType, lang, userClientIp
-     * 
+     *
      * 测试Pussy用户注册：action=pussy_register
      * 参数：userName, password, agent, name, tel, memo, userType（1=玩家，100=代理）
      *
@@ -1963,7 +1994,7 @@ class TelegramWebhookController extends Controller
                 $currency = $request->input('currency', 'USDT'); // 币种，默认USDT
                 $pageNum = (int)$request->input('pageNum', 0); // 分页页码，默认0
                 $pageSize = (int)$request->input('pageSize', 10); // 每页数量，默认10，最大500
-                
+
                 Log::info('测试DP游戏列表获取', [
                     'venueCode' => $venueCode,
                     'currency' => $currency,
@@ -2015,7 +2046,7 @@ class TelegramWebhookController extends Controller
 
     /**
      * 获取常驻键盘菜单配置
-     * 
+     *
      * @return array
      */
     protected function getPersistentKeyboard()
@@ -2109,7 +2140,7 @@ class TelegramWebhookController extends Controller
     protected function setPersistentKeyboard($chatId)
     {
         $replyKeyboard = $this->getPersistentKeyboard();
-        
+
         // 发送一条消息来设置键盘，使用空格作为文本（Telegram 不允许空文本，但可以用空格）
         // 注意：Telegram会自动显示键盘，即使消息被删除，键盘也会保留
         $keyboardResult = $this->telegramBot->sendMessageWithReplyKeyboard(
@@ -2119,7 +2150,7 @@ class TelegramWebhookController extends Controller
             true,  // resize_keyboard
             false  // one_time_keyboard (false表示常驻，键盘会一直显示)
         );
-        
+
         if ($keyboardResult['code'] == 200) {
             Log::info('设置常驻键盘菜单成功', [
                 'chat_id' => $chatId,
@@ -2133,7 +2164,7 @@ class TelegramWebhookController extends Controller
             ]);
         }
     }
-    
+
     /**
      * 调试方法 - 检查Telegram Bot配置和连接
      * 访问方式：GET/POST /api/telegram/debug
@@ -2145,7 +2176,7 @@ class TelegramWebhookController extends Controller
     {
         try {
             $botToken = \App\Models\SystemConfig::getValue('telegram_bot_token') ?? env('TELEGRAM_BOT_TOKEN');
-            
+
             $debugInfo = [
                 'bot_token_configured' => !empty($botToken),
                 'bot_token_length' => strlen($botToken ?? ''),
@@ -2548,7 +2579,7 @@ class TelegramWebhookController extends Controller
 
     /**
      * 获取用户流水明细
-     * 
+     *
      * @param User $user
      * @return string 流水明细文本
      */
@@ -2556,37 +2587,37 @@ class TelegramWebhookController extends Controller
     {
         // 从数据库读取游戏分类（按 order 排序）
         $categories = GameCategory::orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
-        
+
         // 今日开始和结束时间
         $todayStart = date('Y-m-d 00:00:00');
         $todayEnd = date('Y-m-d 23:59:59');
-        
+
         // 昨日开始和结束时间
         $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
         $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
-        
+
         // 初始化分类流水数组
         $todayFlows = [];
         $yesterdayFlows = [];
-        
+
         // 遍历每个分类，统计流水
         foreach ($categories as $category) {
             $categoryCode = $category->code;
             $categoryName = $category->name;
-            
+
             // 获取该分类下的所有平台名称（通过 game_lists 表的 category_id 字段关联）
             $platformNames = GameList::where('category_id', $categoryCode)
                 ->where('app_state', 1)
                 ->pluck('platform_name')
                 ->toArray();
-            
+
             if (empty($platformNames)) {
                 // 如果该分类下没有平台，流水为0
                 $todayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
                 $yesterdayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
                 continue;
             }
-            
+
             // 查询今日流水：通过 platform_type 关联到 game_lists.platform_name，再关联到分类
             $todayFlow = GameRecord::where('user_id', $user->id)
                 ->where('status', 1) // 只统计已结算的
@@ -2594,12 +2625,12 @@ class TelegramWebhookController extends Controller
                 ->whereBetween('bet_time', [$todayStart, $todayEnd])
                 ->select(DB::raw('SUM(valid_amount) as total_valid'))
                 ->first();
-            
+
             $todayFlows[$categoryCode] = [
                 'total_valid' => $todayFlow->total_valid ?? 0,
                 'name' => $categoryName
             ];
-            
+
             // 查询昨日流水
             $yesterdayFlow = GameRecord::where('user_id', $user->id)
                 ->where('status', 1) // 只统计已结算的
@@ -2607,13 +2638,13 @@ class TelegramWebhookController extends Controller
                 ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
                 ->select(DB::raw('SUM(valid_amount) as total_valid'))
                 ->first();
-            
+
             $yesterdayFlows[$categoryCode] = [
                 'total_valid' => $yesterdayFlow->total_valid ?? 0,
                 'name' => $categoryName
             ];
         }
-        
+
         // 今日总流水和输赢（所有分类）
         $todayTotal = GameRecord::where('user_id', $user->id)
             ->where('status', 1)
@@ -2623,16 +2654,16 @@ class TelegramWebhookController extends Controller
                 DB::raw('SUM(win_loss) as total_winloss')
             )
             ->first();
-        
+
         $todayTotalFlow = $todayTotal->total_flow ?? 0;
         $todayWinLoss = $todayTotal->total_winloss ?? 0;
-        
+
         // 注册时间
         $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
-        
+
         // 构建显示文本
         $text = '';
-        
+
         // 今日流水（按分类显示）
         $text .= "💎 <b>今日流水</b>\n";
         foreach ($categories as $category) {
@@ -2644,7 +2675,7 @@ class TelegramWebhookController extends Controller
             $flowAmount = $todayFlows[$categoryCode]['total_valid'] ?? 0;
             $text .= "🔸 今日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
         }
-        
+
         // 昨日流水（按分类显示）
         $text .= "\n💎 <b>昨日流水</b>\n";
         foreach ($categories as $category) {
@@ -2656,27 +2687,27 @@ class TelegramWebhookController extends Controller
             $flowAmount = $yesterdayFlows[$categoryCode]['total_valid'] ?? 0;
             $text .= "🔹 昨日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
         }
-        
+
         // 提示信息
         $text .= "\n💡 (流水更新大约有十分钟延迟哦~)\n\n";
-        
+
         // 今日流水总计和输赢
         $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
         $text .= "🔸 今日输赢: " . number_format($todayWinLoss, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
-        
+
         // 预计反水、下级总流水、预计返佣、还需完成流水（暂时设为0，后续可根据实际需求实现）
         $text .= "🔸 预计反水: 0.00 USDT\n";
         $text .= "🔸 下级总流水: 0 USDT\n";
         $text .= "🔸 预计返佣: 0.00 USDT\n";
         $text .= "🔹 还需完成流水: 0.00 USDT";
-        
+
         return $text;
     }
 
     /**
      * 显示帮助信息（在线客服）
-     * 
+     *
      * @param int $chatId
      * @param User $user
      * @return \Illuminate\Http\JsonResponse
@@ -2687,10 +2718,10 @@ class TelegramWebhookController extends Controller
             // 获取客服用户名（从系统配置获取，如果没有则使用默认值）
             $serviceUsername = SystemConfig::getValue('kefu_username') ?: 'JZTYKF';
             $currentTime = date('H:i');
-            
+
             // 构建消息文本
             $text = "💻 在线值班 @{$serviceUsername} {$currentTime}";
-            
+
             // 构建内联键盘按钮
             $inlineKeyboard = [
                 [
@@ -2706,10 +2737,10 @@ class TelegramWebhookController extends Controller
                     ]
                 ]
             ];
-            
+
             // 发送消息
             $result = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
-            
+
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('显示帮助信息失败', [
@@ -2723,10 +2754,14 @@ class TelegramWebhookController extends Controller
 
     // ==================== 用户状态管理 ====================
 
-    // 状态常量
+    // 状态常量 - TRC20
     const STATE_WAITING_RECHARGE_AMOUNT = 'waiting_recharge_amount';
     const STATE_WAITING_WITHDRAW_AMOUNT = 'waiting_withdraw_amount';
     const STATE_WAITING_WITHDRAW_ADDRESS = 'waiting_withdraw_address';
+    // 状态常量 - ERC20
+    const STATE_WAITING_ERC20_RECHARGE_AMOUNT = 'waiting_erc20_recharge_amount';
+    const STATE_WAITING_ERC20_WITHDRAW_AMOUNT = 'waiting_erc20_withdraw_amount';
+    const STATE_WAITING_ERC20_WITHDRAW_ADDRESS = 'waiting_erc20_withdraw_address';
 
     /**
      * 获取用户状态缓存键
@@ -2809,19 +2844,41 @@ class TelegramWebhookController extends Controller
     protected function showRechargeNetworkMenu($chatId, $messageId, $user, $notice = null)
     {
         try {
+            // 检查充值通道开关
+            $trc20Enabled = SystemConfig::getValue('recharge_trc20_enabled', '1') == '1';
+            $erc20Enabled = SystemConfig::getValue('recharge_erc20_enabled', '1') == '1';
+
+            // 如果所有通道都关闭
+            if (!$trc20Enabled && !$erc20Enabled) {
+                $text = "💵 <b>充值</b>\n\n";
+                $text .= "⚠️ 充值通道暂时关闭，请稍后再试。";
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
             $text = "💵 <b>充值</b>\n\n";
             $text .= "请选择充值网络：";
             if ($notice) {
                 $text .= "\n" . $notice;
             }
 
-            $inlineKeyboard = [
-                [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'recharge_trc20']],
-                [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'recharge_erc20']],
-                [
-                    ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
-                ]
-            ];
+            // 根据通道开关动态构建按钮
+            $inlineKeyboard = [];
+            if ($trc20Enabled) {
+                $inlineKeyboard[] = [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'recharge_trc20']];
+            }
+            if ($erc20Enabled) {
+                $inlineKeyboard[] = [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'recharge_erc20']];
+            }
+            $inlineKeyboard[] = [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']];
 
             // 编辑图片消息的caption和按钮（图片保持不变）
             $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
@@ -2844,6 +2901,26 @@ class TelegramWebhookController extends Controller
     protected function showWithdrawNetworkMenu($chatId, $messageId, $user, $notice = null)
     {
         try {
+            // 检查提现通道开关
+            $trc20Enabled = SystemConfig::getValue('withdraw_trc20_enabled', '1') == '1';
+            $erc20Enabled = SystemConfig::getValue('withdraw_erc20_enabled', '1') == '1';
+
+            // 如果所有通道都关闭
+            if (!$trc20Enabled && !$erc20Enabled) {
+                $text = "💸 <b>提现</b>\n\n";
+                $text .= "⚠️ 提现通道暂时关闭，请稍后再试。";
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
             $text = "💸 <b>提现</b>\n\n";
             $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n\n";
             $text .= "请选择提现网络：";
@@ -2851,13 +2928,15 @@ class TelegramWebhookController extends Controller
                 $text .= "\n" . $notice;
             }
 
-            $inlineKeyboard = [
-                [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'withdraw_trc20']],
-                [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'withdraw_erc20']],
-                [
-                    ['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']
-                ]
-            ];
+            // 根据通道开关动态构建按钮
+            $inlineKeyboard = [];
+            if ($trc20Enabled) {
+                $inlineKeyboard[] = [['text' => '1️⃣ USDT(TRC20)', 'callback_data' => 'withdraw_trc20']];
+            }
+            if ($erc20Enabled) {
+                $inlineKeyboard[] = [['text' => '2️⃣ USDT(ERC20)', 'callback_data' => 'withdraw_erc20']];
+            }
+            $inlineKeyboard[] = [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']];
 
             // 编辑图片消息的caption和按钮（图片保持不变）
             $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
@@ -2929,6 +3008,102 @@ class TelegramWebhookController extends Controller
     }
 
     /**
+     * 处理ERC20充值
+     */
+    protected function handleRechargeErc20($chatId, $messageId, $user, $telegramId)
+    {
+        try {
+            // 检查是否有待支付订单
+            $pendingOrder = Recharge::where('user_id', $user->id)
+                ->where('state', 1)
+                ->where('tron_network', 'ERC20')
+                ->where('created_at', '>=', now()->subMinutes(10))
+                ->first();
+
+            if ($pendingOrder) {
+                // 有待支付订单，直接显示
+                return $this->showPendingErc20RechargeOrder($chatId, $messageId, $user, $pendingOrder);
+            }
+
+            // 获取充值限额（使用ERC20配置）
+            $minAmount = SystemConfig::getValue('erc20_min_amount') ?: 10;
+            $maxAmount = SystemConfig::getValue('erc20_max_amount') ?: 50000;
+            $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+
+            // 进入输入金额状态
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_ERC20_RECHARGE_AMOUNT,
+                'network' => 'ERC20',
+                'message_id' => $messageId,
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $text = "💵 <b>ERC20 USDT 充值</b>\n\n";
+            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
+            $text .= "充值限额：<code>{$minAmount}</code> - <code>{$maxAmount}</code> USDT\n\n";
+            $text .= "📝 请输入充值金额（USDT）：";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            // 编辑图片消息的caption和按钮（图片保持不变）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理ERC20充值异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示待支付ERC20充值订单
+     */
+    protected function showPendingErc20RechargeOrder($chatId, $messageId, $user, $order)
+    {
+        try {
+            // 获取二维码图片URL（ERC20）
+            $qrcodeUrl = SystemConfig::getValue('erc20_usdt_qrcode');
+            if ($qrcodeUrl) {
+                $qrcodeUrl = env('APP_URL') . '/uploads/' . $qrcodeUrl;
+            }
+
+            $erc20Address = SystemConfig::getValue('erc20_usdt_address');
+            $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+
+            $text = "📋 <b>待支付ERC20充值订单</b>\n\n";
+            $text .= "订单号：<code>{$order->out_trade_no}</code>\n";
+            $text .= "充值金额：<b>{$order->amount}</b> 元\n";
+            $text .= "需支付（点击复制）：<code>{$order->tron_usdt_amount}</code> USDT\n";
+            $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
+            $text .= "📮 收款地址(ERC20)：\n<code>{$erc20Address}</code>\n\n";
+            $text .= "⚠️ 请务必转账准确金额\n";
+            $text .= "⏰ 订单将在10分钟后过期";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]],
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+            ];
+
+            if ($qrcodeUrl) {
+                $result = $this->telegramBot->editMessageMediaWithInlineKeyboard($chatId, $messageId, $qrcodeUrl, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+            } else {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示待支付ERC20充值订单异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
      * 显示待支付充值订单
      */
     protected function showPendingRechargeOrder($chatId, $messageId, $user, $order)
@@ -2946,7 +3121,7 @@ class TelegramWebhookController extends Controller
             $text = "📋 <b>待支付充值订单</b>\n\n";
             $text .= "订单号：<code>{$order->out_trade_no}</code>\n";
             $text .= "充值金额：<b>{$order->amount}</b> 元\n";
-            $text .= "需支付：<b>{$order->tron_usdt_amount}</b> USDT\n";
+            $text .= "需支付（点击复制）：<code>{$order->tron_usdt_amount}</code> USDT\n";
             $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
             $text .= "📮 收款地址(TRC20)：\n<code>{$tronAddress}</code>\n\n";
             $text .= "⚠️ 请务必转账准确金额\n";
@@ -3005,14 +3180,14 @@ class TelegramWebhookController extends Controller
             }
 
             $this->clearUserState($telegramId);
-            
+
             // 使用 editMessageMedia 替换图片（无消失特效）
             $mainImageUrl = $this->getMainMenuImageUrl();
             $walletBalance = number_format($user->balance, 2);
             $text = "💰 <b>充值提现</b>\n\n";
             $text .= "💵 余额：<b>{$walletBalance}</b> 元\n\n";
             $text .= "✅ 订单已取消";
-            
+
             $inlineKeyboard = [
                 [
                     ["text" => "💵 充值", "callback_data" => "recharge"],
@@ -3022,8 +3197,12 @@ class TelegramWebhookController extends Controller
                     ["text" => "🏠 返回主菜单", "callback_data" => "back_main"]
                 ]
             ];
-            
-            $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $text, $inlineKeyboard);
+
+            $result = $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $text, $inlineKeyboard);
+            // 如果编辑图片消息失败（原消息可能是文本），降级为编辑文本消息
+            if ($result['code'] != 200) {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
             return response()->json(["ok" => true]);
         } catch (\Exception $e) {
             Log::error('取消充值订单异常', ['error' => $e->getMessage()]);
@@ -3095,7 +3274,7 @@ class TelegramWebhookController extends Controller
 
             // 构建订单信息文本（紧接图片，无标题）
             $text = "编号：{$order->id}\n";
-            $text .= "金额：{$usdtAmount} USDT\n";
+            $text .= "金额（点击复制）：<code>{$usdtAmount}</code> USDT\n";
             $text .= "过期时间：{$expireTime}\n";
             $text .= "--------------------------------\n";
             $text .= "收款地址（点击复制）👇\n";
@@ -3103,10 +3282,14 @@ class TelegramWebhookController extends Controller
             $text .= "--------------------------------\n";
             $text .= "⚠️ 支付金额可能会出现附加小数\n";
             $text .= "⚠️ 尾数金额也必须正确\n";
-            $text .= "✅ 充值未到账，请联系客服";
+            $kefuUsername = SystemConfig::getValue('kefu_username');
+            // 移除可能的@符号，确保用户名格式正确
+            $kefuUsername = $kefuUsername ? ltrim($kefuUsername, '@') : '';
+            $text .= $kefuUsername ? "✅ 充值未到账，请联系客服 @{$kefuUsername}" : "✅ 充值未到账，请联系客服";
 
             $inlineKeyboard = [
-                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]]
+                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]],
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
             ];
 
             // 发送二维码图片+订单信息+按钮（作为一条消息）
@@ -3134,7 +3317,7 @@ class TelegramWebhookController extends Controller
                     $sentMessageId = $textResult["data"]["result"]["message_id"];
                 }
             }
-            
+
             // 保存消息ID到订单
             if ($sentMessageId) {
                 $order->telegram_message_id = $sentMessageId;
@@ -3144,6 +3327,130 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('处理充值金额输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理ERC20充值金额输入
+     */
+    protected function processErc20RechargeAmountInput($chatId, $user, $telegramId, $amount, $state)
+    {
+        try {
+            // 验证金额格式
+            if (!is_numeric($amount) || $amount <= 0) {
+                $this->telegramBot->sendMessage($chatId, '❌ 请输入有效的金额数字');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = floatval($amount);
+            $minAmount = floatval(SystemConfig::getValue('erc20_min_amount') ?: 10);
+            $maxAmount = floatval(SystemConfig::getValue('erc20_max_amount') ?: 50000);
+
+            if ($amount < $minAmount || $amount > $maxAmount) {
+                $this->telegramBot->sendMessage($chatId, "❌ 充值金额必须在 {$minAmount} - {$maxAmount} USDT 之间");
+                return response()->json(['ok' => true]);
+            }
+
+            // 调用 TronUsdtService 生成充值订单（复用，只是网络不同）
+            $tronService = new TronUsdtService();
+            $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+            // 将USDT金额转换为人民币金额
+            $amountCny = $amount * $exchangeRate;
+
+            $rechargeInfo = $tronService->generateRechargeInfo($amountCny, $user->id);
+
+            if (!$rechargeInfo['success']) {
+                $this->telegramBot->sendMessage($chatId, '❌ 生成订单失败：' . ($rechargeInfo['message'] ?? '未知错误'));
+                return response()->json(['ok' => true]);
+            }
+
+            // 创建充值记录
+            $order = Recharge::create([
+                'out_trade_no' => $rechargeInfo['data']['out_trade_no'],
+                'user_id' => $user->id,
+                'pay_way' => 6,  // USDT-ERC20
+                'amount' => $amountCny,
+                'cash_fee' => 0,
+                'real_money' => $amountCny,
+                'usdt_rate' => $exchangeRate,
+                'state' => 1,
+                'tron_network' => 'ERC20',
+                'tron_usdt_amount' => $rechargeInfo['data']['usdt_amount'],
+                'info' => 'Telegram ERC20充值'
+            ]);
+
+            // 清除状态
+            $this->clearUserState($telegramId);
+
+            // 显示充值信息
+            $qrcodeUrl = SystemConfig::getValue('erc20_usdt_qrcode');
+            if ($qrcodeUrl) {
+                $qrcodeUrl = env('APP_URL') . '/uploads/' . $qrcodeUrl;
+            }
+
+            $erc20Address = SystemConfig::getValue('erc20_usdt_address');
+            $expireTime = now()->addMinutes(10)->format('Y-m-d H:i:s');
+            $usdtAmount = $rechargeInfo['data']['usdt_amount'];
+
+            // 构建订单信息文本
+            $text = "编号：{$order->id}\n";
+            $text .= "网络：<b>ERC20</b>\n";
+            $text .= "金额（点击复制）：<code>{$usdtAmount}</code> USDT\n";
+            $text .= "过期时间：{$expireTime}\n";
+            $text .= "--------------------------------\n";
+            $text .= "收款地址（点击复制）👇\n";
+            $text .= "<code>{$erc20Address}</code>\n";
+            $text .= "--------------------------------\n";
+            $text .= "⚠️ 支付金额可能会出现附加小数\n";
+            $text .= "⚠️ 尾数金额也必须正确\n";
+            $text .= "⚠️ 请确认使用 ERC20 网络转账\n";
+            $kefuUsername = SystemConfig::getValue('kefu_username');
+            // 移除可能的@符号，确保用户名格式正确
+            $kefuUsername = $kefuUsername ? ltrim($kefuUsername, '@') : '';
+            $text .= $kefuUsername ? "✅ 充值未到账，请联系客服 @{$kefuUsername}" : "✅ 充值未到账，请联系客服";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消订单', 'callback_data' => 'cancel_recharge_order:' . $order->id]],
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+            ];
+
+            // 发送二维码图片+订单信息+按钮
+            $sentMessageId = null;
+            if ($qrcodeUrl) {
+                $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $qrcodeUrl, $text, $inlineKeyboard);
+                if ($result["code"] == 200 && isset($result["data"]["result"]["message_id"])) {
+                    $sentMessageId = $result["data"]["result"]["message_id"];
+                } elseif ($result["code"] != 200) {
+                    Log::warning("ERC20充值订单发送失败", [
+                        "chat_id" => $chatId,
+                        "qrcode_url" => $qrcodeUrl,
+                        "result" => $result
+                    ]);
+                    // 降级：图片发送失败时只发文字
+                    $textResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                    if (isset($textResult["data"]["result"]["message_id"])) {
+                        $sentMessageId = $textResult["data"]["result"]["message_id"];
+                    }
+                }
+            } else {
+                // 没有二维码时只发文字
+                $textResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                if (isset($textResult["data"]["result"]["message_id"])) {
+                    $sentMessageId = $textResult["data"]["result"]["message_id"];
+                }
+            }
+
+            // 保存消息ID到订单
+            if ($sentMessageId) {
+                $order->telegram_message_id = $sentMessageId;
+                $order->save();
+            }
+
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理ERC20充值金额输入异常', ['error' => $e->getMessage()]);
             $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
         }
@@ -3235,6 +3542,86 @@ class TelegramWebhookController extends Controller
     }
 
     /**
+     * 处理ERC20提现
+     */
+    protected function handleWithdrawErc20($chatId, $messageId, $user, $telegramId)
+    {
+        try {
+            // 检查是否有待审核提现订单
+            $pendingWithdraw = Withdraw::where('user_id', $user->id)
+                ->where('state', 1)
+                ->first();
+
+            if ($pendingWithdraw) {
+                $text = "⏳ <b>您有待审核的提现订单</b>\n\n";
+                $text .= "订单号：<code>{$pendingWithdraw->order_no}</code>\n";
+                $text .= "提现金额：<b>{$pendingWithdraw->amount}</b> 元\n";
+                $text .= "创建时间：{$pendingWithdraw->created_at}\n\n";
+                $text .= "请等待审核完成后再申请新的提现";
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
+            // 验证提现条件
+            $validateResult = $this->validateWithdraw($user);
+            if (!$validateResult['success']) {
+                $text = "❌ <b>无法提现</b>\n\n";
+                $text .= $validateResult['message'];
+
+                $inlineKeyboard = [
+                    [['text' => '↩️ 返回', 'callback_data' => 'back_to_deposit_withdraw']]
+                ];
+
+                $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                }
+                return response()->json(['ok' => true]);
+            }
+
+            // 获取提现限额（使用ERC20汇率）
+            $minWithdraw = SystemConfig::getValue('min_withdraw_money') ?: 100;
+            $maxWithdraw = SystemConfig::getValue('max_withdraw_money') ?: 50000;
+            $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+
+            // 进入输入金额状态
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_ERC20_WITHDRAW_AMOUNT,
+                'network' => 'ERC20',
+                'message_id' => $messageId,
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $text = "💸 <b>ERC20 USDT 提现</b>\n\n";
+            $text .= "当前余额：" . number_format($user->balance, 2) . " 元\n";
+            $text .= "当前汇率：1 USDT = {$exchangeRate} 元\n";
+            $text .= "提现限额：{$minWithdraw} - {$maxWithdraw} 元\n\n";
+            $text .= "📝 请输入提现金额（元）：";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理ERC20提现异常', ['error' => $e->getMessage()]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
      * 验证提现条件
      */
     protected function validateWithdraw($user)
@@ -3260,8 +3647,9 @@ class TelegramWebhookController extends Controller
             }
         }
 
-        // 3. 打码量验证
-        $withdrawFee = floatval(SystemConfig::getValue('withdraw_fee') ?: 1);
+        // 3. 打码量验证（倍数为0时不检查）
+        $withdrawFeeConfig = SystemConfig::getValue('withdraw_fee');
+        $withdrawFee = ($withdrawFeeConfig !== null && $withdrawFeeConfig !== '') ? floatval($withdrawFeeConfig) : 1;
         if ($withdrawFee > 0) {
             // 获取用户总充值金额
             $totalRecharge = Recharge::where('user_id', $user->id)
@@ -3372,40 +3760,63 @@ class TelegramWebhookController extends Controller
 
             $amount = $state['amount'];
 
-            // 再次验证余额（防止并发问题）
-            $user->refresh();
-            if ($amount > $user->balance) {
-                $this->clearUserState($telegramId);
-                $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
-                return response()->json(['ok' => true]);
+            // 使用事务和行锁，防止并发问题
+            \DB::beginTransaction();
+            try {
+                // 锁定用户记录，防止余额被并发修改
+                $user = \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
+
+                // 再次验证余额
+                if ($amount > $user->balance) {
+                    \DB::rollBack();
+                    $this->clearUserState($telegramId);
+                    $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
+                    return response()->json(['ok' => true]);
+                }
+
+                // 再次检查是否有待审核订单（防止并发创建）
+                $pendingWithdraw = Withdraw::where('user_id', $user->id)
+                    ->where('state', 1)
+                    ->first();
+                if ($pendingWithdraw) {
+                    \DB::rollBack();
+                    $this->clearUserState($telegramId);
+                    $this->telegramBot->sendMessage($chatId, "❌ 您有待审核的提现订单，请等待处理完成后再申请");
+                    return response()->json(['ok' => true]);
+                }
+
+                // 计算手续费
+                $cashFee = 0;
+                $realMoney = $amount - $cashFee;
+
+                // 创建提现订单
+                $orderNo = 'W' . date('YmdHis') . $user->id . mt_rand(1000, 9999);
+                $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
+
+                $withdraw = Withdraw::create([
+                    'order_no' => $orderNo,
+                    'user_id' => $user->id,
+                    'type' => 2,  // USDT-TRC20 提现
+                    'card_id' => 0,
+                    'amount' => $amount,
+                    'cash_fee' => $cashFee,
+                    'real_money' => $realMoney,
+                    'usdt_rate' => $exchangeRate,
+                    'state' => 1,
+                    'usdt_address' => $address,
+                    'usdt_network' => 'TRC20',
+                    'info' => 'Telegram TRC20提现'
+                ]);
+
+                // 扣减余额
+                $user->balance -= $amount;
+                $user->save();
+
+                \DB::commit();
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                throw $e;
             }
-
-            // 计算手续费
-            $cashFee = 0;
-            $realMoney = $amount - $cashFee;
-
-            // 创建提现订单
-            $orderNo = 'W' . date('YmdHis') . $user->id . mt_rand(1000, 9999);
-            $exchangeRate = SystemConfig::getValue('tron_exchange_rate') ?: 7;
-
-            $withdraw = Withdraw::create([
-                'order_no' => $orderNo,
-                'user_id' => $user->id,
-                'type' => 2,  // USDT-TRC20 提现
-                'card_id' => 0,
-                'amount' => $amount,
-                'cash_fee' => $cashFee,
-                'real_money' => $realMoney,
-                'usdt_rate' => $exchangeRate,
-                'state' => 1,
-                'usdt_address' => $address,
-                'usdt_network' => 'TRC20',
-                'info' => 'Telegram TRC20提现'
-            ]);
-
-            // 扣减余额
-            $user->balance -= $amount;
-            $user->save();
 
             // 清除状态
             $this->clearUserState($telegramId);
@@ -3431,6 +3842,257 @@ class TelegramWebhookController extends Controller
         } catch (\Exception $e) {
             Log::error('处理提现地址输入异常', ['error' => $e->getMessage()]);
             $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理ERC20提现金额输入
+     */
+    protected function processErc20WithdrawAmountInput($chatId, $user, $telegramId, $amount, $state)
+    {
+        try {
+            // 验证金额格式
+            if (!is_numeric($amount) || $amount <= 0) {
+                $this->telegramBot->sendMessage($chatId, '❌ 请输入有效的金额数字');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = floatval($amount);
+            $minWithdraw = floatval(SystemConfig::getValue('min_withdraw_money') ?: 100);
+            $maxWithdraw = floatval(SystemConfig::getValue('max_withdraw_money') ?: 50000);
+
+            if ($amount < $minWithdraw || $amount > $maxWithdraw) {
+                $this->telegramBot->sendMessage($chatId, "❌ 提现金额必须在 {$minWithdraw} - {$maxWithdraw} 元之间");
+                return response()->json(['ok' => true]);
+            }
+
+            if ($amount > $user->balance) {
+                $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
+                return response()->json(['ok' => true]);
+            }
+
+            // 更新状态，保存金额，等待输入地址
+            $this->setUserState($telegramId, [
+                'action' => self::STATE_WAITING_ERC20_WITHDRAW_ADDRESS,
+                'network' => 'ERC20',
+                'amount' => $amount,
+                'message_id' => $state['message_id'],
+                'created_at' => now()->toDateTimeString()
+            ]);
+
+            $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+            $usdtAmount = round($amount / $exchangeRate, 2);
+
+            $text = "💸 <b>ERC20 USDT 提现</b>\n\n";
+            $text .= "提现金额：<b>{$amount}</b> 元\n";
+            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n";
+            $remainingBalance = number_format($user->balance, 2);
+            $text .= "剩余余额：<b>{$remainingBalance}</b> 元\n\n";
+            $text .= "汇率：1 USDT = {$exchangeRate} 元\n\n";
+            $text .= "📝 请输入 ERC20 钱包地址：\n";
+            $text .= "<i>（0x开头，42个字符）</i>";
+
+            $inlineKeyboard = [
+                [['text' => '❌ 取消', 'callback_data' => 'cancel_input']]
+            ];
+
+            // 编辑原消息而不是发送新消息（保留主菜单图片）
+            $messageId = $state['message_id'] ?? null;
+            if ($messageId) {
+                // 获取主菜单图片URL
+                $mainImageUrl = SystemConfig::getValue('telegram_bot_main_image');
+                if ($mainImageUrl) {
+                    $mainImageUrl = env('APP_URL') . '/uploads/' . $mainImageUrl;
+                } else {
+                    $mainImageUrl = env('APP_URL') . '/images/telegram/main_banner.jpg';
+                }
+
+                $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $text, $inlineKeyboard);
+            } else {
+                $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            }
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理ERC20提现金额输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理ERC20提现地址输入
+     */
+    protected function processErc20WithdrawAddressInput($chatId, $user, $telegramId, $address, $state)
+    {
+        try {
+            // 验证ERC20地址格式（0x开头，42个字符）
+            if (!preg_match('/^0x[a-fA-F0-9]{40}$/', $address)) {
+                $this->telegramBot->sendMessage($chatId, '❌ 钱包地址格式错误，ERC20地址应以 0x 开头，共42个字符');
+                return response()->json(['ok' => true]);
+            }
+
+            $amount = $state['amount'];
+
+            // 使用事务和行锁，防止并发问题
+            \DB::beginTransaction();
+            try {
+                // 锁定用户记录，防止余额被并发修改
+                $user = \App\Models\User::where('id', $user->id)->lockForUpdate()->first();
+
+                // 再次验证余额
+                if ($amount > $user->balance) {
+                    \DB::rollBack();
+                    $this->clearUserState($telegramId);
+                    $this->telegramBot->sendMessage($chatId, "❌ 余额不足，当前余额: " . number_format($user->balance, 2) . " 元");
+                    return response()->json(['ok' => true]);
+                }
+
+                // 再次检查是否有待审核订单（防止并发创建）
+                $pendingWithdraw = Withdraw::where('user_id', $user->id)
+                    ->where('state', 1)
+                    ->first();
+                if ($pendingWithdraw) {
+                    \DB::rollBack();
+                    $this->clearUserState($telegramId);
+                    $this->telegramBot->sendMessage($chatId, "❌ 您有待审核的提现订单，请等待处理完成后再申请");
+                    return response()->json(['ok' => true]);
+                }
+
+                // 计算手续费
+                $cashFee = 0;
+                $realMoney = $amount - $cashFee;
+
+                // 创建提现订单
+                $orderNo = 'W' . date('YmdHis') . $user->id . mt_rand(1000, 9999);
+                $exchangeRate = SystemConfig::getValue('erc20_exchange_rate') ?: 7;
+
+                $withdraw = Withdraw::create([
+                    'order_no' => $orderNo,
+                    'user_id' => $user->id,
+                    'type' => 3,  // USDT-ERC20 提现
+                    'card_id' => 0,
+                    'amount' => $amount,
+                    'cash_fee' => $cashFee,
+                    'real_money' => $realMoney,
+                    'usdt_rate' => $exchangeRate,
+                    'state' => 1,
+                    'usdt_address' => $address,
+                    'usdt_network' => 'ERC20',
+                    'info' => 'Telegram ERC20提现'
+                ]);
+
+                // 扣减余额
+                $user->balance -= $amount;
+                $user->save();
+
+                \DB::commit();
+            } catch (\Exception $e) {
+                \DB::rollBack();
+                throw $e;
+            }
+
+            // 清除状态
+            $this->clearUserState($telegramId);
+
+            $usdtAmount = round($realMoney / $exchangeRate, 2);
+
+            $text = "✅ <b>ERC20提现申请已提交</b>\n\n";
+            $text .= "订单号：<code>{$orderNo}</code>\n";
+            $text .= "提现金额：<b>{$amount}</b> 元\n";
+            $text .= "手续费：<b>{$cashFee}</b> 元\n";
+            $text .= "预计到账：<b>{$usdtAmount}</b> USDT\n";
+            $remainingBalance = number_format($user->balance, 2);
+            $text .= "剩余余额：<b>{$remainingBalance}</b> 元\n\n";
+            $text .= "📮 收款地址(ERC20)：\n<code>{$address}</code>\n\n";
+            $text .= "⏳ 请耐心等待审核";
+
+            $inlineKeyboard = [
+                [['text' => '🏠 返回主菜单', 'callback_data' => 'back_main']]
+            ];
+
+            $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('处理ERC20提现地址输入异常', ['error' => $e->getMessage()]);
+            $this->telegramBot->sendMessage($chatId, '❌ 处理失败：' . $e->getMessage());
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 处理Telegram账号换绑
+     */
+    protected function handleTelegramRebind($chatId, $newTelegramId, $token, $firstName, $username)
+    {
+        try {
+            Log::info('处理Telegram换绑请求', [
+                'chat_id' => $chatId,
+                'new_telegram_id' => $newTelegramId,
+                'token' => $token
+            ]);
+
+            // 验证令牌
+            $rebindToken = TelegramRebindToken::validateToken($token);
+
+            if (!$rebindToken) {
+                $this->telegramBot->sendMessage($chatId, "❌ 换绑链接无效或已过期，请联系管理员重新生成。");
+                return response()->json(['ok' => true]);
+            }
+
+            // 检查新Telegram ID是否已被其他账号绑定
+            $existingUser = User::where('telegram_id', $newTelegramId)->first();
+            if ($existingUser && $existingUser->id != $rebindToken->user_id) {
+                $this->telegramBot->sendMessage($chatId, "❌ 此Telegram账号已绑定其他用户，无法换绑。\n\n如需解绑，请联系客服处理。");
+                return response()->json(['ok' => true]);
+            }
+
+            // 获取要换绑的用户
+            $user = User::find($rebindToken->user_id);
+            if (!$user) {
+                $this->telegramBot->sendMessage($chatId, "❌ 用户不存在，换绑失败。");
+                return response()->json(['ok' => true]);
+            }
+
+            // 记录旧的Telegram ID
+            $oldTelegramId = $user->telegram_id;
+
+            // 执行换绑
+            $user->telegram_id = $newTelegramId;
+            $user->save();
+
+            // 标记令牌已使用
+            $rebindToken->markAsUsed($newTelegramId);
+
+            Log::info('Telegram换绑成功', [
+                'user_id' => $user->id,
+                'username' => $user->username,
+                'old_telegram_id' => $oldTelegramId,
+                'new_telegram_id' => $newTelegramId
+            ]);
+
+            // 发送成功消息
+            $successText = "✅ <b>Telegram账号换绑成功！</b>\n\n";
+            $successText .= "👤 用户名：<code>{$user->username}</code>\n";
+            $successText .= "🆔 新Telegram ID：<code>{$newTelegramId}</code>\n\n";
+            $successText .= "现在您可以使用此Telegram账号操作了。";
+
+            $replyKeyboard = $this->getPersistentKeyboard();
+            $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $successText, $replyKeyboard, true, false);
+
+            // 显示主菜单
+            $telegramUserInfo = [
+                'first_name' => $firstName,
+                'username' => $username
+            ];
+            return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+
+        } catch (\Exception $e) {
+            Log::error('处理Telegram换绑异常', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            $this->telegramBot->sendMessage($chatId, '❌ 换绑处理失败：' . $e->getMessage());
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
         }
     }

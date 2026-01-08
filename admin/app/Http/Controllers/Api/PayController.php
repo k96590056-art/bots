@@ -50,9 +50,9 @@ class PayController extends Controller
     {
      $token = $request->header('authorization');
      $token = str_replace('Bearer ','',$token) ;
-     $user = User::where('api_token',$token)->first(); 
+     $user = User::where('api_token',$token)->first();
         $tg = new TgService;
-        $result = $tg->allusersbalance($user->username);        
+        $result = $tg->allusersbalance($user->username);
         $Balance = $result['data']['userblance'];
         $str = "";
         $gameblance = 0;
@@ -83,11 +83,11 @@ class PayController extends Controller
         $data['email'] = $user->mail;
         $data['birthday'] = $user->birthday;
         $data['usdtrate'] = $info->value;
-        $data['withdrawusdtrate'] =$info_withdraw->value;   
+        $data['withdrawusdtrate'] =$info_withdraw->value;
         $info_withdrawcashfee = SystemConfig::where('key','withdraw_fee_usdt_erc')->first();
-        $data['withdrawcashfee'] =$info_withdrawcashfee->value;  
+        $data['withdrawcashfee'] =$info_withdrawcashfee->value;
         $info_withdrawfeeusdttrc = SystemConfig::where('key','withdraw_cash_fee')->first();
-        $data['withdrawfeeusdttrc'] =$info_withdrawfeeusdttrc->value; 
+        $data['withdrawfeeusdttrc'] =$info_withdrawfeeusdttrc->value;
         $uservip = UserVip::where('id',$user->vip)->first();
         if($uservip){
                 $data['vipname'] =  '/static/style/'.strtolower($uservip->vipname).'.png';
@@ -95,7 +95,7 @@ class PayController extends Controller
                 $data['vipname'] =  '/static/style/'.strtolower('VIP0').'.png';
          }
 
-         
+
         return $this->returnMsg(200, $data,'刷新成功');
     }
     /**
@@ -105,8 +105,8 @@ class PayController extends Controller
     {
      $token = $request->header('authorization');
      $token = str_replace('Bearer ','',$token) ;
-     $user = User::where('api_token',$token)->first(); 
-     
+     $user = User::where('api_token',$token)->first();
+
         $data = $request->all();
         $info = Recharge::where('user_id',$user->id)->where('out_trade_no',$data['deposit_no'])->first();
         switch ($info['pay_way']) {
@@ -114,7 +114,7 @@ class PayController extends Controller
                 $cardlist = PaySetting::where('state',1)->get();
                 foreach ($cardlist as &$val){
                     if($val->bank_data->bank_name!='USDT' || $val->bank_data->bank_name!='银行类型后台添加'){
-                        $val->ico= env('APP_URL').'/uploads/'. $val->bank_data->bank_img;    
+                        $val->ico= env('APP_URL').'/uploads/'. $val->bank_data->bank_img;
                     }else{
                         $val->ico='';
                     }
@@ -132,7 +132,7 @@ class PayController extends Controller
                 $alipayinfo->payimg = $alipayinfo->payimg ? env('APP_URL').'/uploads/'.$alipayinfo->payimg : '';
                 $info->paytype='支付宝扫码支付';
                 $data['info'] = $info;
-                $data['cardlist'] = $alipayinfo;                
+                $data['cardlist'] = $alipayinfo;
                 return $this->returnMsg($data ? 200 : 500,$data,'alipay');
                 break;
             case 4: //提交后台审核  wxpay
@@ -143,12 +143,12 @@ class PayController extends Controller
                 $wxinfo->payimg = $wxinfo->payimg ? env('APP_URL').'/uploads/'.$wxinfo->payimg : '';
                 $info->paytype='微信扫码支付';
                 $data['info'] = $info;
-                $data['cardlist'] = $wxinfo;                    
+                $data['cardlist'] = $wxinfo;
                 return $this->returnMsg($data ? 200 : 500,$data,'wxpay');
                 break;
            case 5: //提交后台审核  USDT
                 $infousd = SystemConfig::where('key','usdt_rate')->first();
-                $usdtinfo = CodePay::where('status',1)->where('id',5)->first();    
+                $usdtinfo = CodePay::where('status',1)->where('id',5)->first();
                 if(!$usdtinfo){
                     return $this->returnMsg(201, '', 'USDT(TRC20)入款方式未配置');
                 }
@@ -157,13 +157,13 @@ class PayController extends Controller
                 $info->usdtrate = $infousd->value;
                 $info->real_money = round($info->real_money / $infousd->value,2);
                 $data['info'] = $info;
-                $data['cardlist'] = $usdtinfo;                   
+                $data['cardlist'] = $usdtinfo;
                 return $this->returnMsg($data ? 200 : 500,$data,'usdtpay');
                 break;
            case 6: //提交后台审核  USDT
                 $infousd = SystemConfig::where('key','usdt_rate')->first();
-                
-                $usdtinfo = CodePay::where('status',1)->where('id',7)->first();        
+
+                $usdtinfo = CodePay::where('status',1)->where('id',7)->first();
                 if(!$usdtinfo){
                     return $this->returnMsg(201, '', 'USDT(ERC20)入款方式未配置');
                 }
@@ -172,9 +172,9 @@ class PayController extends Controller
                 $info->usdtrate = $infousd->value;
                 $info->real_money = round($info->real_money / $infousd->value,2);
                 $data['info'] = $info;
-                $data['cardlist'] = $usdtinfo;                   
+                $data['cardlist'] = $usdtinfo;
                 return $this->returnMsg($data ? 200 : 500,$data,'usdtpay');
-                break;     
+                break;
             case 7:
                 $ebpay = CodePay::where('status',1)->where('id',8)->first();
                 if(!$ebpay){
@@ -183,14 +183,14 @@ class PayController extends Controller
                 $ebpay->payimg = $ebpay->payimg ? env('APP_URL').'/uploads/'.$ebpay->payimg : '';
                 $info->paytype='EBpay';
                 $data['info'] = $info;
-                $data['cardlist'] = $ebpay;                    
+                $data['cardlist'] = $ebpay;
                 return $this->returnMsg($data ? 200 : 500,$data,'ebpay');
                 break;
             default:
                 $cardlist = PaySetting::where('state',1)->get();
                 foreach ($cardlist as &$val){
                     if($val->bank_data->bank_name!='USDT' || $val->bank_data->bank_name!='银行类型后台添加'){
-                        $val->ico= env('APP_URL').'/uploads/'. $val->bank_data->bank_img;    
+                        $val->ico= env('APP_URL').'/uploads/'. $val->bank_data->bank_img;
                     }else{
                         $val->ico='';
                     }
@@ -199,13 +199,13 @@ class PayController extends Controller
                 $data['cardlist'] = $cardlist;
                 return $this->returnMsg($data ? 200 : 500,$data,'bankpay');
                 break;
-        }       
-       
+        }
+
     }
 
 
 
-        
+
     /**
      * 充值
      *
@@ -219,10 +219,10 @@ class PayController extends Controller
             'paytype' => 'required',
         ];
         $this->validate($request, $rules, $this->messages);
-      
+
      $token = $request->header('authorization');
      $token = str_replace('Bearer ','',$token) ;
-            $user = User::where('api_token',$token)->first(); 
+            $user = User::where('api_token',$token)->first();
 
         $data = $request->all();
         // 清理非表字段，避免插入时触发 SQL 错误
@@ -246,7 +246,7 @@ class PayController extends Controller
         $catepay = $data['catepay'] ?? '';
         unset($data['catepay']);
         unset($data['paytype']);
-        
+
         switch ($data['pay_way']) {
             case "bank": //提交后台审核
                 $data['pay_way'] =1;
@@ -277,7 +277,7 @@ class PayController extends Controller
                 $usdtinfo = CodePay::where('status',1)->where('id',3)->first();
                 if(!$usdtinfo){
                      return $this->returnMsg(500,[],'系统维护中...');
-                }           
+                }
                 if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
                 $res = Recharge::create($data);
                 return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
@@ -286,13 +286,13 @@ class PayController extends Controller
                 $data['cash_fee'] = 0;
                 $data['bank'] = $catepay;
                 $data['pay_way'] = ($catepay=='TRC20') ? 5 : 6;
-                
+
                 $pay_way = ($catepay=='TRC20') ? 5 : 7;
-                
+
                 $usdtinfo = CodePay::where('status',1)->where('id',$pay_way)->first();
                 if(!$usdtinfo){
                      return $this->returnMsg(500,[],'系统维护中...');
-                }   
+                }
                 if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
                 $data['real_money'] = $data['amount'] - $data['cash_fee'];
                 $res = Recharge::create($data);
@@ -306,25 +306,30 @@ class PayController extends Controller
                 $info = CodePay::where('status',1)->where('id',8)->first();
                 if(!$info){
                     return $this->returnMsg(500,[],'系统维护中...');
-                } 
+                }
                 if ($data['amount'] > $info['max_price'] || $data['amount'] < $info['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
                 $res = Recharge::create($data);
                 return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
-            	
+
 
             default:
                 # code...
                 break;
         }
     }
-    
+
     public function getPayRange(Request $request)
     {
         $type = $request->input('type');
-        // USDT 统一走系统 TRON 配置，不依赖 CodePay 列表
-        if ($type === 'usdt-trc20' || $type === 'usdt-erc20') {
+        // USDT 走系统配置，不依赖 CodePay 列表
+        if ($type === 'usdt-trc20') {
             $min = SystemConfig::getValue('tron_min_amount') ?? 0;
             $max = SystemConfig::getValue('tron_max_amount') ?? 0;
+            return $this->returnMsg(200, ['min_price' => (float)$min, 'max_price' => (float)$max]);
+        }
+        if ($type === 'usdt-erc20') {
+            $min = SystemConfig::getValue('erc20_min_amount') ?? 0;
+            $max = SystemConfig::getValue('erc20_max_amount') ?? 0;
             return $this->returnMsg(200, ['min_price' => (float)$min, 'max_price' => (float)$max]);
         }
         switch ($type) {
@@ -361,7 +366,7 @@ class PayController extends Controller
         }
         return $this->returnMsg(200,$data);
     }
-    
+
     /**
      * 绑定银行卡
      *
@@ -381,13 +386,13 @@ class PayController extends Controller
          $data = $request->all();
          $token = $request->header('authorization');
          $token = str_replace('Bearer ','',$token) ;
-         $user = User::where('api_token',$token)->first(); 
+         $user = User::where('api_token',$token)->first();
         if(!$user->paypwd){
             return $this->returnMsg(251,[],'请先设置支付密码');
         }
         if (!Hash::check($data['pay_pass'], $user->paypwd)) return $this->returnMsg(205,[],'支付密码错误');
-        
-        
+
+
         if($data['bank']=='USDT'){
             $count = UserCard::where('user_id', $user->id)->where('bank','USDT')->count();
             $data['bank_address'] = $data['bank_owner'];
@@ -425,16 +430,16 @@ class PayController extends Controller
         $data = $request->all();
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         $count = UserCard::where('user_id', $user->id)->where('id', $data['id'])->delete();
         return $this->returnMsg($count ? 200 : 500);
     }
-    
+
     public function getBetAmount(Request $request)
     {
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         $withdrawinfo = Withdraw::where('user_id',$user->id)->where('state',2)->orderBy("id","desc")->first();
 
         if($withdrawinfo){
@@ -468,7 +473,7 @@ class PayController extends Controller
         $max_withdraw_money = SystemConfig::getValue('max_withdraw_money');
      $token = $request->header('authorization');
      $token = str_replace('Bearer ','',$token) ;
-            $user = User::where('api_token',$token)->first(); 
+            $user = User::where('api_token',$token)->first();
         if (isset($daily_withdraw_times) && !empty($daily_withdraw_times)) {
             $count = Withdraw::whereDate('created_at',date('Y-m-d'))->count();
             if ($count >= $daily_withdraw_times) {
@@ -500,7 +505,7 @@ class PayController extends Controller
             $bet_amount = GameRecord::where('user_id',$user->id)->sum('valid_amount');
         }
 
-        if($recharge_amount > 0 && $bet_amount/$recharge_amount<$withdraw_fee){
+        if($withdraw_fee > 0 && $recharge_amount > 0 && $bet_amount/$recharge_amount<$withdraw_fee){
             return $this->returnMsg(214,[],'打码量达没有达到充值的'.$withdraw_fee.'倍,无法正常提现');
         }
         if (isset($min_withdraw_money) && !empty($min_withdraw_money)) {
@@ -560,7 +565,7 @@ class PayController extends Controller
         }else {
             $real_money = $data['amount'];
         }
-        
+
         $item = [
             'order_no' => $order_no,
             'type' => $type,
@@ -588,19 +593,19 @@ class PayController extends Controller
             if (!$token) {
                 return $this->returnMsg(401, [], '未提供认证令牌');
             }
-            
+
             $token = str_replace('Bearer ', '', $token);
             $user = User::where('api_token', $token)->first();
-            
+
             if (!$user) {
                 return $this->returnMsg(401, [], '用户认证失败');
             }
-            
+
             $data = $request->all();
             $type = $data['type'] ?? 1; // 默认类型为1
-            
+
             $list = collect(); // 初始化为空集合
-            
+
             if ($type == 1) {
                 $list = UserCard::where('user_id', $user->id)
                     ->whereNotIn('bank', ['USDT', 'ebpay', 'antoken'])
@@ -618,14 +623,14 @@ class PayController extends Controller
                     ->where('bank', 'antoken')
                     ->get();
             }
-            
+
             // 获取USDT汇率配置
             $info = SystemConfig::where('key', 'usdt_rate')->first();
             $info_withdraw = SystemConfig::where('key', 'withdraw_usdt_rate')->first();
-            
+
             $usdtRate = $info ? $info->value : '7.2'; // 默认汇率
             $withdrawUsdtRate = $info_withdraw ? $info_withdraw->value : '7.2';
-            
+
             foreach ($list as &$val) {
                 if ($val->bank != 'USDT' && $val->bank != 'ebpay' && $val->bank != 'antoken') {
                     $banklist = Bank::where('bank_name', $val->bank)->first();
@@ -633,14 +638,14 @@ class PayController extends Controller
                 } else {
                     $val->ico = '';
                 }
-                
+
                 $val->bank_not = substr($val->bank_no, -4);
                 $val->usdtrate = $usdtRate;
                 $val->withdrawusdtrate = $withdrawUsdtRate;
             }
-            
+
             return $this->returnMsg(200, $list, '获取成功');
-            
+
         } catch (\Exception $e) {
             \Log::error('getAllUserCard error: ' . $e->getMessage());
             return $this->returnMsg(500, [], '获取银行卡列表失败：' . $e->getMessage());
@@ -664,7 +669,7 @@ class PayController extends Controller
         $data = $request->all();
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         $tg = new TgService;
         $order_no = date('YmdHis').rand(100000,999999);
         if($data['sourcetype']==$data['targettype']){
@@ -678,7 +683,7 @@ class PayController extends Controller
         }
 		if($data['sourcetype'] != 'userbalance' && $data['targettype'] != 'userbalance' ){
 			return $this->returnMsg(209,[],'场馆之间禁止互转');
-		}		
+		}
 		$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
 		if(!$User_Api){
 			$result = $tg->register($data['pay_way'],$user->username);
@@ -691,9 +696,9 @@ class PayController extends Controller
 				'api_pass' => 123456,
 				'api_code' => $data['pay_way'],
 			];
-			$User_Api = User_Api::create($arr);		    
-		}	
-		
+			$User_Api = User_Api::create($arr);
+		}
+
         if ($data['type'] == "togame") { //转入游戏
             $amount = intval($data['amount']);
             if ($amount > $user->balance) return $this->returnMsg(210,[],'操作金额高于账户余额');
@@ -709,8 +714,8 @@ class PayController extends Controller
                     'after_money' => $user->balance,
                     'state' => 0
                 ];
-                TransferLog::create($arr);               
-            
+                TransferLog::create($arr);
+
 				$res = $tg->deposit($user->username,$amount,$order_no,$data['pay_way']);
 
 				if ($res['code'] == 200) {
@@ -722,13 +727,13 @@ class PayController extends Controller
 					$transferlog->save();
 					$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
 					$User_Api->api_money += $amount;
-					$User_Api->save();											
+					$User_Api->save();
 					return $this->returnMsg(200,['balance' => $user->balance]);
 				} else {
 					return $this->returnMsg(209,$res,$res['message']);
 				}
         } else {  //回收
-                $amount = intval($data['amount']);          
+                $amount = intval($data['amount']);
                 $arr = [
                     'order_no' => $order_no,
                     'api_type' => $data['pay_way'],
@@ -741,7 +746,7 @@ class PayController extends Controller
                     'after_money' => $user->balance,
                     'state' => 0
                 ];
-                TransferLog::create($arr);   
+                TransferLog::create($arr);
 				$res = $tg->withdrawal($user->username,$amount,$order_no,$data['pay_way']);
 				if ($res['code'] == 200) {
 					$user->balance += $data['amount'];
@@ -753,10 +758,10 @@ class PayController extends Controller
 					$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
 					if($User_Api->api_money <= $amount){
 						$User_Api->api_money = 0;
-						$User_Api->save();						
+						$User_Api->save();
 					}else{
 						$User_Api->api_money -= $amount;
-						$User_Api->save();						
+						$User_Api->save();
 					}
 					return $this->returnMsg(200,['balance' => $user->balance]);
 				} else {
@@ -764,7 +769,7 @@ class PayController extends Controller
 				}
         }
     }
-    
+
 
     public function transAll(Request $request)
     {
@@ -784,7 +789,7 @@ class PayController extends Controller
 			return $this->returnMsg(200,'','没有可回收的金额');
 		}
 		$order_no = date('YmdHis').rand(100000,999999);
-		$amount = intval($result['data']);          
+		$amount = intval($result['data']);
 		$arr = [
 			'order_no' => $order_no,
 			'api_type' => $transferlog->api_type,
@@ -797,11 +802,11 @@ class PayController extends Controller
 			'after_money' => $user->balance,
 			'state' => 0
 		];
-		TransferLog::create($arr);   
+		TransferLog::create($arr);
 		$res = $tg->withdrawal($user->username,$amount,$order_no,$transferlog->api_type);
 		if($res['code'] != 200){
 			return $this->returnMsg(201, '', $res['message']);
-		} 
+		}
 		$user->balance += $amount;
 		$user->save();
 		$transferlog = TransferLog::where('order_no', $order_no)->first();
@@ -811,18 +816,18 @@ class PayController extends Controller
 		$User_Api = User_Api::where('api_code',$transferlog->api_type)->where('user_id',$user->id)->first();
 		if($User_Api->api_money <= $amount){
 			$User_Api->api_money = 0;
-			$User_Api->save();						
+			$User_Api->save();
 		}else{
 			$User_Api->api_money -= $amount;
-			$User_Api->save();						
-		}		
-        return $this->returnMsg(200,'','回收成功');		
+			$User_Api->save();
+		}
+        return $this->returnMsg(200,'','回收成功');
         //\Illuminate\Support\Facades\Log::info("手机版一键回收结果".$user->username);
 
-        //\Illuminate\Support\Facades\Log::info($result);  
-        
+        //\Illuminate\Support\Facades\Log::info($result);
+
     }
-    
+
 
     /**
      * 一键回收
@@ -847,11 +852,11 @@ class PayController extends Controller
         TransferLog::create($arr);
         $user->balance = $user->balance + $money;
         $user->save();
-        
+
         return array('code' => 200);
-       
+
     }
-    
+
     public function getPayWay()
     {
         $wxinfo = CodePay::where('status',1)->where('id',3)->count();
@@ -868,12 +873,12 @@ class PayController extends Controller
         $card = count($cardlist) > 0 ? 1 : 0;
         return $this->returnMsg(200,compact('wechat','usdt','alipay','card'),'success');
     }
-    
+
     public function userRedPacket(Request $request)
     {
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         list($start, $end) = [date('Y-m-d').' 00:00:00',date('Y-m-d').' 23:59:59'];
 
         $acquirednum = Userredpacket::where('uid', $user->id)
@@ -890,7 +895,7 @@ class PayController extends Controller
                 return $query->where('created_at', '<=', $end);
             })->sum('amount');
             // var_dump($totalRecharge);exit;
-  
+
         $rule = RedEnvelopes::where('flow_money','>=',$totalRecharge)->where('day_flow','<=',$totalRecharge)
             ->where('start_time','<',date('Y-m-d H:i:s'))->where('end_time','>',date('Y-m-d H:i:s'))->where('status',1)->orderBy('recharge','desc')->first();
         if (!$rule) {
@@ -904,7 +909,7 @@ class PayController extends Controller
         $data = date('Y-m-d');
         $datatime = date('Y-m-d H:i:s');
         $redPacketStatus = "READY";
-        
+
         $max_times = RedEnvelopes::where('status',1)->orderBy('recharge','desc')->value('recharge');
         $max_times = intval($max_times);
         $max_end_time = RedEnvelopes::where('status',1)->orderBy('end_time','desc')->value('end_time');
@@ -922,12 +927,12 @@ class PayController extends Controller
         }
         return $this->returnMsg(200,compact('sendnums','acquirednum','redPacketStatus','rules','max_times'));
     }
-    
+
     public function doUserRedPacket(Request $request)
     {
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         $data = $request->all();
         list($start, $end) = [date('Y-m-d').' 00:00:00',date('Y-m-d').' 23:59:59'];
 
@@ -958,7 +963,7 @@ class PayController extends Controller
             ->where('start_time','<',date('Y-m-d H:i:s'))->where('end_time','>',date('Y-m-d H:i:s'))->orderBy('recharge','desc')->first();
         if (!$rule) return $this->returnMsg(500,[],'暂无红包可抢');
         $sendnums = (int)$rule->recharge;
- 
+
         if($sendnums<=0){
             return $this->returnMsg(203, '','累计充值不满足活动条件，无法领取');
         }
@@ -1007,12 +1012,12 @@ class PayController extends Controller
         $rand = $min + mt_rand() / mt_getrandmax() * ($max - $min);
         return floatval(number_format($rand,2));
     }
-    
+
     public function redPacket(Request $request)
     {
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
-        $user = User::where('api_token',$token)->first(); 
+        $user = User::where('api_token',$token)->first();
         $data = $request->all();
         $start = $end = '';
         if (isset($data['time'])) {
@@ -1032,13 +1037,13 @@ class PayController extends Controller
 
         return $this->returnMsg(200, $list);
     }
-    
+
     public function getRedPacket(Request $request)
     {
         if ($request->isMethod('post')) {
             $token = $request->header('authorization');
             $token = str_replace('Bearer ','',$token) ;
-            $user = User::where('api_token',$token)->first(); 
+            $user = User::where('api_token',$token)->first();
             $data = $request->all();
             $id = $data['id'];
             try {
@@ -1105,7 +1110,7 @@ class PayController extends Controller
             }
 
         }
-    }    
+    }
     public function cgpay_notify(Request $request)
     {
         $json = file_get_contents('php://input');
@@ -1122,17 +1127,17 @@ class PayController extends Controller
 		$recharge = Recharge::where('out_trade_no', $data['MerchantOrderId'])->where('state', 1)->first();
 		if(!$recharge){
 			echo 'order error';
-			exit;			
+			exit;
 		}
 		$user = User::where('id',$recharge->user_id)->first();
 		if(!$user){
 			echo 'user error';
-			exit;			
+			exit;
 		}
 		$recharge->state = 2;
 		$recharge->save();
 		$user->increment('balance',$recharge->amount);
 		echo 'success';
-		exit;		
-	}    
+		exit;
+	}
 }

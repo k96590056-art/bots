@@ -12,6 +12,7 @@ use Dcat\Admin\Http\Controllers\AdminController;
 
 use App\Admin\Actions\Grid\User\Balance;
 use App\Admin\Actions\Grid\User\BackBalance;
+use App\Admin\Actions\Grid\User\RebindTelegram;
 use App\Admin\Renderable\UserBalance;
 use Dcat\Admin\Widgets\Card as WidgetsCard;
 use App\Services\TgService;
@@ -103,6 +104,7 @@ JS
                 // append一个操作
                 $actions->append(new Balance());
                 $actions->append(new BackBalance());
+                $actions->append(new RebindTelegram());
             });
 
             $grid->filter(function (Grid\Filter $filter) {

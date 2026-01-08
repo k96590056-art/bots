@@ -12,6 +12,7 @@
         "dcat/laravel-admin": "2.*",
         "fideloper/proxy": "^4.0",
         "guanguans/dcat-login-captcha": "^1.0.10",
+        "guzzlehttp/guzzle": "^6.0",
         "laravel/framework": "^6.0",
         "laravel/tinker": "^1.0",
         "predis/predis": "^3.3",

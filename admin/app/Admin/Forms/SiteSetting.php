@@ -21,7 +21,7 @@ class SiteSetting extends Form
      */
     public function handle(array $input)
     {
-        
+
         foreach ($input as $k => $v) {
             $arr = ['key' => $k,'value' => $v ?? ''];
             SystemConfig::updateOrCreate(['key' => $k],$arr);
@@ -42,8 +42,9 @@ class SiteSetting extends Form
             $this->image('site_logo','网站Logo')->uniqueName();
             $this->image('app_logo','APP Logo')->uniqueName();
             $this->image('telegram_bot_main_image','Telegram Bot主图')->uniqueName()->help('Telegram Bot发送信息时显示的主图，建议尺寸：宽1200px，高600px');
-            $this->text('telegram_bot_game_url','Telegram Bot游戏地址')->help('机器人菜单中的“游戏入口”链接地址，例如：https://example.com/game');
-            $this->text('telegram_bot_official_url','Telegram Bot官方地址')->help('机器人菜单中的“官方入口/官网”链接地址，例如：https://t.me/your_channel 或官网地址');
+            $this->text('telegram_bot_username','Telegram Bot用户名')->help('机器人用户名（不含@符号），用于生成换绑链接等功能，例如：MyGameBot');
+            $this->text('telegram_bot_game_url','Telegram Bot游戏地址')->help('机器人菜单中的"游戏入口"链接地址，例如：https://example.com/game');
+            $this->text('telegram_bot_official_url','Telegram Bot官方地址')->help('机器人菜单中的"官方入口/官网"链接地址，例如：https://t.me/your_channel 或官网地址');
             $this->text('site_title','网站标题');
             $this->text('site_keyword','网站关键词');
             $this->radio('cors_enabled','<span style="color: red;">CORS跨域开关</span>')->options([1 => '允许', 0 => '不允许'])->default(1)->help('控制是否允许跨域资源共享，开启后允许其他域名访问API接口，正式运营建议不允许！并输入安全域名！');
@@ -59,6 +60,7 @@ class SiteSetting extends Form
                     $this->tab('客服系统配置', function () {
                 $this->radio('service_type','服务类型')->options(['kefu' => '客服系统','gongdan' => '工单系统'])->default('kefu')->help('选择使用客服系统或工单系统，只能选择其中一种');
                 $this->text('kf_url','客服系统链接')->help('在线客服系统URL地址，仅在选择客服系统时生效');
+                $this->text('kefu_username','Telegram客服用户名')->help('Telegram客服账号用户名（不含@符号），用户点击可直接跳转到客服聊天');
             });
 
         $this->tab('APP配置', function () {
@@ -70,13 +72,13 @@ class SiteSetting extends Form
             $this->image('ios_download_qrcode','苹果下载二维码')->uniqueName();
             $this->radio('app_download_switch','APP下载提示框开关')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制首页是否显示APP下载提示框');
         });
-        
+
         $this->tab('接口设置', function() {
             $this->text('game_api','API接口地址');
             $this->text('merchant_account','api_account');
             $this->text('api_secret','sign_key');
         });
-        
+
         $this->tab('支付设置', function() {
             $this->text('onlinepay_title','网上支付标题');
             $this->text('onlinepay_des','网上支付说明');
@@ -85,14 +87,17 @@ class SiteSetting extends Form
 
 
         });
-        
+
         $this->tab('存款设置',function() {
             $this->number('min_recharge_money','最低存款限额');
             $this->text('recharge_fee','充值赠送比例(%)');
             $this->number('max_recharge_money','最高存款限额');
             $this->decimal('min_price','银行卡最低充值金额')->required();
             $this->decimal('max_price','银行卡最大充值金额')->required();
-            
+            $this->divider('充值通道开关');
+            $this->radio('recharge_bank_enabled','银行卡充值')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用银行卡充值');
+            $this->radio('recharge_trc20_enabled','USDT-TRC20充值')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用TRC20(波场)充值');
+            $this->radio('recharge_erc20_enabled','USDT-ERC20充值')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用ERC20(以太坊)充值');
         });
 
         $this->tab('提款设置',function() {
@@ -106,19 +111,23 @@ class SiteSetting extends Form
             $this->decimal('withdraw_cash_fee','USDT-TRC20手续费');
             $this->decimal('withdraw_fee_usdt_erc','USDT-ERC20手续费');
             $this->decimal('withdraw_usdt_rate','提现USDT汇率');
+            $this->divider('提现通道开关');
+            $this->radio('withdraw_bank_enabled','银行卡提现')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用银行卡提现');
+            $this->radio('withdraw_trc20_enabled','USDT-TRC20提现')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用TRC20(波场)提现');
+            $this->radio('withdraw_erc20_enabled','USDT-ERC20提现')->options([1 => '开启', 0 => '关闭'])->default(1)->help('控制用户是否可以使用ERC20(以太坊)提现');
         });
 
-        
+
         $this->tab('代理设置',function() {
             $this->select('settlement','代理结算周期')->options([1 => 'T+1',2 => 'T+2',3 => 'T+3',4 => 'T+4',5 => 'T+5',6 => 'T+6',7 => 'T+7',10 => 'T+10',15 => 'T+15',20 => 'T+20',30 => 'T+30'])->default(4);
             $this->radio('settlementtypes','代理结算方式')->options([1 => '按输赢结算',0 => '按打码量结算'])->default(1);
             $this->number('settlementlevel','代理返佣级数');
         });
-        
+
         $this->tab('提醒设置', function() {
             /*$this->select('notice_set','提醒方式')->options([1 => '语音加弹窗提醒',2 => '语音提醒',3 => '弹窗提醒'])->default(1);
             $this->radio('auto_refresh','是否自动刷新')->options([0 => '关闭',1 => '开启']);
-            $this->number('auto_refresh_interval','刷新时间(秒)');*/			
+            $this->number('auto_refresh_interval','刷新时间(秒)');*/
             $this->file('recharge_apply_audio','充值提醒语音上传')->uniqueName();
             $this->file('withdraw_apply_audio','提款提醒语音上传')->uniqueName();
             $this->file('activity_apply_audio','活动申请语音上传')->uniqueName();
@@ -128,7 +137,7 @@ class SiteSetting extends Form
             // $this->text('syslogday','金管家申请语音上传');
 
         });
-        
+
     }
 
     /**
@@ -144,11 +153,13 @@ class SiteSetting extends Form
             'site_logo' => SystemConfig::getValue('site_logo'),
             'app_logo' => SystemConfig::getValue('app_logo'),
             'telegram_bot_main_image' => SystemConfig::getValue('telegram_bot_main_image'),
+            'telegram_bot_username' => SystemConfig::getValue('telegram_bot_username'),
             'telegram_bot_game_url' => SystemConfig::getValue('telegram_bot_game_url'),
             'telegram_bot_official_url' => SystemConfig::getValue('telegram_bot_official_url'),
             'site_title' => SystemConfig::getValue('site_title'),
             'site_keyword' => SystemConfig::getValue('site_keyword'),
             'kf_url' => SystemConfig::getValue('kf_url'),
+            'kefu_username' => SystemConfig::getValue('kefu_username'),
             'gongdan_url' => SystemConfig::getValue('gongdan_url'),
             'service_type' => SystemConfig::getValue('service_type'),
             'gongdan_enabled' => SystemConfig::getValue('gongdan_enabled'),
@@ -203,7 +214,7 @@ class SiteSetting extends Form
             'max_price' => SystemConfig::getValue('max_price'),
             'auto_refresh' => SystemConfig::getValue('auto_refresh'),
             'auto_refresh_interval' => SystemConfig::getValue('auto_refresh_interval'),
-            
+
             // TRON区块链USDT充值配置
             'tron_usdt_address' => SystemConfig::getValue('tron_usdt_address'),
             'tron_api_key' => SystemConfig::getValue('tron_api_key'),
@@ -211,6 +222,16 @@ class SiteSetting extends Form
             'tron_confirmations' => SystemConfig::getValue('tron_confirmations'),
             'tron_min_amount' => SystemConfig::getValue('tron_min_amount'),
             'tron_max_amount' => SystemConfig::getValue('tron_max_amount'),
+
+            // 充值通道开关
+            'recharge_bank_enabled' => SystemConfig::getValue('recharge_bank_enabled', '1'),
+            'recharge_trc20_enabled' => SystemConfig::getValue('recharge_trc20_enabled', '1'),
+            'recharge_erc20_enabled' => SystemConfig::getValue('recharge_erc20_enabled', '1'),
+
+            // 提现通道开关
+            'withdraw_bank_enabled' => SystemConfig::getValue('withdraw_bank_enabled', '1'),
+            'withdraw_trc20_enabled' => SystemConfig::getValue('withdraw_trc20_enabled', '1'),
+            'withdraw_erc20_enabled' => SystemConfig::getValue('withdraw_erc20_enabled', '1'),
         ];
     }
 }

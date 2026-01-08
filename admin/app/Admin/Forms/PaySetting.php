@@ -62,7 +62,37 @@ class PaySetting extends Form
             $this->decimal('tron_min_amount','最小充值金额(USDT)')->default(10);
             $this->decimal('tron_max_amount','最大充值金额(USDT)')->default(50000);
         });
-        
+
+        $this->tab('ERC20 USDT充值配置', function () {
+            $this->divider('ETH 链上充值');
+            $this->text('erc20_usdt_address','ERC20-USDT收款地址')->help('ERC20网络USDT收款地址');
+            $this->image('erc20_usdt_qrcode','ERC20收款二维码')->help('ERC20网络USDT收款地址二维码图片');
+
+            // 开关与密钥输入框（用前端脚本控制显示/隐藏）
+            $this->switch('erc20_api_key_enabled','启用API Key')
+                ->default(0)
+                ->help('开启后输入密钥以提高限频，基本无需开启');
+            $this->text('erc20_api_key','ERC20 API密钥')
+                ->help('Etherscan 的 API 密钥，可留空；仅在限频时开启使用，申请地址：https://etherscan.io/myapikey');
+
+            // 前端脚本：根据开关状态显示/隐藏密钥输入框
+            $this->html('<script>
+                function toggleErc20KeyField(){
+                    var on = $("input[name=\\"erc20_api_key_enabled\\"]").is(":checked");
+                    var group = $("input[name=\\"erc20_api_key\\"]").closest(".form-group");
+                    if(on){ group.show(); } else { group.hide(); }
+                }
+                $(document).on("change","input[name=\\"erc20_api_key_enabled\\"]",toggleErc20KeyField);
+                $(function(){ toggleErc20KeyField(); });
+            </script>');
+
+            $this->text('erc20_api_url','ERC20 API地址')->default('https://api.etherscan.io/api')->help('Etherscan API 地址');
+            $this->decimal('erc20_exchange_rate','USDT存款汇率')->help('用于按金额换算USDT数量');
+            $this->number('erc20_confirmations','确认数')->default(12)->help('建议值（按场景）：测试联调：1–2，小额/日常：6，标准生产：12，大额/高风控：20+');
+            $this->decimal('erc20_min_amount','最小充值金额(USDT)')->default(10);
+            $this->decimal('erc20_max_amount','最大充值金额(USDT)')->default(50000);
+        });
+
     }
 
     /**
@@ -83,6 +113,16 @@ class PaySetting extends Form
             'tron_confirmations' => SystemConfig::where('key','tron_confirmations')->value('value') ?? 12,
             'tron_min_amount' => SystemConfig::where('key','tron_min_amount')->value('value') ?? 10,
             'tron_max_amount' => SystemConfig::where('key','tron_max_amount')->value('value') ?? 50000,
+            // ERC20
+            'erc20_usdt_address' => SystemConfig::where('key','erc20_usdt_address')->value('value') ?? '',
+            'erc20_usdt_qrcode' => SystemConfig::where('key','erc20_usdt_qrcode')->value('value') ?? '',
+            'erc20_api_key' => SystemConfig::where('key','erc20_api_key')->value('value') ?? '',
+            'erc20_api_key_enabled' => (int)(SystemConfig::where('key','erc20_api_key_enabled')->value('value') ?? 0),
+            'erc20_api_url' => SystemConfig::where('key','erc20_api_url')->value('value') ?? 'https://api.etherscan.io/api',
+            'erc20_exchange_rate' => SystemConfig::where('key','erc20_exchange_rate')->value('value') ?? '',
+            'erc20_confirmations' => SystemConfig::where('key','erc20_confirmations')->value('value') ?? 12,
+            'erc20_min_amount' => SystemConfig::where('key','erc20_min_amount')->value('value') ?? 10,
+            'erc20_max_amount' => SystemConfig::where('key','erc20_max_amount')->value('value') ?? 50000,
         ];
     }
 }
