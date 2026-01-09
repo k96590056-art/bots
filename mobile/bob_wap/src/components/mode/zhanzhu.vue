@@ -1,105 +1,158 @@
 <template>
-  <div class="acts">
-    <div class="pageTop">赞助</div>
-    <div style="height: 30px"></div>
-    <div class="lis" @click="$parent.goNav('/zhanzhuye?type=1')">
-        <img style="width: 100%;" src="/static/image/01.png">
+  <div class="sponsor-page">
+    <!-- 顶部标题 -->
+    <div class="page-header">
+      <span>赞助专题</span>
     </div>
-    <div class="lis" @click="$parent.goNav('/zhanzhuye?type=2')">
-        <img style="width: 100%;" src="/static/image/02.png">
-    </div>
-    <div v-if="1==2" class="lis" @click="$parent.goNav('/zhanzhuye?type=1')">
-      <div class="lfs">
-        <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" />
-        <div class="you">尤文图斯</div>
-        <div class="te">官方区域合作伙伴</div>
-      </div>
-      <div class="rig">
-        <img src="/static/image/93b000fa1d3246ce9b90a62c018714af.png" alt="" />
-      </div>
-    </div>
-     <div v-if="1==2" class="lis" @click="$parent.goNav('/zhanzhuye?type=2')">
-      <div class="lfs">
-        <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" />
-        <div class="you">阿斯顿维拉</div>
-        <div class="te">官方全球顶级合作伙伴</div>
-      </div>
-      <div class="rig">
-        <img src="/static/image/bd72c14c428d41ce8105a0d82a1bb696.png" alt="" />
-      </div>
-    </div>
-      <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '20px 100px' }">没有更多了~</van-divider>
 
+    <!-- 赞助卡片列表 -->
+    <div class="sponsor-list">
+      <!-- 佛罗伦萨 -->
+      <div class="sponsor-card" @click="$parent.goNav('/zhanzhuye?type=1')">
+        <div class="card-left">
+          <div class="team-logo">
+            <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="佛罗伦萨" />
+          </div>
+          <div class="partner-label">官方区域合作伙伴</div>
+          <div class="team-name">佛罗伦萨</div>
+          <div class="view-btn">查看详情</div>
+        </div>
+        <div class="card-right">
+          <img src="/static/image/01.png" alt="球队图片" />
+        </div>
+      </div>
+
+      <!-- 赫塔菲 -->
+      <div class="sponsor-card" @click="$parent.goNav('/zhanzhuye?type=2')">
+        <div class="card-left">
+          <div class="team-logo">
+            <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="赫塔菲" />
+          </div>
+          <div class="partner-label">官方独家区域合作伙伴</div>
+          <div class="team-name">赫塔菲</div>
+          <div class="view-btn">查看详情</div>
+        </div>
+        <div class="card-right">
+          <img src="/static/image/02.png" alt="球队图片" />
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部占位 -->
+    <div style="height: 80px;"></div>
   </div>
 </template>
+
 <script>
 export default {
   name: 'zhanzhu',
   data() {
     return {};
   },
-  created() {
-    let that = this;
-  },
+  created() {},
   methods: {},
-  mounted() {
-    let that = this;
-  },
-  updated() {
-    let that = this;
-  },
+  mounted() {},
+  updated() {},
   beforeDestroy() {},
 };
 </script>
-<style lang="scss" scoped>
-.acts {
-  width: 100%;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  background-image: url('/static/image/diy/login_bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: overlay;
-}
-.lis {
-  display: flex;
-  width: calc(100% - 40px);
-  margin: 0 auto;
-  margin-top: 20px;
-  box-sizing: border-box;
 
-  border-radius: 20px;
+<style lang="scss" scoped>
+.sponsor-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+// 顶部标题
+.page-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #eee;
+  z-index: 100;
+
+  span {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #333 !important;
+  }
+}
+
+// 赞助列表
+.sponsor-list {
+  padding: 60px 15px 0;
+}
+
+// 赞助卡片
+.sponsor-card {
+  display: flex;
+  background: #fff;
+  border-radius: 12px;
   overflow: hidden;
-  background-color: #f8f9ff;
-  -webkit-box-shadow: 0 0.04rem 0.2rem rgb(199 212 255 / 42%);
-  box-shadow: 0 0.04rem 0.2rem rgb(199 212 255 / 42%);
-  border: 0.02rem solid #fff;
-  .lfs {
-    height: 100%;
-    width: 45%;
-    text-align: center;
-    color: #98a8c5;
-    img {
-      width: 30px;
-      display: block;
-      margin: 0 auto;
-      margin-top: 20px;
+  margin-bottom: 15px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .card-left {
+    width: 40%;
+    padding: 20px 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    .team-logo {
+      width: 50px;
+      height: 50px;
+      margin-bottom: 8px;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
     }
-    .you {
+
+    .partner-label {
+      font-size: 11px;
+      color: #999;
+      margin-bottom: 5px;
+      text-align: center;
+    }
+
+    .team-name {
+      font-size: 20px;
       font-weight: 700;
-      font-size: 18px;
-      margin-top: 10px;
+      color: #333;
+      margin-bottom: 12px;
     }
-    .te {
+
+    .view-btn {
+      padding: 6px 16px;
+      border: 1px solid #4a8cca;
+      border-radius: 15px;
       font-size: 12px;
-      margin-top: 5px;
+      color: #4a8cca;
+      cursor: pointer;
     }
   }
-  .rig {
-    width: 55%;
-    font-size: 0;
+
+  .card-right {
+    width: 60%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
     img {
       width: 100%;
+      height: 100%;
+      object-fit: cover;
     }
   }
 }

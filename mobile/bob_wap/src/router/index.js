@@ -43,10 +43,6 @@ import concise from '@/components/mode/concise'
 
 
 
-
-
-
-
 Vue.use(Router)
 
 export default new Router({
@@ -100,10 +96,7 @@ export default new Router({
           name: 'mine',
           component: mine, meta: {
             keepAlive: true,//是否缓存组件
-
-            useCatch: false,//是否用缓存
-            requireAuth: true,
-
+            useCatch: false//是否用缓存
           }
 
         },

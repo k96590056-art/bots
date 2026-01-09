@@ -1,473 +1,777 @@
 <template>
-  <div class="mine-container">
-    <!-- title -->
-    <div style="padding: 0 18px">
-      <div class="mineTop">
-        我的
-        <div class="kefus" @click="$parent.openKefu()"><img src="/static/image/iconKefu.da12a10e52caa3da81e8cbe383247f67.png" /><span>客服</span></div>
-      </div>
-      <!-- user -->
-      <div class="usersg">
-        <div class="lesf">
-          <img :src="$store.state.userInfo.avatar ? $store.state.userInfo.avatar : '/static/image/imageAvatar02@3x.png'" alt="" />
-          <input class="inputsw" type="file" @change="onchangemd" single accept="image/gif,image/png" />
+  <div class="mine-page">
+    <!-- 顶部用户信息 - 灰色背景 -->
+    <div class="user-header">
+      <div class="user-info-row">
+        <div class="user-avatar">
+          <img :src="$store.state.userInfo.avatar || '/static/image/imageAvatar02@3x.png'" alt="avatar" />
+          <input class="avatar-input" type="file" @change="onchangemd" accept="image/gif,image/png" />
         </div>
-        <div class="center" @click="$parent.goNav('/userInfo')">
-          <div class="name">
-            {{ $store.state.userInfo.username }}
-            <img :src="`/static/style/vip${$store.state.userInfo.vip}.png`" alt="" />
+        <div class="user-details" @click="!$store.state.token && $parent.goNav('/login')">
+          <div class="user-name">{{ $store.state.token ? $store.state.userInfo.username : '点击登录/注册' }}</div>
+          <div class="user-days" v-if="$store.state.token">加入星乐第{{ joinDays }}天</div>
+          <div class="user-days not-login" v-else>您还未登录</div>
+        </div>
+        <div class="header-actions">
+          <div class="action-icon" @click="$parent.goNav('/userCent')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="22" height="22">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+            </svg>
           </div>
-          <div class="dat">加入{{ $store.state.appInfo.title }}第{{ $store.state.userInfo.joinday }}天</div>
-        </div>
-        <img class="rig" @click="$parent.goNav('/userInfo')" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
-      </div>
-      <div class="meys">
-        <div class="lefs">
-          <img src="/static/image/wallet.png" alt="" />
-          <span>中心钱包</span>
-          <div class="imsg" @click="$parent.getUserInfoShowLoding()">
-            <img src="/static/style/refresh_2.98852cef4dfc05494e3f32a99e17d124.png" />
-          </div>
-        </div>
-        <div class="meysf">
-          <span>￥</span>
-          {{ $store.state.userInfo.balance }}
-        </div>
-      </div>
-      <div class="vipousf">
-        <div class="box" @click="$parent.goNav('/vip')">
-          <img src="/static/image/vipnew.png" alt="" />
-          <div>
-            <div class="nsgs">VIP特权</div>
-            <div class="nsgsss">VIP PRIVILEGE</div>
-          </div>
-        </div>
-        <div class="shu"></div>
-        <div class="box" @click="$parent.goNav('/activity')">
-          <img src="/static/image/giftnew.png" alt="" />
-          <div>
-            <div class="nsgs">豪礼赠送</div>
-            <div class="nsgsss">SPREE ACTIVITY</div>
+          <div class="action-icon" @click="$parent.goNav('/message')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="22" height="22">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+            </svg>
           </div>
         </div>
       </div>
     </div>
-    <div class="uslis">
-      <div style="box-sizing: border-box; padding: 0 12px">
-        <div style="height: 24px"></div>
-        <div class="thbs">
-          <div class="lis" @click="$parent.goNav('/money')">
-            <img src="/static/image/walletnew.png" alt="" />
-            <span>我的钱包</span>
+
+    <div class="content-area">
+      <!-- VIP卡片 -->
+      <div class="vip-card" @click="$parent.goNav('/vip')">
+        <div class="vip-header">
+          <div class="vip-slider">
+            <div class="vip-level-box active">
+              <span>VIP{{ $store.state.userInfo.vip || 0 }}</span>
+            </div>
+            <div class="vip-progress-bar">
+              <div class="progress-fill" :style="{width: vipProgress + '%'}"></div>
+            </div>
+            <div class="vip-level-box">
+              <span>VIP{{ ($store.state.userInfo.vip || 0) + 1 }}</span>
+            </div>
           </div>
-          <div class="lis" @click="$parent.goNav('/transRecord')">
-            <img src="/static/image/transactionnew.png" alt="" />
-            <span>交易记录</span>
-          </div>
-          <div class="lis" @click="$parent.goNav('/betRecord')">
-            <img src="/static/image/betnew.png" alt="" />
-            <span>投注记录</span>
-          </div>
-          <div class="lis" @click="$parent.goNav('/userCent')">
-            <img src="/static/image/settingnew.png" alt="" />
-            <span>账户设置</span>
+          <div class="vip-more">
+            <span>更多VIP特权</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="14" height="14">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
           </div>
         </div>
-        <div class="bosfs">
-          <div class="hgsw" @click="$parent.goNav('/message')">
-            <img class="firsimg" src="/static/image/ob@2x.png" alt="" />
-            <span class="tit">消息中心</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
-          </div>
+        <div class="vip-progress-info">
+          <span class="progress-label">晋级流水(元)</span>
+          <span class="progress-value">{{ $store.state.userInfo.paysum || '0.00' }}/{{ nextVipAmount }}</span>
+        </div>
+        <div class="vip-tags">
+          <span class="vip-tag"><span class="tag-check">✓</span> 每周红包</span>
+          <span class="vip-tag"><span class="tag-check">✓</span> 晋级礼金</span>
+          <span class="vip-tag"><span class="tag-check">✓</span> 专属豪礼</span>
+          <span class="vip-tag"><span class="tag-check">✓</span> 生日礼金</span>
+        </div>
+      </div>
 
-          <div class="hgsw" @click="$parent.goNav('/fanshui')">
-            <img class="firsimg" src="/static/image/haoyou.svg" alt="" />
-            <span class="tit">返水中心</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+      <!-- 中心钱包 -->
+      <div class="wallet-section">
+        <div class="wallet-left">
+          <div class="wallet-title">
+            <span>中心钱包</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16" @click.stop="toggleBalance">
+              <path v-if="showBalance" d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+              <circle v-if="showBalance" cx="12" cy="12" r="3"/>
+              <path v-if="!showBalance" d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
+              <line v-if="!showBalance" x1="1" y1="1" x2="23" y2="23"/>
+            </svg>
           </div>
-          <div class="hgsw" @click="$parent.goNav('/activityRecord')">
-            <img class="firsimg" src="/static/image/help.png" alt="" />
-            <span class="tit">活动记录</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+          <div class="wallet-balance">
+            <span class="currency">¥</span>
+            <span v-if="showBalance">{{ $store.state.token ? $store.state.userInfo.balance : '0.00' }}</span>
+            <span v-else>****</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16" @click.stop="refreshBalance">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+            </svg>
           </div>
-          <div class="hgsw" @click="$parent.goNav('/welfare')">
-            <img class="firsimg" src="/static/image/haoyou.svg" alt="" />
-            <span class="tit">福利中心</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+        </div>
+        <div class="wallet-actions">
+          <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/money') : $parent.goNav('/login')">
+            <div class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="2" y1="7" x2="22" y2="7"/>
+                <circle cx="12" cy="13" r="2"/>
+              </svg>
+            </div>
+            <span>余额宝</span>
           </div>
-          <div class="hgsw" v-if="$store.state.userInfo.isagent == 0" @click="$parent.goNav('/applyagent')">
-            <img class="firsimg" src="/static/image/join.png" alt="" />
-            <span class="tit">合营计划</span>
-            <span class="tisf">加入我们，共赢财富</span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+          <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/recharge') : $parent.goNav('/login')">
+            <div class="btn-icon dark">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="18" height="18">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                <line x1="1" y1="10" x2="23" y2="10"/>
+              </svg>
+            </div>
+            <span>存款</span>
           </div>
-          <div class="hgsw" v-if="$store.state.userInfo.isagent == 1" @click="$parent.goNav('/gamePage?dailiD=1')">
-            <img class="firsimg" src="/static/image/join.png" alt="" />
-            <span class="tit">代理登录</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+          <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/transfer') : $parent.goNav('/login')">
+            <div class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 12h8M12 8l4 4-4 4"/>
+              </svg>
+            </div>
+            <span>转账</span>
           </div>
-          <div class="hgsw" @click="$parent.goNav('/app')">
-            <img class="firsimg" src="/static/image/appxiazaus.png" alt="" />
-            <span class="tit">app下载</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
-          </div>
-          <div class="hgsw" @click="$parent.goNav('/boutBallBet')">
-            <img class="firsimg" src="/static/image/help.png" alt="" />
-            <span class="tit">帮助中心</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
-          </div>
-
-          <div class="hgsw" style="border: none" @click="$parent.outLogin">
-            <img class="firsimg" style="width: 18px; margin-left: 3px; margin-right: 3px" src="/static/image/close151.png" alt="" />
-            <span class="tit">退出系统</span>
-            <span class="tisf"></span>
-            <img class="rigiong" src="/static/style/icoArrowGrey@2x.abc43ab099390c4587d33290a76fc15e.png" alt="" />
+          <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/withdrawal') : $parent.goNav('/login')">
+            <div class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 12l4 4 4-4M12 8v8"/>
+              </svg>
+            </div>
+            <span>取款</span>
           </div>
         </div>
       </div>
+
+      <!-- 福利中心 -->
+      <div class="welfare-card" @click="$parent.goNav('/activity')">
+        <div class="welfare-content">
+          <div class="welfare-title">福利中心 尽享优惠</div>
+        </div>
+        <div class="welfare-btn">
+          <span>领取福利</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" width="12" height="12">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 功能菜单 -->
+      <div class="menu-grid">
+        <div class="menu-item" @click="$parent.goNav('/transRecord')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+              <line x1="16" y1="2" x2="16" y2="6"/>
+              <line x1="8" y1="2" x2="8" y2="6"/>
+              <line x1="3" y1="10" x2="21" y2="10"/>
+            </svg>
+          </div>
+          <span>交易记录</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/betRecord')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+            </svg>
+          </div>
+          <span>投注记录</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/fanshui')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 6v6l4 2"/>
+            </svg>
+          </div>
+          <span>实时返水</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/userCent')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <circle cx="12" cy="7" r="4"/>
+              <path d="M5.5 21a8.38 8.38 0 0113 0"/>
+            </svg>
+          </div>
+          <span>账户管理</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/applyagent')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+          </div>
+          <span>分享赚钱</span>
+        </div>
+        <div class="menu-item" @click="$parent.openKefu()">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </div>
+          <span>意见反馈</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/boutBallBet')">
+          <div class="menu-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="24" height="24">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </div>
+          <span>帮助中心</span>
+        </div>
+        <div class="menu-item" @click="$parent.goNav('/applyagent')">
+          <div class="menu-icon highlight">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#4a8cca" stroke-width="1.5" width="24" height="24">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87"/>
+              <path d="M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+          </div>
+          <span class="text-highlight">加入我们</span>
+        </div>
+      </div>
+
+      <!-- 邀请好友Banner -->
+      <div class="invite-banner" @click="$parent.goNav('/applyagent')">
+        <div class="invite-content">
+          <div class="invite-title">邀请好友 共享盛宴</div>
+        </div>
+        <div class="invite-image">
+          <img src="/static/image/invite_banner.png" onerror="this.parentElement.innerHTML='<div class=\'placeholder-img\'></div>'" />
+        </div>
+      </div>
+
+      <!-- 底部列表 -->
+      <div class="bottom-list">
+        <div class="list-item" @click="$parent.goNav('/abouts')">
+          <div class="item-left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="16" x2="12" y2="12"/>
+              <line x1="12" y1="8" x2="12.01" y2="8"/>
+            </svg>
+            <span>关于星乐</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+        <div class="list-item" @click="$parent.openKefu()">
+          <div class="item-left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+              <path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/>
+            </svg>
+            <span>添加桌面客服</span>
+          </div>
+          <div class="item-right">
+            <span class="item-desc">一对一在线解答</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+        </div>
+        <div class="list-item" @click="$parent.goNav('/app')">
+          <div class="item-left">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="1.5" width="20" height="20">
+              <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+              <line x1="12" y1="18" x2="12.01" y2="18"/>
+            </svg>
+            <span>打开星乐APP</span>
+          </div>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- 退出登录 -->
+      <div class="logout-section" v-if="$store.state.token">
+        <div class="logout-btn" @click="$parent.outLogin">退出登录</div>
+      </div>
     </div>
+
+    <!-- 底部占位 -->
+    <div style="height: 80px;"></div>
   </div>
 </template>
+
 <script>
 export default {
   name: 'mine',
   data() {
     return {
-      activitylistList: [],
-      bfNum: 0,
+      showBalance: true,
       vipLis: [],
+      joinDays: 1,
+      nextVipAmount: '0.00',
+      vipProgress: 0,
     };
   },
   created() {
-    let that = this;
-    that.activitylist();
-    that.uservip();
+    this.uservip();
+    this.calcJoinDays();
+  },
+  activated() {
+    // 页面从缓存激活时，重新检查登录状态和数据
+    this.calcJoinDays();
+    if (this.$store.state.token) {
+      this.uservip();
+    }
   },
   methods: {
     onchangemd(e) {
       let that = this;
-
-      console.log(e.target.files); //这个就是选中文件信息
       let formdata = new FormData();
       Array.from(e.target.files).map(item => {
-        console.log(item);
-        formdata.append('file', item); //将每一个文件图片都加进formdata
+        formdata.append('file', item);
       });
-      //  axios.post("接口地址", formdata).then(res => { console.log(res) })
       that.$parent.showLoading();
-
       that.$apiFun.post('/api/uploadimg', formdata).then(res => {
         that.$parent.hideLoading();
-
         that.$parent.getUserInfoShowLoding();
       });
     },
+    toggleBalance() {
+      this.showBalance = !this.showBalance;
+    },
+    refreshBalance() {
+      this.$parent.getUserInfoShowLoding();
+    },
+    calcJoinDays() {
+      if (this.$store.state.userInfo && this.$store.state.userInfo.created_at) {
+        const created = new Date(this.$store.state.userInfo.created_at);
+        const now = new Date();
+        const diff = Math.floor((now - created) / (1000 * 60 * 60 * 24));
+        this.joinDays = diff > 0 ? diff : 1;
+      }
+    },
     uservip() {
       let that = this;
-      that.$parent.showLoading();
       that.$apiFun
         .post('/api/uservip', {})
         .then(res => {
-          if (res.code != 200) {
-            that.$parent.showTost(0, res.message);
-          }
           if (res.code == 200) {
             that.vipLis = res.data;
-            that.getbfNum();
+            that.calcNextVip();
           }
-          that.$parent.hideLoading();
         })
-        .catch(res => {
-          that.$parent.hideLoading();
-        });
+        .catch(() => {});
     },
-    getbfNum() {
-      let that = this;
-      let num = 0; //当前vip充值钱
-      let vip = that.$store.state.userInfo.vip * 1; //当前vip等级
-      that.vipLis.forEach((el, index) => {
-        console.log();
-        if (index == vip) {
-          num = el.recharge * 1;
-        }
-      });
-      let userMey = that.$store.state.userInfo.paysum * 1;
-      let bfNum = userMey == 0 || num == 0 ? 0 : Math.round((userMey / num) * 100);
-      that.bfNum = bfNum > 100 ? 100 : bfNum;
-      console.log(111);
-    },
-    transall() {
-      let that = this;
-      that.$parent.showLoading();
-      that.$apiFun
-        .post('/api/transall', {})
-        .then(res => {
-          that.$parent.showTost(0, res.message);
-          that.$parent.getUserInfoShowLoding();
-          that.$parent.hideLoading();
-        })
-        .catch(res => {
-          that.$parent.hideLoading();
-        });
-    },
-    activitylist() {
-      let that = this;
-      let info = that.actType == '' ? {} : { type: that.actType };
-      that.$parent.showLoading();
-      that.$apiFun.post('/api/activitylist', info).then(res => {
-        console.log(res);
-        if (res.code !== 200) {
-          that.$parent.showTost(0, res.message);
-        }
-        if (res.code === 200) {
-          that.activitylistList = res.data.data;
-        }
-        that.$parent.hideLoading();
-      });
+    calcNextVip() {
+      let vip = (this.$store.state.userInfo.vip || 0) * 1;
+      if (this.vipLis && this.vipLis[vip]) {
+        this.nextVipAmount = this.vipLis[vip].recharge || '6,000.00';
+        let userPay = this.$store.state.userInfo.paysum * 1 || 0;
+        let targetPay = this.vipLis[vip].recharge * 1 || 6000;
+        this.vipProgress = Math.min(100, Math.round((userPay / targetPay) * 100));
+      } else {
+        this.nextVipAmount = '6,000.00';
+      }
     },
   },
-  mounted() {
-    let that = this;
-  },
-  updated() {
-    let that = this;
-  },
-  beforeDestroy() {},
 };
 </script>
+
 <style lang="scss" scoped>
-.mine-container {
-  width: 100%;
+.mine-page {
   min-height: 100vh;
-  box-sizing: border-box;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  background-image: url('/static/image/diy/login_bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: overlay;
+  background: #f5f5f5;
 }
-// @import '../../../static/css/chunk-4deac3d0.11461b5f.css';
-.mineTop {
-  height: 60px;
-  line-height: 60px;
-  box-sizing: border-box;
-  font-size: 16px;
-  color: #5d75a2;
-  text-align: center;
-  position: relative;
-  .kefus {
-    position: absolute;
-    top: 0;
-    right: 0px;
+
+// 顶部用户信息 - 灰色背景
+.user-header {
+  background: linear-gradient(180deg, #e8e8e8 0%, #f5f5f5 100%);
+  padding: 20px 15px 25px;
+
+  .user-info-row {
     display: flex;
-    height: 56px;
     align-items: center;
-    font-size: 12px;
-
-    img {
-      width: 20px;
-    }
-    span {
-      padding-top: 6px;
-    }
   }
-}
 
-.usersg {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  color: #5d75a2;
-  .lesf {
-    width: 60px;
+  .user-avatar {
     position: relative;
-    margin-right: 20px;
+    width: 60px;
+    height: 60px;
+
     img {
-      width: 60px;
-      height: 60px;
+      width: 100%;
+      height: 100%;
       border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .avatar-input {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
     }
   }
-  .center {
+
+  .user-details {
     flex: 1;
-    .name {
-      font-size: 16px;
-      font-weight: 700;
-      img {
-        width: 30px;
-        margin-left: 10px;
+    margin-left: 12px;
+
+    .user-name {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .user-days {
+      font-size: 12px;
+      color: #666;
+      margin-top: 4px;
+
+      &.not-login {
+        color: #999;
       }
     }
-    .dat {
-      font-size: 12px;
-      margin-top: 8px;
-      color: #a2aec8;
-    }
   }
-  .rig {
-    width: 10px;
+
+  .header-actions {
+    display: flex;
+    gap: 15px;
+
+    .action-icon {
+      cursor: pointer;
+    }
   }
 }
 
-.meys {
-  display: flex;
+// 内容区域
+.content-area {
+  padding: 0 15px;
+}
 
-  align-items: center;
-  justify-content: space-between;
-  margin: 0 auto;
-  margin-top: 10px;
-  padding: 0 12px;
-  -webkit-box-sizing: border-box;
-  box-sizing: border-box;
-  width: 94%;
-  height: 36px;
-  background-image: url(/static/style/walletbg.27f1624304433214845615bf9bc121e3.png);
-  background-repeat: no-repeat;
-  background-position: top;
-  background-size: 100% 100%;
-  color: #fff;
-  .lefs {
+// VIP卡片
+.vip-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+
+  .vip-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .vip-slider {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    margin-right: 15px;
+
+    .vip-level-box {
+      background: #f0f0f0;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #666;
+      border: 1px solid #e0e0e0;
+
+      &.active {
+        background: linear-gradient(90deg, #8b7355 0%, #c4a574 100%);
+        color: #fff;
+        border-color: transparent;
+      }
+    }
+
+    .vip-progress-bar {
+      flex: 1;
+      height: 4px;
+      background: #e0e0e0;
+      margin: 0 8px;
+      border-radius: 2px;
+      overflow: hidden;
+
+      .progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #8b7355 0%, #c4a574 100%);
+        border-radius: 2px;
+        transition: width 0.3s;
+      }
+    }
+  }
+
+  .vip-more {
     display: flex;
     align-items: center;
     font-size: 12px;
-    img {
-      width: 18px;
-    }
-    span {
-      padding: 0 6px;
-    }
-    .imsg {
-      background: url(/static/image/refresh_1.png) no-repeat;
-      background-size: 100% 100%;
-      width: 14px;
-      height: 14px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      img {
-        width: 6px;
-      }
+    color: #999;
+
+    svg {
+      margin-left: 3px;
     }
   }
-  .meysf {
-    font-size: 16px;
-    font-weight: 700;
-    span {
-      font-size: 8px;
-      font-weight: 100;
+
+  .vip-progress-info {
+    margin-top: 12px;
+    font-size: 12px;
+    color: #999;
+
+    .progress-value {
+      margin-left: 5px;
+    }
+  }
+
+  .vip-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+
+    .vip-tag {
+      font-size: 11px;
+      color: #666;
+      display: flex;
+      align-items: center;
+
+      .tag-check {
+        color: #52c41a;
+        margin-right: 3px;
+        font-size: 10px;
+      }
     }
   }
 }
 
-.vipousf {
-  position: relative;
+// 中心钱包
+.wallet-section {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  background: url(/static/image/itembg01.9f4ff0731e793011f46663dbfdbfd903.9f4ff073.png) no-repeat;
-  background-size: 100% 100%;
-  margin: 0 auto;
-  border-radius: 4px;
-  width: 100%;
-  height: 80px;
-  -webkit-box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
-  box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
-  box-sizing: border-box;
-  padding-top: 5px;
-  padding-bottom: 10px;
-  .box {
-    display: flex;
-    flex: 1;
-    justify-content: center;
-    align-items: center;
-    img {
-      width: 38px;
-      margin-right: 10px;
-    }
-    .nsgs {
-      font-weight: 600;
+  background: #fff;
+  border-radius: 12px;
+  padding: 15px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+
+  .wallet-left {
+    .wallet-title {
+      display: flex;
+      align-items: center;
       font-size: 14px;
-      color: #5d75a2;
+      color: #333;
+
+      svg {
+        margin-left: 8px;
+        cursor: pointer;
+      }
     }
-    .nsgsss {
-      color: #a5a9b3;
-      font-size: 8px;
-      margin-top: 6px;
+
+    .wallet-balance {
+      display: flex;
+      align-items: center;
+      font-size: 28px;
+      font-weight: 700;
+      color: #333;
+      margin-top: 5px;
+
+      .currency {
+        font-size: 18px;
+        margin-right: 2px;
+      }
+
+      svg {
+        margin-left: 8px;
+        cursor: pointer;
+      }
     }
   }
-  .shu {
-    width: 1px;
-    display: block;
-    background: rgba(170, 184, 209, 0.2);
-    height: 100%;
-  }
-}
-.uslis {
-  background: rgba(0, 0, 0, 0.5);
-  width: 100%;
-  margin-top: -20px;
-  z-index: 200;
-  position: relative;
-  padding-bottom: 98px;
-  .thbs {
+
+  .wallet-actions {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    box-sizing: border-box;
-    padding: 0 16px;
-    .lis {
-      img {
-        display: block;
-        margin: 0 auto;
-        width: 44px;
-      }
-      span {
-        display: block;
-        text-align: center;
-        font-size: 12px;
-        color: #5d75a2;
-      }
-    }
-  }
-  .bosfs {
-    margin-top: 15px;
-    border-radius: 15px;
-    padding: 4px 12px;
-    box-sizing: border-box;
-    width: 100%;
-    background: rgba(0, 0, 0, 0.45);
-    -webkit-box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
-    box-shadow: 0 0.04rem 0.2rem 0 rgb(93 114 162 / 11%);
-      .hgsw {
+    gap: 12px;
+
+    .wallet-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+
+      .btn-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #f0f0f0;
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        height: 40px;
-        box-sizing: border-box;
-        border-bottom: 1px solid rgba(24, 144, 255, 0.3);
-      .firsimg {
-        width: 24px;
+        justify-content: center;
+        margin-bottom: 5px;
+
+        &.dark {
+          background: #333;
+        }
       }
-      .tit {
-        color: rgba(255, 255, 255, 0.9);
-        margin-left: 10px;
-      }
-      .tisf {
-        flex: 1;
-        margin: 0 12px;
-        color: rgba(255, 255, 255, 0.7);
-        text-align: right;
-      }
-      .rigiong {
-        width: 6px;
+
+      span {
+        font-size: 11px;
+        color: #666;
       }
     }
+  }
+}
+
+// 福利中心
+.welfare-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(90deg, #4a8cca 0%, #6ba3d6 100%);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 10px;
+
+  .welfare-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+  }
+
+  .welfare-btn {
+    display: flex;
+    align-items: center;
+    background: rgba(255,255,255,0.2);
+    padding: 6px 12px;
+    border-radius: 15px;
+    font-size: 12px;
+    color: #fff;
+
+    svg {
+      margin-left: 3px;
+    }
+  }
+}
+
+// 功能菜单
+.menu-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #fff;
+  border-radius: 12px;
+  padding: 15px 0;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+
+  .menu-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 0;
+
+    .menu-icon {
+      width: 45px;
+      height: 45px;
+      border-radius: 10px;
+      background: #f5f5f5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+
+      &.highlight {
+        background: #e8f4fd;
+      }
+    }
+
+    span {
+      font-size: 12px;
+      color: #666;
+
+      &.text-highlight {
+        color: #4a8cca;
+      }
+    }
+  }
+}
+
+// 邀请Banner
+.invite-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-radius: 12px;
+  padding: 15px 20px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+
+  .invite-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+  }
+
+  .invite-image {
+    img {
+      width: 70px;
+      height: 50px;
+      object-fit: contain;
+    }
+
+    .placeholder-img {
+      width: 70px;
+      height: 50px;
+      background: #f0f0f0;
+      border-radius: 5px;
+    }
+  }
+}
+
+// 底部列表
+.bottom-list {
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+
+  .list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 15px;
+    border-bottom: 1px solid #f5f5f5;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    .item-left {
+      display: flex;
+      align-items: center;
+
+      svg {
+        margin-right: 10px;
+      }
+
+      span {
+        font-size: 14px;
+        color: #333;
+      }
+    }
+
+    .item-right {
+      display: flex;
+      align-items: center;
+
+      .item-desc {
+        font-size: 12px;
+        color: #999;
+        margin-right: 5px;
+      }
+    }
+  }
+}
+
+// 退出登录
+.logout-section {
+  margin: 15px 0;
+  text-align: center;
+
+  .logout-btn {
+    font-size: 14px;
+    color: #4a8cca;
+    cursor: pointer;
   }
 }
 </style>

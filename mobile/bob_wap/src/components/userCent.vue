@@ -1,125 +1,168 @@
 <template>
-  <div style="width: 100%; min-height: 100vh; background: #f1f1f1">
-    <van-nav-bar style="position: fixed; top: 0; left: 0; width: 100%; background-color: #ede9e7" title="个人资料" left-arrow @click-left="$router.back()" />
-    <div style="height: 46px"></div>
-    <div class="tops">
-      <img src="/static/image/safety.d3a323b5ad7cca95958707791f3861b1.png" alt="" />
-      <div class="tes">完善账户信息，更安全</div>
+  <div class="setting-page">
+    <!-- 顶部导航 -->
+    <div class="page-header">
+      <div class="back-btn" @click="$router.back()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="20" height="20">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </div>
+      <span class="header-title">设置</span>
+      <div class="header-right"></div>
     </div>
-    <div class="boxst">
-      <div class="hgs" @click="$parent.goNav('/userInfo')">
-        <div class="lfs">
-          <div class="topas">完善个人资料</div>
-          <div class="tisg">资料更完整，我们的服务更加周到</div>
-        </div>
-        <div class="rigs">去完善 <img src="/static/image/right.b9a9c7c64558347505384ad01922580c.png" alt="" /></div>
+
+    <!-- 夜间模式卡片 -->
+    <div class="setting-card">
+      <div class="setting-item">
+        <span class="item-label">夜间模式</span>
+        <van-switch v-model="nightMode" size="24px" active-color="#4cd964" inactive-color="#ddd" @change="toggleNightMode" />
       </div>
-      <div class="hgs" @click="$parent.goNav('/wallet')">
-        <div class="lfs">
-          <div class="topas">卡片管理</div>
-          <div class="tisg">如需提现，请绑定银行卡或虚拟币地址</div>
+    </div>
+
+    <!-- 密码设置卡片 -->
+    <div class="setting-card">
+      <div class="setting-item" @click="$parent.goNav('/password?type=1')">
+        <span class="item-label">修改密码</span>
+        <div class="item-right">
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
         </div>
-        <div class="rigs"><img src="/static/image/right.b9a9c7c64558347505384ad01922580c.png" alt="" /></div>
       </div>
-      <div class="hgs" @click="$parent.goNav('/password?type=1')">
-        <div class="lfs">
-          <div class="topas">登录密码管理</div>
-          <div class="tisg">定期修改登录密码，有利账户安全</div>
+      <div class="setting-item no-border" @click="$parent.goNav('/password?type=2')">
+        <span class="item-label">二级密码</span>
+        <div class="item-right">
+          <span class="item-status">{{ hasSecondPwd ? '已设置' : '未设置' }}</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
         </div>
-        <div class="rigs"><img src="/static/image/right.b9a9c7c64558347505384ad01922580c.png" alt="" /></div>
       </div>
-      <div class="hgs" @click="$parent.goNav('/password?type=2')">
-        <div class="lfs">
-          <div class="topas">取款密码管理</div>
-          <div class="tisg">定期修改登录密码，有利账户安全</div>
-        </div>
-        <div class="rigs"><img src="/static/image/right.b9a9c7c64558347505384ad01922580c.png" alt="" /></div>
-      </div>
+    </div>
+
+    <!-- 退出按钮卡片 -->
+    <div class="setting-card">
+      <div class="logout-btn" @click="handleLogout">退出</div>
     </div>
   </div>
 </template>
+
 <script>
 export default {
   name: 'userCent',
   data() {
-    return {};
+    return {
+      nightMode: false,
+      hasSecondPwd: false,
+    };
   },
   created() {
     let that = this;
+    // 读取夜间模式状态
+    that.nightMode = localStorage.getItem('nightMode') === 'true';
+    // 检查是否设置了二级密码
+    if (that.$store.state.userInfo && that.$store.state.userInfo.has_withdraw_pwd) {
+      that.hasSecondPwd = true;
+    }
   },
-  methods: {},
-  mounted() {
-    let that = this;
+  methods: {
+    toggleNightMode(val) {
+      localStorage.setItem('nightMode', val);
+    },
+    handleLogout() {
+      let that = this;
+      that.$dialog.confirm({
+        title: '提示',
+        message: '确定要退出登录吗？',
+      }).then(() => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('userInfo');
+        that.$store.commit('setToken', '');
+        that.$store.commit('setUserInfo', {});
+        that.$parent.goNav('/');
+      }).catch(() => {});
+    },
   },
-  updated() {
-    let that = this;
-  },
+  mounted() {},
 };
 </script>
 
 <style lang="scss" scoped>
-// @import '../../static/css/chunk-764158fc.acb18eaa.css';
+.setting-page {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
 
-.tops {
-  background: url(/static/image/safety_back.577bcf768c07205d5e3e2c7949d5677c.577bcf76.png) no-repeat;
-  background-size: 100% 100%;
-  width: 100%;
-  height: 5rem;
-  box-sizing: border-box;
-  padding: 30px 0;
-  min-height: 200px;
-  img {
-    width: 3rem;
-    display: block;
-    margin: 0 auto;
+// 顶部导航
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  height: 50px;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+
+  .back-btn {
+    width: 30px;
+    display: flex;
+    align-items: center;
   }
-  .tes {
-    color: #fff;
-    font-size: 0.3rem;
-    text-align: center;
-    padding-top: 15px;
+
+  .header-title {
+    font-size: 17px;
+    font-weight: 500;
+    color: #333;
+  }
+
+  .header-right {
+    width: 30px;
   }
 }
 
-.boxst {
-  width: 90%;
+// 设置卡片
+.setting-card {
   background: #fff;
-  border-radius: 20px;
-  position: relative;
-  margin: 0 auto;
-  margin-top: -10px;
-  box-sizing: border-box;
-  padding: 20px;
+  margin: 10px 15px;
+  border-radius: 10px;
+  overflow: hidden;
+}
 
-  .hgs {
-    border-bottom: 1px solid #f1f1f1;
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 15px;
+  border-bottom: 1px solid #f0f0f0;
+
+  &.no-border {
+    border-bottom: none;
+  }
+
+  .item-label {
+    font-size: 15px;
+    color: #333;
+  }
+
+  .item-right {
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    height: 1.3rem;
-    min-height: 50px;
-    .lfs {
-      flex: 1;
-      .topas {
-        font-size: 0.3rem;
-      }
-      .tisg {
-        margin-top: 4px;
-        color: #999;
-        font-size: 0.3rem;
-      }
-    }
-    .rigs {
-      display: flex;
-      align-items: center;
-      color: #999;
-      font-size: 0.3rem;
 
-      img {
-        width: 0.34rem;
-        margin-left: 4px;
-      }
+    .item-status {
+      font-size: 14px;
+      color: #999;
+      margin-right: 5px;
     }
   }
+}
+
+// 退出按钮
+.logout-btn {
+  width: 100%;
+  height: 50px;
+  line-height: 50px;
+  text-align: center;
+  font-size: 16px;
+  color: #333;
 }
 </style>

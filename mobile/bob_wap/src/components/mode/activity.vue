@@ -1,19 +1,39 @@
 <template>
-  <div class="acts" v-if="activitytypeList.length > 0">
-    <div class="pageTop">优惠活动</div>
-    <van-tabs v-model="actType" class="topsa" @click="activitylist">
-      <van-tab title="全部" :name="''"> </van-tab>
-      <van-tab v-for="(item, index) in activitytypeList" :name="item.id" :title="item.name" :key="index"> </van-tab>
-    </van-tabs>
-    <div class="consg">
-      <div class="lis" v-for="(item, index) in activitylistList" :key="index" @click="$parent.goNav(`/activityInfo?id=${item.id}`)">
-        <img :src="item.banner" alt="" />
-        <div class="tite_sf">{{ item.title }}</div>
+  <div class="activity-page" v-if="activitytypeList.length > 0">
+    <!-- 顶部标题 -->
+    <div class="page-header">
+      <span>全部优惠</span>
+    </div>
+
+    <!-- 分类标签 -->
+    <div class="tabs-wrapper">
+      <van-tabs v-model="actType" class="activity-tabs" @click="activitylist" line-width="0" line-height="0">
+        <van-tab title="全部优惠" :name="''"></van-tab>
+        <van-tab v-for="(item, index) in activitytypeList" :name="item.id" :title="item.name" :key="index"></van-tab>
+      </van-tabs>
+    </div>
+
+    <!-- 活动列表 -->
+    <div class="activity-list">
+      <div class="activity-card" v-for="(item, index) in activitylistList" :key="index" @click="$parent.goNav(`/activityInfo?id=${item.id}`)">
+        <div class="card-left">
+          <div class="card-title">
+            <span class="title-text">{{ item.title }}</span>
+          </div>
+        </div>
+        <div class="card-right">
+          <img :src="item.banner" alt="" />
+        </div>
       </div>
+
       <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '20px 16px' }">END</van-divider>
     </div>
+
+    <!-- 底部占位 -->
+    <div style="height: 70px;"></div>
   </div>
 </template>
+
 <script>
 export default {
   name: 'activity',
@@ -66,57 +86,116 @@ export default {
       that.activitylist();
     },
   },
-  mounted() {
-    let that = this;
-  },
-  updated() {
-    let that = this;
-  },
+  mounted() {},
+  updated() {},
   beforeDestroy() {},
 };
 </script>
+
 <style lang="scss" scoped>
-// @import '../../../static/css/dashboard-activity.b2be1233.css';
-.acts {
-  width: 100%;
+.activity-page {
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  background-image: url('/static/image/diy/login_bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: overlay;
+  background: #f5f5f5;
 }
-.topsa {
+
+// 顶部标题
+.page-header {
   position: fixed;
-  top: 40px;
+  top: 0;
   left: 0;
-  width: 100%;
-  z-index: 200;
+  right: 0;
+  height: 45px;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 101;
+
+  span {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #333 !important;
+  }
 }
-.consg {
-  padding-top: 90px;
-  padding-bottom: 120px;
-  .lis {
-    margin-top: 20px;
-    border-radius: 10px;
-    -webkit-box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
-    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 10%);
-    padding-bottom:10px ;
+
+// 标签栏
+.tabs-wrapper {
+  position: fixed;
+  top: 45px;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: #fff;
+  border-bottom: 1px solid #eee;
+}
+
+.activity-tabs ::v-deep .van-tabs__wrap {
+  height: 44px;
+}
+
+.activity-tabs ::v-deep .van-tab {
+  font-size: 14px;
+  color: #666;
+  padding: 0 12px;
+  flex: none;
+}
+
+.activity-tabs ::v-deep .van-tab--active {
+  color: #ff6600;
+  font-weight: 600;
+}
+
+.activity-tabs ::v-deep .van-tabs__nav {
+  background: #fff;
+}
+
+// 活动列表
+.activity-list {
+  padding: 100px 15px 0;
+}
+
+// 活动卡片
+.activity-card {
+  display: flex;
+  background: #fff;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  .card-left {
+    flex: 1;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+
+    .card-title {
+      .title-text {
+        font-size: 16px;
+        font-weight: 700;
+        color: #333;
+        line-height: 1.3;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    }
+  }
+
+  .card-right {
+    width: 110px;
+    min-height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+
     img {
       width: 100%;
-      min-height: 200px;
-    }
-    .tite_sf {
-      font-size: 12px;
-      font-weight: 700;
-      color: #333;
-      height: 30px;
-      line-height: 30px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      box-sizing: border-box;
-      padding: 0 20px;
+      height: 100%;
+      object-fit: cover;
     }
   }
 }
