@@ -134,14 +134,14 @@ export default {
 }
 
 .activity-tabs ::v-deep .van-tab {
-  font-size: 14px;
-  color: #666;
-  padding: 0 12px;
-  flex: none;
+  font-size: 17px;
+  color: #999;
+  padding: 0 8px;
+  flex: 1 0 20%;
 }
 
 .activity-tabs ::v-deep .van-tab--active {
-  color: #ff6600;
+  color: #000;
   font-weight: 600;
 }
 

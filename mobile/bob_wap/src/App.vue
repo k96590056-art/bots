@@ -155,7 +155,7 @@ export default {
                 console.error('[Telegram自动登录] 登录失败:', res.code, res.message);
                 debugInfo.push('登录失败: ' + res.message);
                 // 开发模式下显示调试弹窗
-                alert(debugInfo.join('\n'));
+                
               }
             }
           }).catch(err => {
@@ -163,7 +163,7 @@ export default {
               console.error('[Telegram自动登录] API 调用异常:', err);
               debugInfo.push('API异常: ' + (err.message || JSON.stringify(err)));
               // 开发模式下显示调试弹窗
-              alert(debugInfo.join('\n'));
+              
             }
           });
         } else {
@@ -177,7 +177,7 @@ export default {
               console.log('[Telegram自动登录] 跳过：用户已登录，token 存在');
             }
             // 开发模式下显示调试弹窗（没有initData或已登录时）
-            alert(debugInfo.join('\n'));
+            
           }
         }
       } else {
@@ -185,7 +185,7 @@ export default {
           debugInfo.push('跳过: 非Telegram环境');
           console.log('[Telegram自动登录] 跳过：非 Telegram 环境');
           // 开发模式下在非Telegram环境也显示调试信息
-          alert(debugInfo.join('\n'));
+          
         }
       }
 
@@ -604,6 +604,16 @@ p {
 }
 .van-tabs__line {
   background-color: #108ee9;
+}
+/* 优惠页面菜单样式 */
+.activity-tabs .van-tab {
+  font-size: 17px !important;
+  flex: 1 0 20% !important;
+  padding: 0 5px !important;
+  color: #999 !important;
+}
+.activity-tabs .van-tab--active {
+  color: #000 !important;
 }
 .van-cell {
   padding: 5px 8px;

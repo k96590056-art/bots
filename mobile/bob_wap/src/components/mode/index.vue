@@ -5,8 +5,8 @@
       <img @click="changhongbashow" src="/static/image/hongbaocolse.png" />
     </div>
 
-    <!-- Logo展示 -->
-    <div class="top-logo-wrapper">
+    <!-- Logo展示 - 不做卡片 -->
+    <div class="top-logo-area">
       <div class="top-logo" @click="goToH5">
         <img :src="$store.state.appInfo.site_logo" alt="" class="logo" />
         <div class="logo-text">
@@ -16,20 +16,85 @@
       </div>
     </div>
 
-    <div style="position: relative">
-      <van-swipe ref="bannerSwipe" :autoplay="false" :initial-swipe="current" @change="onChange">
-        <van-swipe-item v-for="(item, index) in bannerList" :key="index">
-          <img :src="item.src" style="width: 100%" alt="" class="banner-image" />
-        </van-swipe-item>
-      </van-swipe>
-      <!-- 轮播图底部圆点 -->
-      <div class="banner-pagination">
-        <div 
-          v-for="(item, index) in bannerList" 
-          :key="index"
-          :class="['pagination-dot', current === index ? 'active' : '']"
-          @click="goToBanner(index)"
-        ></div>
+    <!-- Banner + 用户信息 合并卡片 -->
+    <div class="card-block banner-user-card">
+      <!-- 轮播图 -->
+      <div class="banner-wrapper">
+        <van-swipe ref="bannerSwipe" :autoplay="false" :initial-swipe="current" @change="onChange" :show-indicators="false">
+          <van-swipe-item v-for="(item, index) in bannerList" :key="index">
+            <img :src="item.src" style="width: 100%" alt="" class="banner-image" />
+          </van-swipe-item>
+        </van-swipe>
+        <!-- 轮播图底部圆点 -->
+        <div class="banner-pagination">
+          <div
+            v-for="(item, index) in bannerList"
+            :key="index"
+            :class="['pagination-dot', current === index ? 'active' : '']"
+            @click="goToBanner(index)"
+          ></div>
+        </div>
+      </div>
+
+      <!-- 公告栏 -->
+      <div class="notice-bar-inline">
+        <div class="notice-icon-wrap">
+          <svg viewBox="0 0 24 24" fill="#1890ff" width="16" height="16">
+            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+          </svg>
+        </div>
+        <div class="notice-content">
+          <van-notice-bar color="#666" background="transparent" scrollable v-if="homenoticelis && homenoticelis.length > 0">
+            <span v-for="(item, index) in homenoticelis" @click="openGogao(item)" :key="index">{{ item }}</span>
+          </van-notice-bar>
+          <span v-else class="notice-placeholder">暂无公告</span>
+        </div>
+      </div>
+
+      <!-- 用户信息和操作按钮 -->
+      <div class="user-wallet-area">
+        <div class="user-info-left" v-if="$store.state.token">
+          <div class="user-name">{{ $store.state.userInfo.username }}</div>
+          <div class="user-balance">
+            <span class="balance-amount">{{ balanceVisible ? '¥ ' + $store.state.userInfo.balance : '******' }}</span>
+            <img
+              @click="toggleBalanceVisible"
+              :class="['toggle-eye-icon', balanceVisible ? 'eye-open' : 'eye-closed']"
+              :src="balanceVisible ? eyeOpenIcon : eyeClosedIcon"
+              alt="显示/隐藏余额"
+            />
+          </div>
+        </div>
+        <div v-else class="user-info-left" @click="$parent.goNav('/login')">
+          <div class="user-name not-login">您还未登录</div>
+          <div class="user-tip">登录/注册后查看</div>
+        </div>
+        <div class="user-actions">
+          <div class="action-btn" @click="$parent.goNav('/recharge')">
+            <div class="action-icon">
+              <img src="/static/image/icon_deposit.png" alt="存款" class="action-icon-img" />
+            </div>
+            <span>存款</span>
+          </div>
+          <div class="action-btn" @click="$parent.goNav('/transfer')">
+            <div class="action-icon">
+              <img src="/static/image/icon_transfer.png" alt="转账" class="action-icon-img" />
+            </div>
+            <span>转账</span>
+          </div>
+          <div class="action-btn" @click="$parent.goNav('/withdrawal')">
+            <div class="action-icon">
+              <img src="/static/image/imagewithdraw.png" alt="取款" class="action-icon-img" />
+            </div>
+            <span>取款</span>
+          </div>
+          <div class="action-btn" @click="$parent.goNav('/applyagent')">
+            <div class="action-icon">
+              <img src="/static/image/icon_promote.png" alt="推广" class="action-icon-img" />
+            </div>
+            <span>推广</span>
+          </div>
+        </div>
       </div>
     </div>
     <div class="domainModal_domainView__FWCzg" v-if="goInfo">
@@ -44,120 +109,98 @@
         </div>
       </div>
     </div>
-    <!-- 用户信息栏 -->
-    <div class="user-info-card">
-      <!-- 公告信息 -->
-      <div class="user-notice-bar" v-if="homenoticelis && homenoticelis.length > 0">
-        <svg class="notice-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" fill="#1890ff"/>
-        </svg>
-        <div class="user-notice-content">
-          <van-notice-bar color="#333333" background="transparent" scrollable>
-            <span v-for="(item, index) in homenoticelis" @click="openGogao(item)" :key="index">{{ item }}</span>
-          </van-notice-bar>
-        </div>
-      </div>
-      
-      <!-- 分隔线 -->
-      <div class="user-info-divider" v-if="homenoticelis && homenoticelis.length > 0"></div>
-      
-      <div class="user-info-content">
-        <div class="user-info-left" v-if="$store.state.token">
-          <div class="user-name">{{ $store.state.userInfo.username }}</div>
-          <div class="user-balance"><span>￥</span>{{ $store.state.userInfo.balance }}</div>
-        </div>
-        <div v-else class="user-info-left" @click="$parent.goNav('/login')">
-          <div class="user-name">您还未登录</div>
-          <div class="user-tip">登录/注册后查看</div>
-        </div>
-        <div class="user-actions">
-          <div class="action-btn" @click="$parent.goNav('/recharge')">
-            <div class="action-icon">💰</div>
-            <div class="action-text">存款</div>
-          </div>
-          <div class="action-btn" @click="$parent.goNav('/transfer')">
-            <div class="action-icon">↔️</div>
-            <div class="action-text">转账</div>
-          </div>
-          <div class="action-btn" @click="$parent.goNav('/withdrawal')">
-            <div class="action-icon">💵</div>
-            <div class="action-text">取款</div>
-          </div>
-          <div class="action-btn" @click="$parent.goNav('/vip')">
-            <div class="action-icon">📢</div>
-            <div class="action-text">推广</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <!-- 游戏栏 -->
-    <div class="game-section">
-      <!-- 导航栏 -->
+    <!-- 游戏菜单 - 单独卡片 -->
+    <div class="card-block game-nav-card">
       <div class="game-nav">
         <div :class="['nav-item', gameType == 3 ? 'active' : '']" @click="changGameType(3)">
+          <img v-if="gameType == 3" src="/static/image/chess.png" class="nav-icon" />
           <span>棋牌</span>
         </div>
         <div :class="['nav-item', gameType == 4 ? 'active' : '']" @click="changGameType(4)">
+          <img v-if="gameType == 4" src="/static/image/electronic.png" class="nav-icon" />
           <span>电子</span>
         </div>
         <div :class="['nav-item', gameType == 5 ? 'active' : '']" @click="changGameType(5)">
+          <img v-if="gameType == 5" src="/static/image/lottery.png" class="nav-icon" />
           <span>彩票</span>
         </div>
         <div :class="['nav-item', gameType == 0 ? 'active' : '']" @click="changGameType(0)">
+          <img v-if="gameType == 0" src="/static/image/real_person.png" class="nav-icon" />
           <span>真人</span>
         </div>
         <div :class="['nav-item', gameType == 1 ? 'active' : '']" @click="changGameType(1)">
+          <img v-if="gameType == 1" src="/static/image/sports.png" class="nav-icon" />
           <span>体育</span>
         </div>
         <div :class="['nav-item', gameType == 2 ? 'active' : '']" @click="changGameType(2)">
+          <img v-if="gameType == 2" src="/static/image/esports.png" class="nav-icon" />
           <span>电竞</span>
         </div>
       </div>
-      <!-- 游戏列表 - 横向滚动 -->
-      <div class="game-list-scroll">
-        <div class="game-list-container">
-          <!-- 电子游戏特殊处理：第一个是DB棋牌 -->
-          <div v-if="gameType == 4" class="game-list-item" @click="$parent.goNav('/concise?type=obgdy')">
-            <div class="game-card-header official-rec">官方推荐</div>
-            <div class="game-card-body">
-              <div class="game-card-title">DB棋牌</div>
-              <div class="game-card-desc">
-                <span>高达1.20% 无限返水</span>
-                <span class="game-tag">无限返水</span>
+    </div>
+
+    <!-- 游戏列表 - 卡片横向滚动 -->
+    <div class="game-list-scroll">
+      <div class="game-list-container">
+        <!-- 电子游戏特殊处理：第一个是DB棋牌 -->
+        <div v-if="gameType == 4" class="game-list-item card-block" @click="$parent.goNav('/concise?type=obgdy')">
+          <div class="game-card-tag official-rec">官方推荐</div>
+          <div class="game-card-body">
+            <div class="game-card-title">DB棋牌</div>
+            <div class="game-card-desc">
+              <div class="backwater-wrapper">
+                <img src="/static/image/backwater.png" alt="无限返水" class="backwater-img" />
+                <div class="rebate-tag">
+                  <span class="rebate-label">高达</span>
+                  <span class="rebate-value">1.20<em>%</em></span>
+                </div>
               </div>
-              <div class="game-card-count">21种</div>
             </div>
-            <div class="game-card-image">
-              <img src="/static/image/concise/obgdy.png" alt="" />
+            <div class="game-card-count">
+              <span class="count-line"></span>
+              <span class="count-num">21<em>种</em></span>
+              <span class="count-line"></span>
             </div>
           </div>
-          
-          <!-- 通用游戏列表 -->
-          <template v-if="currentGameList && currentGameList.length > 0">
-            <div 
-              class="game-list-item" 
-              v-for="(item, index) in currentGameList" 
-              :key="`${gameType}-${index}`" 
-              @click="handleGameClick(item, index)"
-            >
-              <div class="game-card-header" :class="getCardHeaderClass(index)">
-                {{ getCardHeaderText(index) }}
-              </div>
-              <div class="game-card-body">
-                <div class="game-card-title">{{ getCardTitle(item, index) }}</div>
-                <div class="game-card-desc">
-                  <span>高达1.20% 无限返水</span>
-                  <span class="game-tag">无限返水</span>
+          <div class="game-card-image">
+            <img src="/static/image/concise/obgdy.png" alt="" />
+          </div>
+        </div>
+
+        <!-- 通用游戏列表 -->
+        <template v-if="currentGameList && currentGameList.length > 0">
+          <div
+            class="game-list-item card-block"
+            v-for="(item, index) in currentGameList"
+            :key="`${gameType}-${index}`"
+            @click="handleGameClick(item, index)"
+          >
+            <div class="game-card-tag" :class="getCardHeaderClass(index)">
+              {{ getCardHeaderText(index) }}
+            </div>
+            <div class="game-card-body">
+              <div class="game-card-title">{{ getCardTitle(item, index) }}</div>
+              <div class="game-card-desc">
+                <div class="backwater-wrapper">
+                  <img src="/static/image/backwater.png" alt="无限返水" class="backwater-img" />
+                  <div class="rebate-tag">
+                    <span class="rebate-label">高达</span>
+                    <span class="rebate-value">1.20<em>%</em></span>
+                  </div>
                 </div>
-                <div class="game-card-count">{{ getCardCount(index) }}</div>
               </div>
-              <div class="game-card-image">
-                <img :src="getCardImage(item)" alt="" @error="handleImageError" />
+              <div class="game-card-count">
+                <span class="count-line"></span>
+                <span class="count-num">{{ getCardCount(index) }}<em>种</em></span>
+                <span class="count-line"></span>
               </div>
             </div>
-          </template>
-          <div v-else-if="gameType !== 4" class="empty-game-list">暂无游戏数据</div>
-        </div>
+            <div class="game-card-image">
+              <img :src="getCardImage(item)" alt="" @error="handleImageError" />
+            </div>
+          </div>
+        </template>
+        <div v-else-if="gameType !== 4" class="empty-game-list">暂无游戏数据</div>
       </div>
     </div>
 
@@ -215,6 +258,12 @@ export default {
       gameType: 0,
       tanshow: true,
       goInfo: null,
+      // 余额显示控制
+      balanceVisible: true,
+      // 眼睛图标 - 睁眼
+      eyeOpenIcon: '/static/image/see.png',
+      // 眼睛图标 - 闭眼
+      eyeClosedIcon: '/static/image/no_see.png',
     };
   },
   computed: {
@@ -266,6 +315,9 @@ export default {
     openGogao(val) {
       this.goInfo = val;
     },
+    toggleBalanceVisible() {
+      this.balanceVisible = !this.balanceVisible;
+    },
     changtanshow() {
       this.tanshow = !this.tanshow;
     },
@@ -316,13 +368,17 @@ export default {
     homenotice() {
       let that = this;
       that.$apiFun.post('/api/homenotice', {}).then(res => {
+        console.log('公告接口返回:', res);
         if (res.code != 200) {
-          that.showTost(0, res.message);
+          console.log('公告接口错误:', res.message);
         }
         if (res.code == 200) {
+          console.log('公告数据:', res.data);
           that.homenoticelis = res.data;
           that.ok = true;
         }
+      }).catch(err => {
+        console.error('公告接口请求失败:', err);
       });
     },
     onChange(index) {
@@ -346,9 +402,7 @@ export default {
     },
     // 获取卡片头部class
     getCardHeaderClass(index) {
-      if (this.gameType === 3 && index === 0) {
-        return 'official-cert';
-      }
+      // 所有标签都使用黑色背景
       return 'official-rec';
     },
     // 获取卡片头部文本
@@ -371,7 +425,7 @@ export default {
     getCardCount(index) {
       // 直接使用缓存中的实际数据，不使用硬编码值
       const count = this.currentGameList.length;
-      return `${count}种`;
+      return count;
     },
     // 获取卡片图片
     getCardImage(item) {
@@ -408,38 +462,42 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-// 顶部Logo样式
-.top-logo-wrapper {
-  padding: 10px 15px;
-  background: #ffffff;
-  
+// 顶部Logo区域 - 不做卡片
+.top-logo-area {
+  background: #f5f5f5;
+  padding: 2.5vw 5vw 1.5vw 5vw;
+
   .top-logo {
     display: flex;
     align-items: center;
     cursor: pointer;
-    
+
     .logo {
-      width: 40px;
-      height: 40px;
-      margin-right: 10px;
+      width: 8vw;
+      height: 8vw;
+      margin-right: 2vw;
+      border-radius: 1.5vw;
     }
-    
+
     .logo-text {
       display: flex;
       flex-direction: column;
-      
+
       .logo-title {
-        font-size: 16px;
-        font-weight: 600;
-        color: #333333;
+        font-size: 4vw;
+        font-weight: 700;
+        color: #222;
         line-height: 1.2;
+        letter-spacing: 0.2vw;
+        font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        text-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
       }
-      
+
       .logo-domain {
-        font-size: 12px;
+        font-size: 2.5vw;
         color: #999999;
         line-height: 1.2;
-        margin-top: 2px;
+        margin-top: 0.3vw;
       }
     }
   }
@@ -448,33 +506,30 @@ export default {
 // 轮播图底部圆点样式
 .banner-pagination {
   position: absolute;
-  bottom: 15px;
+  bottom: 4vw;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 8px;
+  gap: 2vw;
   z-index: 10;
-  
+
   .pagination-dot {
-    width: 8px;
-    height: 8px;
+    width: 2vw;
+    height: 2vw;
     border-radius: 50%;
     background: rgba(128, 128, 128, 0.6);
     cursor: pointer;
     transition: all 0.3s ease;
-    
+
     &.active {
       background: #1890ff;
-      width: 20px;
-      border-radius: 4px;
+      width: 5vw;
+      border-radius: 1vw;
     }
   }
 }
 
-.banner-image {
-  border-radius: 0;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-}
+// banner-image 样式已移入 .banner-card 内部
 
 .footer-copyright {
   background: linear-gradient(to right, #002040, #004080);
@@ -490,14 +545,248 @@ export default {
 }
 
 .page-wrapper {
-  padding-bottom: 20px;
+  padding-bottom: 16vw;
   width: 100%;
   min-height: 100vh;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
-  background-image: url('/static/image/diy/login_bg.jpg');
-  background-size: cover;
-  background-position: center;
-  background-blend-mode: overlay;
+  background: #f5f5f5;
+}
+
+// 通用卡片样式
+.card-block {
+  margin: 3.5vw 5vw;
+  background: #ffffff;
+  border-radius: 3vw;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
+
+// Banner + 用户信息合并卡片
+.banner-user-card {
+  margin-top: 0.5vw;
+
+  .banner-wrapper {
+    position: relative;
+    width: 100%;
+    height: 52vw;
+    overflow: hidden;
+
+    .van-swipe {
+      height: 100%;
+    }
+
+    .van-swipe-item {
+      height: 100%;
+    }
+
+    .banner-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 0;
+      box-shadow: none;
+    }
+  }
+
+  // 公告栏
+  .notice-bar-inline {
+    display: flex;
+    align-items: center;
+    padding: 2vw 4vw;
+    background: #fff;
+    position: relative;
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 4vw;
+      right: 4vw;
+      height: 1px;
+      background: #f0f0f0;
+    }
+
+    .notice-icon-wrap {
+      flex-shrink: 0;
+      margin-right: 2vw;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .notice-content {
+      flex: 1;
+      overflow: hidden;
+
+      ::v-deep .van-notice-bar {
+        font-size: 3vw !important;
+      }
+
+      .notice-placeholder {
+        font-size: 3vw;
+        color: #999;
+      }
+    }
+  }
+
+  // 用户钱包区域
+  .user-wallet-area {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4vw 4vw;
+
+    .user-info-left {
+      flex: 1;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 12vw;
+
+      .user-name {
+        font-size: 3.8vw;
+        font-weight: 400;
+        color: #999999;
+
+        &.not-login {
+          color: #333333;
+          font-weight: 700;
+        }
+      }
+
+      .user-balance {
+        display: flex;
+        align-items: center;
+        margin-top: 1vw;
+
+        .balance-amount {
+          font-size: 5.8vw;
+          font-weight: 700;
+          color: #333333;
+        }
+
+        .toggle-eye-icon {
+          width: 5vw;
+          height: 5vw;
+          margin-left: 2vw;
+          cursor: pointer;
+
+          &.eye-open {
+            margin-top: 0;
+          }
+
+          &.eye-closed {
+            margin-top: -1.5vw;
+          }
+        }
+      }
+
+      .user-tip {
+        font-size: 3vw;
+        color: #999999;
+        margin-top: 2vw;
+      }
+    }
+
+    .user-actions {
+      display: flex;
+      gap: 1vw;
+
+      .action-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+
+        .action-icon {
+          width: 10vw;
+          height: 10vw;
+          border-radius: 50%;
+          background: #e0e0e0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 0.5vw;
+
+          &.dark {
+            background: #333;
+          }
+
+          &:has(.action-icon-img) {
+            background: transparent;
+          }
+
+          .action-icon-img {
+            width: 10vw;
+            height: 10vw;
+            object-fit: contain;
+          }
+        }
+
+        span {
+          font-size: 3.2vw;
+          color: #333;
+        }
+      }
+    }
+  }
+}
+
+// 游戏导航卡片
+.game-nav-card {
+  margin: 3.5vw 5vw;
+  padding: 1.5vw 2vw;
+  background: #ffffff;
+
+  .game-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+
+    &::-webkit-scrollbar {
+      display: none;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5vw 2vw;
+      background: transparent;
+      border-radius: 3vw;
+      font-size: 3.5vw !important;
+      color: #666666;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      white-space: nowrap;
+      font-weight: 600;
+
+      .nav-icon {
+        width: 4.5vw;
+        height: 4.5vw;
+        margin-right: 1vw;
+        object-fit: contain;
+      }
+
+      span {
+        font-size: 3.5vw !important;
+      }
+
+      &.active {
+        background: #e8f0fe;
+        color: #3b7ddd;
+        font-weight: 500;
+
+        span {
+          font-size: 3.5vw !important;
+          color: #3b7ddd;
+        }
+      }
+    }
+  }
 }
 
 .login-btn {
@@ -741,12 +1030,7 @@ export default {
 
 /* 用户信息卡片样式 */
 .user-info-card {
-  margin: 15px;
   padding: 0;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
   
   // 用户信息卡片内的公告栏
   .user-notice-bar {
@@ -813,77 +1097,15 @@ export default {
   }
 }
 
-.user-actions {
-  display: flex;
-  gap: 8px;
-  
-  .action-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 50px;
-    height: 50px;
-    background: #f5f5f5;
-    border-radius: 50%;
-    cursor: pointer;
-    
-    .action-icon {
-      font-size: 20px;
-      margin-bottom: 4px;
-    }
-    
-    .action-text {
-      font-size: 10px;
-      color: #666666;
-    }
-  }
-}
-
-/* 游戏区域样式 */
-.game-section {
-  background: #ffffff;
-  padding: 15px 0;
-}
-
-/* 导航栏样式 */
-.game-nav {
-  display: flex;
-  gap: 10px;
-  padding: 0 15px 15px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  
-  &::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .nav-item {
-    flex-shrink: 0;
-    padding: 8px 20px;
-    background: #f5f5f5;
-    border-radius: 20px;
-    font-size: 14px;
-    color: #666666;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    white-space: nowrap;
-    
-    &.active {
-      background: #1890ff;
-      color: #ffffff;
-    }
-  }
-}
 
 /* 游戏列表横向滚动 */
 .game-list-scroll {
   overflow-x: auto;
   overflow-y: hidden;
   -webkit-overflow-scrolling: touch;
-  padding: 0 15px;
-  height: 280px; /* 固定高度 */
-  
+  padding: 0 5vw 2.5vw;
+  margin-top: 1.5vw;
+
   &::-webkit-scrollbar {
     display: none;
   }
@@ -891,97 +1113,158 @@ export default {
 
 .game-list-container {
   display: flex;
-  flex-direction: row; /* 横向排列 */
-  gap: 15px;
-  height: 100%; /* 占满父容器高度 */
-  align-items: stretch; /* 确保所有卡片高度一致 */
+  flex-direction: row;
+  gap: 3vw;
 }
 
 .game-list-item {
   flex-shrink: 0;
-  width: 280px;
-  height: 100%; /* 占满容器高度 */
-  background: #ffffff;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  // 自适应宽度：(屏幕宽度 - 左右边距10vw - 卡片间距3vw) / 2
+  width: calc((100vw - 10vw - 3vw) / 2);
+  height: 55vw;
+  margin: 0;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition: transform 0.3s ease;
   display: flex;
-  flex-direction: column; /* 卡片内部垂直排列 */
-  
+  flex-direction: column;
+  position: relative;
+
   &:active {
     transform: scale(0.98);
   }
-  
-  .game-card-header {
+
+  .game-card-tag {
+    position: absolute;
+    top: 0;
+    left: 0;
     background: #333333;
     color: #ffffff;
-    padding: 8px 15px;
-    font-size: 12px;
-    font-weight: 600;
+    padding: 1vw 2.5vw;
+    font-size: 2.5vw;
+    font-weight: 500;
+    border-radius: 3vw 0 2vw 0;
+    z-index: 1;
+
+    &.official-rec {
+      background: #333333;
+    }
+
+    &.official-cert {
+      background: #e74c3c;
+    }
   }
-  
+
   .game-card-body {
-    padding: 15px;
-    flex: 0 0 auto; /* 不伸缩，根据内容自适应 */
-    
+    padding: 3vw;
+    padding-top: 7vw;
+    flex: 0 0 auto;
+
     .game-card-title {
-      font-size: 18px;
+      font-size: 4vw;
       font-weight: 700;
       color: #333333;
-      margin-bottom: 8px;
+      margin-bottom: 1.5vw;
+      text-align: center;
     }
-    
+
     .game-card-desc {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-      
-      span:first-child {
-        font-size: 12px;
-        color: #666666;
-      }
-      
-      .game-tag {
-        background: #1890ff;
-        color: #ffffff;
-        padding: 2px 8px;
-        border-radius: 12px;
-        font-size: 10px;
+      justify-content: center;
+      margin-bottom: 1vw;
+
+      .backwater-wrapper {
+        position: relative;
+        display: inline-block;
+
+        .backwater-img {
+          height: 4vw;
+          width: auto;
+          object-fit: contain;
+          display: block;
+        }
+
+        .rebate-tag {
+          position: absolute;
+          left: 0.8vw;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: baseline;
+
+          .rebate-label {
+            font-size: 1.8vw;
+            color: #333;
+            font-weight: 700;
+            margin-right: 0.3vw;
+          }
+
+          .rebate-value {
+            font-size: 2.8vw;
+            font-weight: 700;
+            color: #3b7ddd;
+
+            em {
+              font-style: normal;
+              font-size: 2.2vw;
+            }
+          }
+        }
       }
     }
-    
+
     .game-card-count {
-      font-size: 12px;
-      color: #999999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2vw;
+
+      .count-line {
+        flex: 1;
+        height: 0;
+        border-top: 1px dashed #ccc;
+      }
+
+      .count-num {
+        font-size: 4vw;
+        color: #333;
+        font-weight: 700;
+        white-space: nowrap;
+
+        em {
+          font-style: normal;
+          font-size: 2.5vw;
+          color: #999;
+          font-weight: 400;
+          margin-left: 0.5vw;
+        }
+      }
     }
   }
-  
+
   .game-card-image {
-    flex: 1; /* 占据剩余空间 */
-    min-height: 120px;
+    flex: 1;
     overflow: hidden;
-    background: #f5f5f5;
+    background: #f8f8f8;
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      display: block; /* 确保图片正确显示 */
+      display: block;
     }
   }
 }
 
 .empty-game-list {
-  padding: 40px 20px;
+  padding: 8vw 4vw;
   text-align: center;
   color: #999999;
-  font-size: 14px;
+  font-size: 3.5vw;
+  width: 100%;
 }
 
 </style>

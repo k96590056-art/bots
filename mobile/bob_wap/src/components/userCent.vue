@@ -75,11 +75,14 @@ export default {
         title: '提示',
         message: '确定要退出登录吗？',
       }).then(() => {
-        localStorage.removeItem('token');
-        localStorage.removeItem('userInfo');
-        that.$store.commit('setToken', '');
-        that.$store.commit('setUserInfo', {});
-        that.$parent.goNav('/');
+        // 清除所有存储（token 存储在 sessionStorage 中）
+        localStorage.clear();
+        sessionStorage.clear();
+        // 使用正确的 mutation 名称更新 store 状态
+        that.$store.commit('changUserInfo');
+        that.$store.commit('changToken');
+        // 跳转到首页
+        that.$router.push({ path: '/' });
       }).catch(() => {});
     },
   },

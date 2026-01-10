@@ -3,46 +3,31 @@
     <van-tabbar-item>
       <span>首页</span>
       <template #icon="props">
-        <svg viewBox="0 0 24 24" fill="none" :stroke="props.active ? '#1890ff' : '#999'" stroke-width="1.8" width="24" height="24">
-          <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-          <polyline points="9 22 9 12 15 12 15 22"/>
-        </svg>
+        <img src="/static/image/imagehome.png" alt="首页" class="tab-icon" :class="{ active: props.active }" />
       </template>
     </van-tabbar-item>
     <van-tabbar-item>
       <span>客服</span>
       <template #icon="props">
-        <svg viewBox="0 0 24 24" fill="none" :stroke="props.active ? '#1890ff' : '#999'" stroke-width="1.8" width="24" height="24">
-          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 01-3.46 0"/>
-        </svg>
+        <img src="/static/image/imagecustomer.png" alt="客服" class="tab-icon" :class="{ active: props.active }" />
       </template>
     </van-tabbar-item>
     <van-tabbar-item>
       <span>优惠</span>
       <template #icon="props">
-        <svg viewBox="0 0 24 24" fill="none" :stroke="props.active ? '#1890ff' : '#999'" stroke-width="1.8" width="24" height="24">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-          <line x1="3" y1="9" x2="21" y2="9"/>
-          <line x1="9" y1="21" x2="9" y2="9"/>
-        </svg>
+        <img src="/static/image/imagediscount.png" alt="优惠" class="tab-icon" :class="{ active: props.active }" />
       </template>
     </van-tabbar-item>
     <van-tabbar-item>
       <span>赞助</span>
       <template #icon="props">
-        <svg viewBox="0 0 24 24" fill="none" :stroke="props.active ? '#1890ff' : '#999'" stroke-width="1.8" width="24" height="24">
-          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-        </svg>
+        <img src="/static/image/imagesponsorship.png" alt="赞助" class="tab-icon" :class="{ active: props.active }" />
       </template>
     </van-tabbar-item>
     <van-tabbar-item>
       <span>我的</span>
       <template #icon="props">
-        <svg viewBox="0 0 24 24" :fill="props.active ? '#1890ff' : 'none'" :stroke="props.active ? '#1890ff' : '#999'" stroke-width="1.8" width="24" height="24">
-          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
-          <circle cx="12" cy="7" r="4"/>
-        </svg>
+        <img src="/static/image/imagemine.png" alt="我的" class="tab-icon" :class="{ active: props.active }" />
       </template>
     </van-tabbar-item>
   </van-tabbar>
@@ -112,16 +97,25 @@ export default {
 .van-tabbar-item__icon img,
 .van-tabbar-item__icon svg {
   display: block;
-  height: 24px;
-  width: 24px;
+  height: 6.5vw;
+  width: 6.5vw;
 }
 .van-tabbar-item {
-  font-size: 14px;
+  font-size: 3vw;
 }
 .van-tabbar {
-  height: 55px;
+  height: 14vw;
 }
 .van-tabbar-item--active {
   background-color: #fff;
+}
+.tab-icon {
+  width: 6.5vw;
+  height: 6.5vw;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(60%) sepia(0%) saturate(0%) hue-rotate(0deg);
+  &.active {
+    filter: brightness(0) saturate(100%) invert(42%) sepia(93%) saturate(1352%) hue-rotate(196deg) contrast(91%);
+  }
 }
 </style>
