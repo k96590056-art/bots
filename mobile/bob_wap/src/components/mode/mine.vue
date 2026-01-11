@@ -36,17 +36,48 @@
       <!-- VIP卡片 -->
       <div class="vip-card">
         <div class="vip-box" @click="$store.state.token ? $parent.goNav('/vip') : $parent.goNav('/login')">
-          <div class="vip-link">
-            <span>加入VIP专享豪礼</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke="#3b7ddd" stroke-width="2" width="14" height="14">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
+          <!-- VIP等级和进度条 -->
+          <div class="vip-progress-row">
+            <div class="vip-level-left">
+              <img :src="'/static/image/vip' + (vipInfo.currentLevel || 0) + '.png'" class="vip-level-icon" alt="当前VIP等级" />
+            </div>
+            <div class="vip-progress-bar">
+              <div class="progress-track">
+                <div class="progress-fill" :style="{ width: vipProgressPercent + '%' }"></div>
+              </div>
+            </div>
+            <div class="vip-level-right">
+              <img :src="'/static/image/vip' + (vipInfo.nextLevel || 1) + '.png'" class="vip-level-icon" alt="下一VIP等级" />
+            </div>
           </div>
+          <!-- 流水信息和更多特权链接 -->
+          <div class="vip-info-row">
+            <div class="vip-turnover">晋级流水(元) {{ vipInfo.currentTurnover || '0.00' }}/{{ vipInfo.targetTurnover || '6,000.00' }}</div>
+            <div class="vip-more-link">
+              <span>更多VIP特权</span>
+              <svg viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" width="12" height="12">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </div>
+          </div>
+          <!-- VIP特权标签 -->
           <div class="vip-tags">
-            <span class="vip-tag">每周红包</span>
-            <span class="vip-tag">晋级礼金</span>
-            <span class="vip-tag">专属豪礼</span>
-            <span class="vip-tag">生日礼金</span>
+            <span class="vip-tag" :class="{ active: vipInfo.weeklyBonus }">
+              <img :src="vipInfo.weeklyBonus ? '/static/image/vip_tag_check.png' : '/static/image/vip_tag_lock.png'" class="tag-icon" />
+              每周红包
+            </span>
+            <span class="vip-tag" :class="{ active: vipInfo.upgradeBonus }">
+              <img :src="vipInfo.upgradeBonus ? '/static/image/vip_tag_check.png' : '/static/image/vip_tag_lock.png'" class="tag-icon" />
+              晋级礼金
+            </span>
+            <span class="vip-tag" :class="{ active: vipInfo.exclusiveGift }">
+              <img :src="vipInfo.exclusiveGift ? '/static/image/vip_tag_check.png' : '/static/image/vip_tag_lock.png'" class="tag-icon" />
+              专属豪礼
+            </span>
+            <span class="vip-tag" :class="{ active: vipInfo.birthdayGift }">
+              <img :src="vipInfo.birthdayGift ? '/static/image/vip_tag_check.png' : '/static/image/vip_tag_lock.png'" class="tag-icon" />
+              生日礼金
+            </span>
           </div>
         </div>
       </div>
@@ -232,6 +263,28 @@ export default {
       vipProgress: 0,
     };
   },
+  computed: {
+    vipInfo() {
+      const userInfo = this.$store.state.userInfo || {};
+      const currentLevel = (userInfo.vip || 0) * 1;
+      const nextLevel = Math.min(currentLevel + 1, 10);
+      const currentTurnover = userInfo.paysum ? Number(userInfo.paysum).toFixed(2) : '0.00';
+      const targetTurnover = this.nextVipAmount || '6,000.00';
+      return {
+        currentLevel,
+        nextLevel,
+        currentTurnover,
+        targetTurnover,
+        weeklyBonus: currentLevel >= 1,
+        upgradeBonus: currentLevel >= 1,
+        exclusiveGift: currentLevel >= 2,
+        birthdayGift: currentLevel >= 3,
+      };
+    },
+    vipProgressPercent() {
+      return this.vipProgress || 0;
+    },
+  },
   created() {
     this.uservip();
     this.calcJoinDays();
@@ -395,37 +448,102 @@ export default {
   margin-bottom: 0;
 
   .vip-box {
-    border: 1px solid #eee;
+    border: 1px solid #e0e0e0;
     border-radius: 2vw;
-    padding: 2vw 3vw;
+    padding: 3vw;
   }
 
-  .vip-link {
+  // VIP等级和进度条行
+  .vip-progress-row {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
+    margin-bottom: 2vw;
 
-    span {
-      font-size: 3.5vw !important;
-      color: #333;
-      font-weight: 600;
+    .vip-level-left,
+    .vip-level-right {
+      flex-shrink: 0;
     }
 
-    svg {
-      margin-left: 1vw;
-      stroke: #333;
+    .vip-level-icon {
+      width: 12vw;
+      height: auto;
+    }
+
+    .vip-progress-bar {
+      flex: 1;
+      margin: 0 3vw;
+
+      .progress-track {
+        background: #e0e0e0;
+        border-radius: 1vw;
+        height: 1.5vw;
+        overflow: hidden;
+      }
+
+      .progress-fill {
+        background: linear-gradient(90deg, #3b7ddd 0%, #5a9cff 100%);
+        height: 100%;
+        border-radius: 1vw;
+        transition: width 0.3s ease;
+      }
     }
   }
 
+  // 流水信息行
+  .vip-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 3vw;
+
+    .vip-turnover {
+      font-size: 2.8vw;
+      color: #666;
+    }
+
+    .vip-more-link {
+      display: flex;
+      align-items: center;
+      font-size: 2.8vw;
+      color: #666;
+
+      svg {
+        margin-left: 0.5vw;
+      }
+    }
+  }
+
+  // VIP特权标签
   .vip-tags {
     display: flex;
-    justify-content: center;
-    gap: 4vw;
-    margin-top: 1.5vw;
+    justify-content: space-between;
+    gap: 1.5vw;
 
     .vip-tag {
-      font-size: 2.8vw !important;
+      display: flex;
+      align-items: center;
+      font-size: 2.5vw;
       color: #999;
+      padding: 1vw 1.5vw;
+      border: 1px solid #e0e0e0;
+      border-radius: 4vw;
+      background: #f8f8f8;
+      white-space: nowrap;
+      flex-shrink: 0;
+
+      &.active {
+        color: #333;
+        border-color: #3b7ddd;
+        background: rgba(59, 125, 221, 0.1);
+      }
+
+      .tag-icon {
+        width: 3vw;
+        height: 3vw;
+        margin-right: 0.8vw;
+        flex-shrink: 0;
+      }
     }
   }
 }
