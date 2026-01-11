@@ -10,7 +10,7 @@
           @error="handleLogoError"
         />
         <div class="logo-text">
-          <div class="logo-title">{{ $store.state.appInfo.site_name || '九游娱乐' }}</div>
+          <div class="logo-title">{{ $store.state.appInfo.site_name || '星乐娱乐' }}</div>
           <div class="logo-domain">jiuyou.com</div>
         </div>
       </div>
@@ -42,8 +42,11 @@
             autocomplete="off"
           />
           <div class="password-toggle" @click="changPsw('psw1')">
-            <span v-if="psw1">👁️</span>
-            <span v-else>👁️‍🗨️</span>
+            <img
+              :src="psw1 ? '/static/image/no_see.png' : '/static/image/see.png'"
+              alt="显示/隐藏密码"
+              class="eye-icon"
+            />
           </div>
         </div>
 
@@ -58,8 +61,11 @@
             autocomplete="off"
           />
           <div class="password-toggle" @click="changPsw('psw2')">
-            <span v-if="psw2">👁️</span>
-            <span v-else>👁️‍🗨️</span>
+            <img
+              :src="psw2 ? '/static/image/no_see.png' : '/static/image/see.png'"
+              alt="显示/隐藏密码"
+              class="eye-icon"
+            />
           </div>
         </div>
 
@@ -381,6 +387,16 @@ export default {
         transform: translateY(-50%);
         cursor: pointer;
         font-size: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .eye-icon {
+          width: 20px;
+          height: 20px;
+          display: block;
+          object-fit: contain;
+        }
       }
     }
   }

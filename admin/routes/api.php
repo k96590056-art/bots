@@ -58,13 +58,14 @@ Route::get('/sponsorList','Api\IndexController@getSponsorList'); // 获取赞助
 
 
 
-// 工单系统API接口
-Route::post('/workorder/list','Api\WorkOrderController@list'); // 获取工单列表
-Route::post('/workorder/create','Api\WorkOrderController@create'); // 创建工单
-Route::post('/workorder/detail','Api\WorkOrderController@detail'); // 获取工单详情
-Route::post('/workorder/reply','Api\WorkOrderController@reply'); // 回复工单
-Route::post('/workorder/close','Api\WorkOrderController@close'); // 关闭工单
 Route::middleware(['crosstttp','api_auth'])->group(function () {
+    // 工单系统API接口
+    Route::post('/workorder/list','Api\WorkOrderController@list'); // 获取工单列表
+    Route::post('/workorder/create','Api\WorkOrderController@create'); // 创建工单
+    Route::post('/workorder/detail','Api\WorkOrderController@detail'); // 获取工单详情
+    Route::post('/workorder/reply','Api\WorkOrderController@reply'); // 回复工单
+    Route::post('/workorder/close','Api\WorkOrderController@close'); // 关闭工单
+
     // 用户
     
     Route::post('/uploadimg','Api\AuthController@uploadimg');  //更新用户转账模式

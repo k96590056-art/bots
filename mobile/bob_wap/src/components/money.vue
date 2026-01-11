@@ -8,7 +8,7 @@
           <div class="titsg">总资产（元）</div>
           <div class="mehs">
             <div class="lfs">￥</div>
-            <div class="num">{{ $store.state.userInfo.balance * 1 + $store.state.userInfo.gameblance * 1 }}</div>
+            <div class="num">{{ ($store.state.userInfo.balance || 0) * 1 + ($store.state.userInfo.gameblance || 0) * 1 }}</div>
             <img @click="$parent.getUserInfoShowLoding()" class="shua" src="/static/image/icon_sx.88b45347bfcdb11586ef9a0872038bf9.png" alt="" />
           </div>
         </div>
@@ -21,7 +21,7 @@
         <div class="mesg">
           <div class="bosgf">
             <div class="top"><img src="/static/image/qianbao123.png" alt="" />中心钱包</div>
-            <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance }}</div>
+            <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance || 0 }}</div>
           </div>
           <div class="bosgf">
             <div class="top"><img src="/static/image/qianbao123.png" alt="" />游戏钱包</div>

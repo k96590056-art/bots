@@ -48,12 +48,12 @@ class WorkOrderController extends Controller
 
             // 构建查询
             $query = DB::table('work_orders');
-            
+
             // 过滤已删除的工单（软删除）
             $query->whereNull('deleted_at');
             // 仅查询当前用户的工单
             $query->where('user_id', $user->id);
-            
+
             // 状态筛选
             if (!empty($status)) {
                 $query->where('status', $status);
@@ -128,27 +128,24 @@ class WorkOrderController extends Controller
                 ]);
             }
 
+            // 获取当前认证用户
+            $user = $this->getAuthenticatedUser($request);
+
+            if (!$user) {
+                return response()->json([
+                    'code' => 401,
+                    'message' => '未登录或认证已失效'
+                ], 401);
+            }
+
             // 生成工单编号
             $orderNo = 'WO' . date('YmdHis') . rand(1000, 9999);
 
-            // 获取当前用户信息
-            $userId = $request->input('user_id', 0);
-            $username = $request->input('username', '');
-            
-            // 如果没有提供用户信息，尝试从认证中获取
-            if ($userId == 0 && auth()->check()) {
-                $userId = auth()->id();
-                $username = auth()->user()->username ?? '用户' . $userId;
-            } elseif (empty($username)) {
-                // 如果仍然没有用户名，尝试从token或其他方式获取
-                $username = $request->input('username', '用户' . ($userId ?: time()));
-            }
-            
             // 插入工单数据
             $id = DB::table('work_orders')->insertGetId([
                 'order_no' => $orderNo,
-                'user_id' => $userId,
-                'username' => $username,
+                'user_id' => $user->id,
+                'username' => $user->username,
                 'title' => $request->input('title'),
                 'content' => $request->input('content'),
                 'category' => $request->input('category'),
@@ -287,7 +284,7 @@ class WorkOrderController extends Controller
             $workOrderId = $request->input('work_order_id');
             $content = $request->input('content');
 
-            // 检查工单是否存在（过滤已删除的工单）
+            // 获取当前认证用户
             $user = $this->getAuthenticatedUser($request);
 
             if (!$user) {
@@ -297,6 +294,7 @@ class WorkOrderController extends Controller
                 ], 401);
             }
 
+            // 检查工单是否存在（过滤已删除的工单）
             $workOrder = DB::table('work_orders')
                 ->where('id', $workOrderId)
                 ->where('user_id', $user->id)
@@ -309,23 +307,10 @@ class WorkOrderController extends Controller
                 ]);
             }
 
-            // 获取当前用户信息
-            $userId = $request->input('user_id', 0);
-            $username = $request->input('username', '');
-            
-            // 如果没有提供用户信息，尝试从认证中获取
-            if ($userId == 0 && auth()->check()) {
-                $userId = auth()->id();
-                $username = auth()->user()->username ?? '用户' . $userId;
-            } elseif (empty($username)) {
-                // 如果仍然没有用户名，生成一个
-                $username = '用户' . ($userId ?: time());
-            }
-            
             // 插入回复记录
             $replyId = DB::table('work_order_replies')->insertGetId([
                 'work_order_id' => $workOrderId,
-                'user_id' => $userId,
+                'user_id' => $user->id,
                 'type' => 'user', // 用户回复
                 'content' => $content,
                 'created_at' => now(),
@@ -464,24 +449,10 @@ class WorkOrderController extends Controller
     }
 
     /**
-     * 获取当前认证用户
+     * 获取当前认证用户（由api_auth中间件注入）
      */
     private function getAuthenticatedUser(Request $request)
     {
-        if ($request->has('current_user')) {
-            return $request->get('current_user');
-        }
-
-        $token = $request->header('Authorization');
-        if (empty($token)) {
-            return null;
-        }
-
-        $token = str_replace('Bearer ', '', $token);
-        if (empty($token) || strlen($token) !== 60) {
-            return null;
-        }
-
-        return User::where('api_token', $token)->first();
+        return $request->get('current_user');
     }
 }

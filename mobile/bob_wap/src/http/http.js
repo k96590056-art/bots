@@ -2,6 +2,8 @@ import axios from 'axios'     //引入
 import { Dialog } from 'vant';
 import router from './../router'
 
+// 临时修改为本地后端进行测试
+// let baseURL = 'http://127.0.0.1:8000'
 let baseURL = 'https://botapi.leyu666.lol'
 
 sessionStorage.setItem("baseURL",baseURL)

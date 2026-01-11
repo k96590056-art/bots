@@ -23,7 +23,7 @@
             <div class="header-style-home">
               <div class="header-style-login">
                 <div class="home-money">
-                  <div class="amount">{{ $store.state.userInfo.balance }}</div>
+                  <div class="amount">{{ $store.state.userInfo.balance || 0 }}</div>
 
                   <svg @click="$parent.getUserInfoShowLoding()" style="width: 0.56rem; height: 0.56rem" aria-hidden="true" class="account-amount-refresh svg-icon svg-icon--mini-small svg-icon--refresh svg-icon--icon"><use xlink:href="#icon-refresh"></use></svg>
                 </div>

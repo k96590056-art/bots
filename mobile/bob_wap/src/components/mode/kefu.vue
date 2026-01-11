@@ -79,7 +79,14 @@ export default {
     },
     // 跳转意见反馈
     goFeedback() {
-      this.$parent.openKefu();
+      // 检查用户是否登录
+      if (!this.$store.state.token) {
+        // 未登录，跳转到登录页面
+        this.$router.push({ path: '/login' });
+        return;
+      }
+      // 已登录，跳转到意见反馈页面
+      this.$router.push({ path: '/feedback' });
     },
   },
 };
@@ -191,24 +198,12 @@ export default {
     justify-content: center;
 
     .bubble-icon {
-      width: 22px;
-      height: 18px;
-      background-color: #fff;
-      border-radius: 9px;
-      position: relative;
-
-      &::before {
-        content: "...";
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        font-size: 14px;
-        font-weight: bold;
-        color: #4a4a4a;
-        line-height: 1;
-        letter-spacing: 1px;
-      }
+      width: 24px;
+      height: 24px;
+      background-image: url('/static/image/customer_qipao.png');
+      background-size: cover;
+      background-repeat: no-repeat;
+      background-position: center;
     }
   }
 }

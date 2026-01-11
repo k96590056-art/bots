@@ -56,7 +56,7 @@
         <div class="user-info-left" v-if="$store.state.token">
           <div class="user-name">{{ $store.state.userInfo.username }}</div>
           <div class="user-balance">
-            <span class="balance-amount">{{ balanceVisible ? '¥ ' + $store.state.userInfo.balance : '******' }}</span>
+            <span class="balance-amount">{{ balanceVisible ? '¥ ' + ($store.state.userInfo.balance || 0) : '******' }}</span>
             <img
               @click="toggleBalanceVisible"
               :class="['toggle-eye-icon', balanceVisible ? 'eye-open' : 'eye-closed']"
@@ -217,7 +217,7 @@
           </dl>
           <ul class="menu-list">
             <li v-if="$store.state.token" @click="$parent.goNav('/message')"><img src="/static/image/meunIcon.39f38dc98ad956615952d485d0e6af04.svg" />消息中心<span class="side__subtitle__3QtYC"></span></li>
-            <li @click="$parent.openKefu"><img src="/static/image/meunIcon2.5d0d78496889fb8b027f603254286fdf.svg" />意见反馈<span class="side__subtitle__3QtYC"></span></li>
+            <li @click="$parent.openFeedback"><img src="/static/image/meunIcon2.5d0d78496889fb8b027f603254286fdf.svg" />意见反馈<span class="side__subtitle__3QtYC"></span></li>
             <li @click="doCopy($store.state.appInfo.h5_url)">
               <img src="/static/image/menuIcon5.5687ef4d1512d53aa3535e3b1088fe70.png" />永久域名<span class="side__subtitle__3QtYC">{{ $store.state.appInfo.h5_url }}</span>
             </li>

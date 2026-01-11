@@ -91,7 +91,7 @@
           <p data-v-f2b5b3f8="">如果会员在一个季度（90天计算）内没有完成相应的保级要求流水，系统会自动降级一个等级，相应的返水及其它优惠也会随之调整至降级后的等级。</p>
           <h4 data-v-f2b5b3f8=""><span data-v-f2b5b3f8="">8</span>VIP返水</h4>
           <p data-v-f2b5b3f8="">VIP返水优惠发放金额根据会员当天北京时间00:00—23:59之间的有效投注进行计算，当天所有的投注额返水将在注单结算当天结束后24小时内发放到福利中心，进入个人中心点击福利中心进行手动领取。（VIP返水1倍流水即可提款）</p>
-          <div data-v-f2b5b3f8="" class="vipDetailStyle__note__2kqnK">欧宝娱乐保留对活动的修改，停止及最终解释权</div>
+          <div data-v-f2b5b3f8="" class="vipDetailStyle__note__2kqnK">星乐娱乐保留对活动的修改，停止及最终解释权</div>
         </div>
       </div>
     </div>

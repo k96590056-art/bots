@@ -39,6 +39,9 @@ import payInfo from '@/components/payInfo'
 import withdrawal from '@/components/withdrawal'
 import transfer from '@/components/transfer'
 import concise from '@/components/mode/concise'
+import feedback from '@/components/feedback'
+import myFeedback from '@/components/myFeedback'
+import feedbackDetail from '@/components/feedbackDetail'
 
 
 
@@ -300,6 +303,27 @@ export default new Router({
       meta: {
         requireAuth: true,
 
+      }
+    }, {
+      path: '/feedback',
+      name: 'feedback',
+      component: feedback,
+      meta: {
+        requireAuth: true,
+      }
+    }, {
+      path: '/myFeedback',
+      name: 'myFeedback',
+      component: myFeedback,
+      meta: {
+        requireAuth: true,
+      }
+    }, {
+      path: '/feedbackDetail',
+      name: 'feedbackDetail',
+      component: feedbackDetail,
+      meta: {
+        requireAuth: true,
       }
     }
     , {

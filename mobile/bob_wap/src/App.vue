@@ -472,6 +472,17 @@ export default {
       let that = this;
       that.goNav(`/kefu`);
     },
+    openFeedback() {
+      let that = this;
+      // 检查用户是否登录
+      if (!that.$store.state.token) {
+        // 未登录，跳转到登录页面
+        that.goNav(`/login`);
+        return;
+      }
+      // 已登录，跳转到意见反馈页面
+      that.goNav(`/feedback`);
+    },
     showTost(type, title) {
       let str = type ? 'success' : 'danger';
       this.$notify({ type: str, message: title });

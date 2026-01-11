@@ -16,7 +16,7 @@
       <div class="mesg">
         <div class="bosgf">
           <div class="top"><img src="/static/image/qianbao123.png" alt="" />中心钱包</div>
-          <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance }}</div>
+          <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance || 0 }}</div>
         </div>
         <div class="bosgf">
           <div class="top"><img src="/static/image/qianbao123.png" alt="" />游戏钱包</div>
