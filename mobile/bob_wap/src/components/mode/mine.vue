@@ -35,7 +35,8 @@
     <div class="content-area">
       <!-- VIP卡片 -->
       <div class="vip-card">
-        <div class="vip-box" @click="$store.state.token ? $parent.goNav('/vip') : $parent.goNav('/login')">
+        <!-- 已登录状态：显示VIP进度样式 -->
+        <div class="vip-box" v-if="$store.state.token" @click="$parent.goNav('/vip')">
           <!-- VIP等级和进度条 -->
           <div class="vip-progress-row">
             <div class="vip-level-left">
@@ -78,6 +79,21 @@
               <img :src="vipInfo.birthdayGift ? '/static/image/vip_tag_check.png' : '/static/image/vip_tag_lock.png'" class="tag-icon" />
               生日礼金
             </span>
+          </div>
+        </div>
+        <!-- 未登录状态：显示原来的简单样式 -->
+        <div class="vip-box vip-box-simple" v-else @click="$parent.goNav('/login')">
+          <div class="vip-link">
+            <span>加入VIP专享豪礼</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="14" height="14">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+          </div>
+          <div class="vip-tags-simple">
+            <span class="vip-tag-simple">每周红包</span>
+            <span class="vip-tag-simple">晋级礼金</span>
+            <span class="vip-tag-simple">专属豪礼</span>
+            <span class="vip-tag-simple">生日礼金</span>
           </div>
         </div>
       </div>
@@ -514,6 +530,37 @@ export default {
     }
   }
 
+  // 未登录状态的简单样式
+  .vip-box-simple {
+    .vip-link {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      span {
+        font-size: 3.5vw;
+        color: #333;
+        font-weight: 600;
+      }
+
+      svg {
+        margin-left: 1vw;
+      }
+    }
+
+    .vip-tags-simple {
+      display: flex;
+      justify-content: center;
+      gap: 4vw;
+      margin-top: 1.5vw;
+
+      .vip-tag-simple {
+        font-size: 2.8vw;
+        color: #999;
+      }
+    }
+  }
+
   // VIP特权标签
   .vip-tags {
     display: flex;
@@ -528,14 +575,14 @@ export default {
       padding: 1vw 1.5vw;
       border: 1px solid #e0e0e0;
       border-radius: 4vw;
-      background: #f8f8f8;
+      background: #eaeaea;
       white-space: nowrap;
       flex-shrink: 0;
 
       &.active {
         color: #333;
-        border-color: #3b7ddd;
-        background: rgba(59, 125, 221, 0.1);
+        border-color: #e0e0e0;
+        background: #eaeaea;
       }
 
       .tag-icon {
