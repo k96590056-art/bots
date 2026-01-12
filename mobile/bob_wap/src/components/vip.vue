@@ -6,7 +6,7 @@
     <img src="/static/image/xiangqing@2x.8b5b315d4cf3a4593fab14da84b35192.jpg" style="width: 100%" alt="" />
     <div class="vipType">
       <div class="vipLis" v-for="(item, index) in 10" :key="index" @click="changvipTab(item)">
-        <img :class="item == vipTab ? 'imgsd' : ''" :src="`/static/image/vip-${item}.png`" alt="" />
+        <img :class="item == vipTab ? 'imgsd' : ''" :src="`/static/image/vip${item}.png`" alt="" />
         VIP{{ item }}
       </div>
     </div>
