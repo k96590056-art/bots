@@ -482,8 +482,11 @@ export default {
     }
 
     .vip-level-icon {
-      width: 12vw;
+      width: 10vw;
       height: auto;
+      background: #4a4a4a;
+      border-radius: 2.5vw;
+      padding: 0 1vw;
     }
 
     .vip-progress-bar {
