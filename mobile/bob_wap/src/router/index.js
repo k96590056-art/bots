@@ -42,6 +42,7 @@ import concise from '@/components/mode/concise'
 import feedback from '@/components/feedback'
 import myFeedback from '@/components/myFeedback'
 import feedbackDetail from '@/components/feedbackDetail'
+import helpTutorial from '@/components/helpTutorial'
 
 
 
@@ -325,6 +326,10 @@ export default new Router({
       meta: {
         requireAuth: true,
       }
+    }, {
+      path: '/helpTutorial',
+      name: 'helpTutorial',
+      component: helpTutorial
     }
     , {
       path: '*', // 重定向页面地址
