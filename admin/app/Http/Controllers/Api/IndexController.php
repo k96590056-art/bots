@@ -501,6 +501,23 @@ class IndexController extends Controller
                 ];
                 $User_Api = User_Api::create($arr);
             }
+        } elseif ($withApi === 'dbzhenren') {
+            Log::info('Dbzhenren接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            if (!$User_Api) {
+                Log::info('Dbzhenren接口 - User_Api不存在，调用注册接口', ['username' => $user->username, 'api_code' => $api_code]);
+                $result = $service->register($api_code, $user->username);
+                if ($result['code'] != 200) {
+                    return $this->returnMsg(201, '', $result['message']);
+                }
+                $arr = [
+                    'user_id' => $user->id,
+                    'api_user' => $user->username,
+                    'api_pass' => 123456,
+                    'api_code' => $api_code,
+                ];
+                $User_Api = User_Api::create($arr);
+            }
         } else {
             // 确保 dp 接口不会进入此分支
             if ($withApi === 'dp') {
@@ -649,6 +666,15 @@ class IndexController extends Controller
             $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameCode);
         } elseif ($withApi === 'pussy') {
             $res = $service->login($user->username, $gameCode, $is_mobile_url ? 1 : 0);
+        } elseif ($withApi === 'dbzhenren') {
+            // Dbzhenren接口登录，参数：username, api_code, game_type, is_mobile, game_code
+            $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameCode);
+            // 如果返回的是token，需要构建游戏URL
+            if ($res['code'] == 200 && isset($res['token'])) {
+                // 根据token构建游戏URL，这里需要根据实际API文档调整
+                // 暂时返回token，前端可以根据需要处理
+                $res['data'] = $res['token'];
+            }
         } else {
             $res = ['code' => 201, 'message' => '不支持的接口'];
         }
@@ -662,10 +688,15 @@ class IndexController extends Controller
 
     public function allmz($plat_name,$userid){
         $user = User::where('id',$userid)->first();
-		$tg = new TgService;
 		$TransferLog = TransferLog::where('transfer_type', 0)->where('user_id', $user->id)->orderBy('id', 'desc')->first();
-        if($TransferLog && $TransferLog->api_type != $plat_name){			
-			$result = $tg->balance($TransferLog->api_type,$user->username);
+        if($TransferLog && $TransferLog->api_type != $plat_name){
+			// 根据接口类型选择服务类
+			$serviceClass = '\\App\\Services\\' . ucfirst($TransferLog->api_type) . 'Service';
+			if (!class_exists($serviceClass)) {
+				$serviceClass = '\\App\\Services\\TgService';
+			}
+			$service = new $serviceClass();
+			$result = $service->balance($TransferLog->api_type, $user->username);
 			if($result['code'] != 200){
 				return $result;
 			}
@@ -687,7 +718,7 @@ class IndexController extends Controller
 				];
 				$Transfers_id = TransferLog::create($arr);
 
-				$res = $tg->withdrawal($user->username, $api_money, $client_transfer_id, $TransferLog->api_type);
+				$res = $service->withdrawal($user->username, $api_money, $client_transfer_id, $TransferLog->api_type);
 				if($res['code'] != 200){
 					$Transfers_id->delete();
 					return $res;
@@ -724,7 +755,13 @@ class IndexController extends Controller
 			];
 			$Transfers_id = TransferLog::create($arr);
             $balance = intval($balance);
-			$res = $tg->deposit($user->username, $balance, $client_transfer_id, $plat_name);
+			// 根据接口类型选择服务类
+			$serviceClass = '\\App\\Services\\' . ucfirst($plat_name) . 'Service';
+			if (!class_exists($serviceClass)) {
+				$serviceClass = '\\App\\Services\\TgService';
+			}
+			$service = new $serviceClass();
+			$res = $service->deposit($user->username, $balance, $client_transfer_id, $plat_name);
 			if($res['code'] != 200){
 				$Transfers_id->delete();
 				return $res;
@@ -1034,9 +1071,14 @@ class IndexController extends Controller
         $token = str_replace('Bearer ','',$token) ;
         $user = User::where('api_token',$token)->first();
 		$User_Api = User_Api::where('api_code',$api_code)->where('user_id',$user->id)->first();
-		$tg = New TgService;
+		// 根据接口类型选择服务类
+		$serviceClass = '\\App\\Services\\' . ucfirst($api_code) . 'Service';
+		if (!class_exists($serviceClass)) {
+			$serviceClass = '\\App\\Services\\TgService';
+		}
+		$service = new $serviceClass();
 		if(!$User_Api){
-			$result = $tg->register($api_code,$user->username);
+			$result = $service->register($api_code, $user->username);
             if($result['code'] != 200){
 				return $this->returnMsg(201, '', $result['message']);
 			}
@@ -1048,7 +1090,7 @@ class IndexController extends Controller
 			];
 			$User_Api = User_Api::create($arr);		    
 		}        
-        $result = $tg->balance($api_code,$user->username);
+        $result = $service->balance($api_code, $user->username);
 		if($result['code'] != 200){
 			return $this->returnMsg(201, '', $result['message']);
 		}		

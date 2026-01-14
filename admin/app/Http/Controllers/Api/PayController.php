@@ -686,7 +686,13 @@ class PayController extends Controller
 		}
 		$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
 		if(!$User_Api){
-			$result = $tg->register($data['pay_way'],$user->username);
+			// 根据接口类型选择服务类
+			$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+			if (!class_exists($serviceClass)) {
+				$serviceClass = '\\App\\Services\\TgService';
+			}
+			$service = new $serviceClass();
+			$result = $service->register($data['pay_way'], $user->username);
             if($result['code'] != 200){
 				return $this->returnMsg(201, '', $result['message']);
 			}
@@ -716,7 +722,13 @@ class PayController extends Controller
                 ];
                 TransferLog::create($arr);
 
-				$res = $tg->deposit($user->username,$amount,$order_no,$data['pay_way']);
+				// 根据接口类型选择服务类
+				$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+				if (!class_exists($serviceClass)) {
+					$serviceClass = '\\App\\Services\\TgService';
+				}
+				$service = new $serviceClass();
+				$res = $service->deposit($user->username, $amount, $order_no, $data['pay_way']);
 
 				if ($res['code'] == 200) {
 					$user->balance -= abs($data['amount']);
@@ -747,7 +759,13 @@ class PayController extends Controller
                     'state' => 0
                 ];
                 TransferLog::create($arr);
-				$res = $tg->withdrawal($user->username,$amount,$order_no,$data['pay_way']);
+				// 根据接口类型选择服务类
+				$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+				if (!class_exists($serviceClass)) {
+					$serviceClass = '\\App\\Services\\TgService';
+				}
+				$service = new $serviceClass();
+				$res = $service->withdrawal($user->username, $amount, $order_no, $data['pay_way']);
 				if ($res['code'] == 200) {
 					$user->balance += $data['amount'];
 					$user->save();
@@ -773,7 +791,6 @@ class PayController extends Controller
 
     public function transAll(Request $request)
     {
-        $tg = new TgService;
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
         $user = User::where('api_token',$token)->first();
@@ -781,7 +798,13 @@ class PayController extends Controller
 		if(!$transferlog){
 			return $this->returnMsg(200,'','没有可回收的金额');
 		}
-		$result = $tg->balance($transferlog->api_type,$user->username);
+		// 根据接口类型选择服务类
+		$serviceClass = '\\App\\Services\\' . ucfirst($transferlog->api_type) . 'Service';
+		if (!class_exists($serviceClass)) {
+			$serviceClass = '\\App\\Services\\TgService';
+		}
+		$service = new $serviceClass();
+		$result = $service->balance($transferlog->api_type, $user->username);
 		if($result['code'] != 200){
 			return $this->returnMsg(201, '', $result['message']);
 		}
@@ -803,7 +826,7 @@ class PayController extends Controller
 			'state' => 0
 		];
 		TransferLog::create($arr);
-		$res = $tg->withdrawal($user->username,$amount,$order_no,$transferlog->api_type);
+		$res = $service->withdrawal($user->username, $amount, $order_no, $transferlog->api_type);
 		if($res['code'] != 200){
 			return $this->returnMsg(201, '', $res['message']);
 		}
