@@ -773,7 +773,7 @@ export default {
 
       span {
         font-size: 2.8vw !important;
-        color: #333;
+        color: #838383;
       }
     }
   }

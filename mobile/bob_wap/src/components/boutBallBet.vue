@@ -90,6 +90,9 @@ export default {
           if (res.data && res.data.content) {
             // 尝试解析后端返回的内容
             that.parseFaqContent(res.data.content);
+          } else {
+            // 如果没有返回内容，使用默认FAQ
+            that.setDefaultFaq();
           }
           that.$parent.hideLoading();
         })
@@ -102,9 +105,64 @@ export default {
 
     // 解析FAQ内容
     parseFaqContent(content) {
-      // 如果后端返回的是结构化数据，直接使用
-      // 否则设置默认FAQ
-      this.setDefaultFaq();
+      // 尝试解析HTML内容中的问题列表
+      // 后端返回的可能是HTML格式的内容
+      try {
+        // 创建临时DOM来解析HTML
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
+
+        // 尝试提取问题标题和内容
+        const questions = [];
+
+        // 方式1: 查找 h3/h4 标签作为问题标题
+        const headers = doc.querySelectorAll('h3, h4, strong, b');
+        if (headers.length > 0) {
+          headers.forEach((header, index) => {
+            const title = header.textContent.trim();
+            if (title) {
+              // 获取下一个兄弟节点作为答案内容
+              let answerContent = '';
+              let nextEl = header.nextElementSibling;
+              while (nextEl && !['H3', 'H4', 'STRONG', 'B'].includes(nextEl.tagName)) {
+                answerContent += nextEl.outerHTML || nextEl.textContent;
+                nextEl = nextEl.nextElementSibling;
+              }
+              if (answerContent || title) {
+                questions.push({
+                  id: index + 1,
+                  title: title.replace(/^\d+[\.\、\s]*/, ''), // 移除开头的数字序号
+                  content: answerContent || '<p>请联系客服了解详情</p>'
+                });
+              }
+            }
+          });
+        }
+
+        // 方式2: 如果没找到结构化内容，将整个内容作为单个FAQ项
+        if (questions.length === 0) {
+          // 检查是否有有效内容
+          const textContent = doc.body.textContent.trim();
+          if (textContent) {
+            // 把整个内容放到一个可展开的FAQ中
+            this.faqList = [{
+              id: 1,
+              title: '常见问题解答',
+              content: content
+            }];
+            return;
+          }
+        }
+
+        if (questions.length > 0) {
+          this.faqList = questions;
+        } else {
+          this.setDefaultFaq();
+        }
+      } catch (e) {
+        console.error('解析FAQ内容失败:', e);
+        this.setDefaultFaq();
+      }
     },
 
     // 设置默认FAQ列表
@@ -214,7 +272,7 @@ export default {
     cursor: pointer;
 
     &.deposit {
-      background: linear-gradient(135deg, #3b7dd8 0%, #2563a8 100%);
+      background: linear-gradient(135deg, #4a5568 0%, #2d3748 100%);
     }
 
     &.withdraw {
