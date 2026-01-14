@@ -12,8 +12,8 @@ use Illuminate\Support\Str;
 class Dbzhenren
 {
     // API 配置参数（固定值）
-    protected $game_api_url = 'https://api.zhenren.com';  // 游戏接口地址（gmag_api_url），用于玩家操作、支付等
-    protected $gmag_game_data_url = 'https://data-api.zhenren.com';  // 游戏数据接口地址（gmag_game_data_url），用于拉取游戏数据、历史记录等
+    protected $game_api_url = 'https://api.obothapi.com';  // 游戏接口地址（gmag_api_url），用于玩家操作、支付等
+    protected $gmag_game_data_url = 'https://api-data.obothapi.com';  // 游戏数据接口地址（gmag_game_data_url），用于拉取游戏数据、历史记录等
     protected $brand_id = 1001;  // 代理标识
     protected $secret_key = 'secretKey';  // 密钥，需要根据实际配置修改
     protected $currency = 'CNY';  // 默认币种
