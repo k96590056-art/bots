@@ -863,135 +863,6 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
-              <a @click="goNav('/discount')" :class="url == '/discount' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
-                >优惠
-                <div class="_17Hw2tUT"></div>
-                <div class="P4bUdpZY _3hNI-m60"><span></span><span></span></div>
-              </a>
-              <div class="PjlHS4wt" style="display: none; background: #808080; background-color: #808080;">
-                <ul class="_1b6LLqfO _1Ad0HjXd">
-                  <div class="_1-bZeUrG _1Rce9DUC YU_Rc0LE" style="animation-delay: 0.2s" @click="goNav('/discount')">
-                    <div class="_3mfrB6SP"></div>
-                    <img class="_3usZDkiN" src="/static/image/0f9375419ba7f615df910ca42c5f8877.png" alt="" />
-                    <div class="_349CzCYy xJQe3jRu hLkKh1i_">
-                      <span>查看详情</span>
-                    </div>
-                  </div>
-                  <div class="_1-bZeUrG _1Rce9DUC YU_Rc0LE" style="animation-delay: 0.3s" @click="goNav('/discount')">
-                    <div class="_3mfrB6SP"></div>
-                    <img class="_3usZDkiN" src="/static/image/e40c3d0e1d266df5ad8ec1d738340b80.png" alt="" />
-                    <div class="_349CzCYy xJQe3jRu hLkKh1i_">
-                      <span>查看详情</span>
-                    </div>
-                  </div>
-                  <div class="_1-bZeUrG _1Rce9DUC YU_Rc0LE" style="animation-delay: 0.4s" @click="goNav('/vipInfo')">
-                    <div class="_3mfrB6SP"></div>
-                    <img class="_3usZDkiN" src="/static/image/724315d68970879d51e52c6fc3cbb57f.png" alt="" />
-                    <div class="_349CzCYy xJQe3jRu hLkKh1i_">
-                      <span>查看详情</span>
-                    </div>
-                  </div>
-                  <div class="_1-bZeUrG _1Rce9DUC YU_Rc0LE" style="animation-delay: 0.5s" @click="goNav('/discount')">
-                    <div class="_3mfrB6SP"></div>
-                    <img class="_3usZDkiN" src="/static/image/3d2fcc7a8c383b1f45b6429062383bfb.png" alt="" />
-                    <div class="_349CzCYy xJQe3jRu hLkKh1i_">
-                      <span>查看详情</span>
-                    </div>
-                  </div>
-                </ul>
-              </div>
-            </div>
-            <div class="_9eNaWz24 nav">
-              <a @click="goNav('/zhanzhu01')" :class="url == '/zhanzhu01' || url == '/zhanzhu02' || url == '/zhanzhu03' || url == '/zhanzhu04' || url == '/zhanzhu05' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
-                >赞助
-                <div class="_17Hw2tUT"></div>
-                <div class="P4bUdpZY _3hNI-m60"><span></span><span></span></div>
-              </a>
-              <div class="PjlHS4wt" style="display: none; background: #808080; background-color: #808080;">
-                <div class="_1b6LLqfO">
-                  <ul class="_2q_0n3sH">
-                    <li class="_3xMhR1us" @click="goNav('/zhanzhu01')">
-                      <div class="_3ukSFWS1 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.2s">
-                        <div class="_3Ii96E8G">
-                          <img class="_2ywsn6BQ" src="/static/image/sponsor_hover_wales_title-8c77.png" alt="" />
-                        </div>
-                        <div class="_2qIXCuoN">
-                          <img alt="" class="ls-is-cached lazyloaded" src="/static/image/sponsor_hover_wales-27f7.png" data-src="/static/image/sponsor_hover_wales-27f7.png" />
-                        </div>
-                        <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                          <span>查看详情</span>
-                        </div>
-                      </div>
-                      <div class="_3qsc2gtG"></div>
-                    </li>
-                    <li class="_3xMhR1us" @click="goNav('/zhanzhu02')">
-                      <div class="_3ukSFWS1 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.3s">
-                        <div class="_3Ii96E8G">
-                          <img class="_2ywsn6BQ" src="/static/image/sponsor_hover_sscnapoli_title-d04b.png" alt="" />
-                        </div>
-                        <div class="_2qIXCuoN">
-                          <img alt="" class="ls-is-cached lazyloaded" src="/static/image/sponsor_hover_sscnapoli-81ad.png" data-src="/static/image/sponsor_hover_sscnapoli-81ad.png" />
-                        </div>
-                        <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                          <span>查看详情</span>
-                        </div>
-                      </div>
-                      <div class="_3qsc2gtG"></div>
-                    </li>
-                    <li class="_3xMhR1us" @click="goNav('/zhanzhu03')">
-                      <div class="_3ukSFWS1 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.4s">
-                        <div class="_3Ii96E8G">
-                          <img class="_2ywsn6BQ" src="/static/image/sponsor_hover_borussia_title-51b4.png" alt="" />
-                        </div>
-                        <div class="_2qIXCuoN">
-                          <img alt="" class="ls-is-cached lazyloaded" src="/static/image/sponsor_hover_borussia-63d5.png" data-src="/static/image/sponsor_hover_borussia-63d5.png" />
-                        </div>
-                        <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                          <span>查看详情</span>
-                        </div>
-                      </div>
-                      <div class="_3qsc2gtG"></div>
-                    </li>
-                    <li class="_3xMhR1us" @click="goNav('/zhanzhu04')">
-                      <div class="_3ukSFWS1 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.5s">
-                        <div class="_3Ii96E8G">
-                          <img class="_2ywsn6BQ" src="/static/image/sponsor_hover_filippo_title-5220.png" alt="" />
-                        </div>
-                        <div class="_2qIXCuoN">
-                          <img alt="" class="ls-is-cached lazyloaded" src="/static/image/sponsor_hover_filippo-73c3.png" data-src="/static/image/sponsor_hover_filippo-73c3.png" />
-                        </div>
-                        <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                          <span>查看详情</span>
-                        </div>
-                      </div>
-                      <div class="_3qsc2gtG"></div>
-                    </li>
-                    <li class="_3xMhR1us" @click="goNav('/zhanzhu05')">
-                      <div class="_3ukSFWS1 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.6s">
-                        <div class="_3Ii96E8G">
-                          <img class="_2ywsn6BQ" src="/static/image/sponsor_hover_olympique_title-9e80.png" alt="" />
-                        </div>
-                        <div class="_2qIXCuoN">
-                          <img alt="" class="ls-is-cached lazyloaded" src="/static/image/sponsor_hover_olympique-013e.png" data-src="/static/image/sponsor_hover_olympique-013e.png" />
-                        </div>
-                        <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                          <span>查看详情</span>
-                        </div>
-                      </div>
-                      <div class="_3qsc2gtG"></div>
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-            <div class="_9eNaWz24">
-              <div to="undefined" @click="goNav('/app')" :class="url == '/app' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '">
-                APP下载
-                <div class="P4bUdpZY"><span></span><span></span></div>
-              </div>
-            </div>
-
             <!-- <div class="_9eNaWz24" @click="goNav('/agent')"> -->
             <div class="_9eNaWz24" @click="getAgentLoginUrl">
               <div to="undefined" class="_5v-zJhSB">
@@ -1000,7 +871,67 @@
               </div>
             </div>
           </div>
-          <div class="_1XwyY7sN"></div>
+        </div>
+        <!-- 右侧图标按钮区域 -->
+        <div class="header-icon-btns">
+          <div class="header-icon-item" @click="openKefu">
+            <img src="/static/image/kefu.png" alt="客服" />
+            <span>客服</span>
+          </div>
+          <div class="header-icon-item" @click="goNav('/agent')">
+            <img src="/static/image/heying.png" alt="合营" />
+            <span>合营</span>
+          </div>
+          <div class="header-icon-item nav" @click="goNav('/zhanzhu01')">
+            <img src="/static/image/zanzhu.png" alt="赞助" />
+            <span>赞助</span>
+            <div class="PjlHS4wt sponsor-dropdown" style="display: none;">
+              <div class="_1b6LLqfO">
+                <div class="sponsor-card" @click.stop="goNav('/zhanzhu01')">
+                  <div class="sponsor-title">威尔士国家队</div>
+                  <div class="sponsor-subtitle">Wales National</div>
+                  <div class="sponsor-img"><img src="/static/image/sponsor_wales.png" alt="威尔士" /></div>
+                  <div class="sponsor-btn">查看详情</div>
+                </div>
+                <div class="sponsor-card" @click.stop="goNav('/zhanzhu02')">
+                  <div class="sponsor-title">那不勒斯俱乐部</div>
+                  <div class="sponsor-subtitle">SSC Napoli</div>
+                  <div class="sponsor-img"><img src="/static/image/sponsor_napoli.png" alt="那不勒斯" /></div>
+                  <div class="sponsor-btn">查看详情</div>
+                </div>
+                <div class="sponsor-card" @click.stop="goNav('/zhanzhu03')">
+                  <div class="sponsor-title">多特蒙德俱乐部</div>
+                  <div class="sponsor-subtitle">Borussia Dortmund</div>
+                  <div class="sponsor-img"><img src="/static/image/sponsor_dortmund.png" alt="多特蒙德" /></div>
+                  <div class="sponsor-btn">查看详情</div>
+                </div>
+                <div class="sponsor-card" @click.stop="goNav('/zhanzhu04')">
+                  <div class="sponsor-title">菲利波·因扎吉</div>
+                  <div class="sponsor-subtitle">Filippo Inzaghi</div>
+                  <div class="sponsor-img"><img src="/static/image/sponsor_inzaghi.png" alt="因扎吉" /></div>
+                  <div class="sponsor-btn">查看详情</div>
+                </div>
+                <div class="sponsor-card" @click.stop="goNav('/zhanzhu05')">
+                  <div class="sponsor-title">法甲里昂俱乐部</div>
+                  <div class="sponsor-subtitle">Olympique Lyonnais</div>
+                  <div class="sponsor-img"><img src="/static/image/sponsor_lyon.png" alt="里昂" /></div>
+                  <div class="sponsor-btn">查看详情</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="header-icon-item header-icon-dropdown" @click="goNav('/discount')">
+            <img src="/static/image/youhui.png" alt="优惠" />
+            <span>优惠</span>
+            <div class="icon-dropdown-panel youhui-dropdown">
+              <div class="dropdown-item" v-for="(item, index) in activityDropdownList" :key="index" @click.stop="goNav(`/discountInfo?id=${item.id}`)">{{ item.title }}</div>
+              <div class="dropdown-item" v-if="activityDropdownList.length === 0">暂无优惠活动</div>
+            </div>
+          </div>
+          <div class="header-icon-item" @click="goNav('/app')">
+            <img src="/static/image/app.png" alt="APP" />
+            <span>APP</span>
+          </div>
         </div>
         <!--已登录-->
         <div v-show="is_login == 1" class="_3p4LHdBG">
@@ -1049,15 +980,15 @@
         </div>
         <!--已登录-->
         <!--未登录-->
-        <form v-show="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv">
-          <input type="text" placeholder="用户名" style="width: 70px !important; min-width: 70px !important" maxlength="16" class="_10rTDi18 loginInput" autocomplete="none" id="name" v-model="username" />
-          <div class="_1xLtCzwl">
-            <input type="password" placeholder="密码" maxlength="16" class="_2uN-VcWm loginInput" id="password" v-model="psw" />
-            <a class="_1ZUvLsxY" @click="openKefu" href="javascript:;">忘记？</a>
-          </div>
-          <div class="_349CzCYy xJQe3jRu _3iaWcDfb" @click="login"><span>登录</span></div>
-          <div class="_349CzCYy xJQe3jRu _3iaWcDfb" @click="goNav('/register')">
-            <span><a>注册</a></span>
+        <form v-show="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv login-form-inline">
+          <input type="text" placeholder="用户名" maxlength="16" class="_10rTDi18 loginInput" autocomplete="none" id="name" v-model="username" />
+          <input type="password" placeholder="密码" maxlength="16" class="_2uN-VcWm loginInput" id="password" v-model="psw" />
+          <div class="login-btn-wrapper">
+            <div class="login-btn-group">
+              <div class="_349CzCYy xJQe3jRu _3iaWcDfb" @click="login"><span>登录</span></div>
+              <div class="_349CzCYy xJQe3jRu _3iaWcDfb" @click="goNav('/register')"><span><a>注册</a></span></div>
+            </div>
+            <div class="permanent-url-text">永久网址:{{$store.state.appInfo.h5_url}}</div>
           </div>
         </form>
         <!--未登录-->
@@ -1124,6 +1055,7 @@ export default {
       sportList: [],
       lotteryList: [],
       conciseList: [],
+      activityDropdownList: [],
       sportImg: {
         sbtest: '/static/image/img_saba_title.png',
         oap: '/static/image/img_ss_title.png',
@@ -1258,6 +1190,7 @@ export default {
     // that.gamelistBycode();
     that.url = this.$route.fullPath;
     that.getGameList();
+    that.getActivityDropdown();
     // that.getGameList('joker');
     // that.getGameList('gaming');
     // that.getGameList('sport');
@@ -1295,6 +1228,14 @@ export default {
               that.conciseList.push(el);
             }
           });
+        }
+      });
+    },
+    getActivityDropdown() {
+      let that = this;
+      that.$apiFun.post('/api/activitylist', {}).then(res => {
+        if (res.code === 200) {
+          that.activityDropdownList = res.data.data ? res.data.data.slice(0, 5) : [];
         }
       });
     },
@@ -1538,6 +1479,16 @@ export default {
       function () {
         $(this).find('.PjlHS4wt').css('display', 'none');
         $('._1XwyY7sN').removeClass('_2fDy0Bg6');
+      },
+    );
+
+    // 图标按钮下拉
+    $('.header-icon-dropdown').hover(
+      function () {
+        $(this).find('.icon-dropdown-panel, .sponsor-dropdown-panel').css('display', 'flex');
+      },
+      function () {
+        $(this).find('.icon-dropdown-panel, .sponsor-dropdown-panel').css('display', 'none');
       },
     );
 

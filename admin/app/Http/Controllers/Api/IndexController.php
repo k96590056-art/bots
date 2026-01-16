@@ -211,9 +211,9 @@ class IndexController extends Controller
         foreach ($list as $key => $value) {
             if (!empty($value['image'])) {
                 $img = $value['image'];
-                // 如果image不是完整的URL，则拼接API地址
+                // 如果image不是完整的URL，则拼接API地址和uploads目录
                 if (stripos($img, 'http://') !== 0 && stripos($img, 'https://') !== 0) {
-                    $list[$key]['image'] = rtrim($apiUrl, '/') . '/' . ltrim($img, '/');
+                    $list[$key]['image'] = rtrim($apiUrl, '/') . '/uploads/' . ltrim($img, '/');
                 }
             }
         }

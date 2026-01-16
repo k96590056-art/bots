@@ -112,29 +112,14 @@
     <!-- 游戏菜单 - 单独卡片 -->
     <div class="card-block game-nav-card">
       <div class="game-nav">
-        <div :class="['nav-item', gameType == 3 ? 'active' : '']" @click="changGameType(3)">
-          <img v-if="gameType == 3" src="/static/image/chess.png" class="nav-icon" />
-          <span>棋牌</span>
-        </div>
-        <div :class="['nav-item', gameType == 4 ? 'active' : '']" @click="changGameType(4)">
-          <img v-if="gameType == 4" src="/static/image/electronic.png" class="nav-icon" />
-          <span>电子</span>
-        </div>
-        <div :class="['nav-item', gameType == 5 ? 'active' : '']" @click="changGameType(5)">
-          <img v-if="gameType == 5" src="/static/image/lottery.png" class="nav-icon" />
-          <span>彩票</span>
-        </div>
-        <div :class="['nav-item', gameType == 0 ? 'active' : '']" @click="changGameType(0)">
-          <img v-if="gameType == 0" src="/static/image/real_person.png" class="nav-icon" />
-          <span>真人</span>
-        </div>
-        <div :class="['nav-item', gameType == 1 ? 'active' : '']" @click="changGameType(1)">
-          <img v-if="gameType == 1" src="/static/image/sports.png" class="nav-icon" />
-          <span>体育</span>
-        </div>
-        <div :class="['nav-item', gameType == 2 ? 'active' : '']" @click="changGameType(2)">
-          <img v-if="gameType == 2" src="/static/image/esports.png" class="nav-icon" />
-          <span>电竞</span>
+        <div
+          v-for="(item, index) in gameCategories"
+          :key="index"
+          :class="['nav-item', gameType == item.gameType ? 'active' : '']"
+          @click="changGameType(item.gameType)"
+        >
+          <img v-if="gameType == item.gameType" :src="item.icon" class="nav-icon" />
+          <span>{{ item.name }}</span>
         </div>
       </div>
     </div>
@@ -264,6 +249,8 @@ export default {
       eyeOpenIcon: '/static/image/see.png',
       // 眼睛图标 - 闭眼
       eyeClosedIcon: '/static/image/no_see.png',
+      // 游戏分类列表（从API获取）
+      gameCategories: [],
     };
   },
   computed: {
@@ -296,7 +283,7 @@ export default {
     let that = this;
     // 从 localStorage 加载游戏列表数据到 store
     that.$store.commit('changGameList');
-    
+
     // 调试信息：检查数据是否加载成功
     console.log('首页组件创建，游戏列表数据:', {
       realbetList: that.$store.state.realbetList.length,
@@ -307,9 +294,10 @@ export default {
       conciseList: that.$store.state.conciseList.length,
       currentGameType: that.gameType
     });
-    
+
     that.getBanList();
     that.homenotice(); //获取公告
+    that.fetchGameCategories(); //获取游戏分类
   },
   methods: {
     openGogao(val) {
@@ -379,6 +367,48 @@ export default {
         }
       }).catch(err => {
         console.error('公告接口请求失败:', err);
+      });
+    },
+    // 获取游戏分类
+    fetchGameCategories() {
+      let that = this;
+      if (!that.$apiFun) {
+        return;
+      }
+      // 映射API返回的code到手机端的gameType和图标
+      const routeMap = {
+        sport: { gameType: 1, name: '体育', fallbackIcon: '/static/image/sports.png' },
+        realbet: { gameType: 0, name: '真人', fallbackIcon: '/static/image/real_person.png' },
+        joker: { gameType: 3, name: '棋牌', fallbackIcon: '/static/image/chess.png' },
+        gaming: { gameType: 2, name: '电竞', fallbackIcon: '/static/image/esports.png' },
+        lottery: { gameType: 5, name: '彩票', fallbackIcon: '/static/image/lottery.png' },
+        concise: { gameType: 4, name: '电子', fallbackIcon: '/static/image/electronic.png' },
+        fishing: { gameType: 4, name: '捕鱼', fallbackIcon: '/static/image/electronic.png' }
+      };
+      that.$apiFun.get('/api/game/categories', {}).then(res => {
+        if (res && res.code === 200 && Array.isArray(res.data)) {
+          const list = res.data;
+          const mapped = list
+            .map(el => {
+              const code = el.code || '';
+              const map = routeMap[code];
+              if (!map) return null;
+              return {
+                name: el.name || map.name,
+                gameType: map.gameType,
+                icon: el.image || map.fallbackIcon,
+                code: code
+              };
+            })
+            .filter(Boolean);
+          that.gameCategories = mapped;
+          // 如果有数据，默认选中第一个分类
+          if (mapped.length > 0) {
+            that.gameType = mapped[0].gameType;
+          }
+        }
+      }).catch(err => {
+        console.error('获取游戏分类失败:', err);
       });
     },
     onChange(index) {

@@ -82,7 +82,7 @@
         </div>
       </div>
       <h6>联系我们</h6>
-      <div style="line-height:1.5;padding-bottom:60px" v-html="dataBox4.content"></div>
+      <div style="line-height:1.5;padding-bottom:60px" v-html="dataBox4 ? dataBox4.content : ''"></div>
       <div class="nWrs4LUF" v-if="false">
         <div class="DNbIv4F4" @click="openKefu">
           <img src="/static/image/icon_logo-edb7.png" alt="" />
@@ -139,7 +139,7 @@ export default {
         .post('/api/article', { type })
         .then(res => {
           let name = 'dataBox' + type;
-          that[name] = res.data;
+          that[name] = res.data || {};
           that.show = false;
         })
         .catch(res => {

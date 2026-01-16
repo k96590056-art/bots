@@ -671,7 +671,7 @@ export default {
   background: #fff;
   border: 1px solid #e8e8e8;
   border-radius: 50px; /* 增加圆角幅度 */
-  padding: 16px 20px;
+  padding: 8px 20px;
   display: flex;
   align-items: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
@@ -679,22 +679,22 @@ export default {
 }
 
 .notice-icon {
-  width: 40px;
-  height: 40px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 16px;
+  margin-right: 12px;
   flex-shrink: 0;
 }
 
 .speaker-icon {
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  
+
   svg {
     width: 100%;
     height: 100%;
@@ -704,8 +704,8 @@ export default {
 .notice-content-wrapper {
   flex: 1;
   overflow: hidden;
-  margin-right: 16px;
-  height: 40px;
+  margin-right: 12px;
+  height: 28px;
   position: relative;
 }
 
@@ -740,26 +740,26 @@ export default {
   display: inline-block;
   margin-right: 40px;
   color: #333;
-  font-size: 14px;
-  line-height: 40px;
+  font-size: 13px;
+  line-height: 28px;
   cursor: pointer;
-  
+
   &:hover {
     color: #1890ff;
   }
 }
 
 .notice-view-btn {
-  padding: 8px 20px;
+  padding: 5px 16px;
   background: #f5f5f5;
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.3s;
   flex-shrink: 0;
-  
+
   span {
     color: #666;
-    font-size: 14px;
+    font-size: 13px;
   }
   
   &:hover {
