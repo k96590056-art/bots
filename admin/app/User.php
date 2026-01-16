@@ -13,6 +13,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use App\Services\TgService;
+use App\Services\Lib;
 use Illuminate\Support\Facades\Auth;
 
 class User extends Authenticatable
@@ -73,7 +74,8 @@ class User extends Authenticatable
                         $this->save();
                         $arr = [
                             'order_no' => $client_transfer_id,
-                            'api_type' => $plat_name,
+                            'api_type' => Lib::resolveWithApiByPlatform($plat_name),
+                            'platform_type' => Lib::normalizePlatformType($plat_name),
                             'user_id' => $this->id,
                             'transfer_type' => 0,
                             'money' => -$amount,
@@ -110,7 +112,8 @@ class User extends Authenticatable
             $amount = -$money;
             $arr = [
                 'order_no' => $client_transfer_id,
-                'api_type' => $plat_name,
+                'api_type' => Lib::resolveWithApiByPlatform($plat_name),
+                'platform_type' => Lib::normalizePlatformType($plat_name),
                 'user_id' => $this->id,
                 'transfer_type' => 0,
                 'money' => -$money,
@@ -257,7 +260,8 @@ class User extends Authenticatable
         $amount = abs($money);
         $arr = [
             'order_no' => $client_transfer_id,
-            'api_type' => $plat_name,
+            'api_type' => Lib::resolveWithApiByPlatform($plat_name),
+            'platform_type' => Lib::normalizePlatformType($plat_name),
             'user_id' => $this->id,
             'transfer_type' => 1,
             'money' => $money,
@@ -297,7 +301,8 @@ class User extends Authenticatable
         $amount = abs($money);
         $arr = [
             'order_no' => $client_transfer_id,
-            'api_type' => $plat_name,
+            'api_type' => Lib::resolveWithApiByPlatform($plat_name),
+            'platform_type' => Lib::normalizePlatformType($plat_name),
             'user_id' => $this->id,
             'transfer_type' => 1,
             'money' => $money,

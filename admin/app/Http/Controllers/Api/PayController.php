@@ -23,6 +23,10 @@ use App\Models\RedEnvelopes;
 use Illuminate\Support\Facades\Log;
 use App\Models\User_Api;
 use App\Services\PayService;
+use App\Services\DbevoService;
+use App\Services\DbkaiyuanService;
+use App\Services\DbgmagService;
+use App\Services\Lib;
 class PayController extends Controller
 {
     protected $messages = [];
@@ -51,15 +55,36 @@ class PayController extends Controller
      $token = $request->header('authorization');
      $token = str_replace('Bearer ','',$token) ;
      $user = User::where('api_token',$token)->first();
+        if (!$user) {
+            return $this->returnMsg(401, [], '用户认证失败');
+        }
         $tg = new TgService;
         $result = $tg->allusersbalance($user->username);
-        $Balance = $result['data']['userblance'];
+        // 兼容：接口异常/返回结构变化时，避免直接下标访问导致报错
+        $Balance = [];
+        if (is_array($result) && (int)($result['code'] ?? 200) === 200) {
+            $maybe = $result['data']['userblance'] ?? [];
+            if (is_array($maybe)) {
+                $Balance = $maybe;
+            }
+        } else {
+            Log::warning('refreshusermoney: allusersbalance 返回异常', [
+                'user_id' => $user->id,
+                'username' => $user->username,
+                'result_type' => gettype($result),
+                'result' => $result,
+            ]);
+        }
         $str = "";
         $gameblance = 0;
-        if($Balance){
-            foreach ($Balance as $wo){
-                Usersmoney::upinfo($user->id,$wo['gamecode'],$wo['blance']);
-                $gameblance +=$wo['blance'];
+        if (!empty($Balance)) {
+            foreach ($Balance as $wo) {
+                if (!is_array($wo)) continue;
+                $gamecode = $wo['gamecode'] ?? null;
+                $blance = $wo['blance'] ?? null;
+                if ($gamecode === null || $blance === null) continue;
+                Usersmoney::upinfo($user->id, $gamecode, $blance);
+                $gameblance += (float)$blance;
             }
         }
         $info = SystemConfig::where('key','usdt_rate')->first();
@@ -676,20 +701,35 @@ class PayController extends Controller
              return $this->returnMsg(209,[],'来源和目标是一致，没有必要转了');
         }elseif($data['sourcetype']=="userbalance"){
             $data['type'] = "togame";
-            $data['pay_way'] =$data['targettype'];
+            $data['pay_way'] = strtolower($data['targettype']);
         }elseif($data['targettype']=="userbalance"){
             $data['type'] = "toaccount";
-            $data['pay_way'] =$data['sourcetype'];
+            $data['pay_way'] = strtolower($data['sourcetype']);
         }
 		if($data['sourcetype'] != 'userbalance' && $data['targettype'] != 'userbalance' ){
 			return $this->returnMsg(209,[],'场馆之间禁止互转');
 		}
+        // platformType=真实场馆，withApi=game_lists.with_api（用于选择 Service）
+        $platformType = $this->normalizePlatformTypeCompat($data['pay_way']);
+        $withApi = $this->resolveWithApiByPlatformCompat($platformType);
+
 		$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
 		if(!$User_Api){
 			// 根据接口类型选择服务类
-			$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+			$serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
 			if (!class_exists($serviceClass)) {
-				$serviceClass = '\\App\\Services\\TgService';
+				// Special handling for DbDianzi/Dbzhenren/DbEvo/Dbkaiyuan
+				if (strtolower($withApi) === 'dbdianzi') {
+					$serviceClass = '\\App\\Services\\DbdianziService';
+				} elseif (strtolower($withApi) === 'dbzhenren') {
+					$serviceClass = '\\App\\Services\\DbzhenrenService';
+				} elseif (strtolower($withApi) === 'dbevo') {
+					$serviceClass = '\\App\\Services\\DbevoService';
+				} elseif (strtolower($withApi) === 'dbkaiyuan') {
+					$serviceClass = '\\App\\Services\\DbkaiyuanService';
+				} else {
+					$serviceClass = '\\App\\Services\\TgService';
+				}
 			}
 			$service = new $serviceClass();
 			$result = $service->register($data['pay_way'], $user->username);
@@ -700,7 +740,7 @@ class PayController extends Controller
 				'user_id' => $user->id,
 				'api_user' => $user->username,
 				'api_pass' => 123456,
-				'api_code' => $data['pay_way'],
+				'api_code' => strtolower($data['pay_way']),
 			];
 			$User_Api = User_Api::create($arr);
 		}
@@ -710,7 +750,10 @@ class PayController extends Controller
             if ($amount > $user->balance) return $this->returnMsg(210,[],'操作金额高于账户余额');
                 $arr = [
                     'order_no' => $order_no,
-                    'api_type' => $data['pay_way'],
+                    // api_type 按 game_lists.with_api 写入
+                    'api_type' => $withApi,
+                    // platform_type 保存真实场馆 code
+                    'platform_type' => $platformType,
                     'user_id' => $user->id,
                     'transfer_type' => 0,
                     'money' => $amount,
@@ -723,12 +766,23 @@ class PayController extends Controller
                 TransferLog::create($arr);
 
 				// 根据接口类型选择服务类
-				$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+				$serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
 				if (!class_exists($serviceClass)) {
-					$serviceClass = '\\App\\Services\\TgService';
+					// Special handling for DbDianzi/Dbzhenren/DbEvo/Dbkaiyuan
+					if (strtolower($withApi) === 'dbdianzi') {
+						$serviceClass = '\\App\\Services\\DbdianziService';
+					} elseif (strtolower($withApi) === 'dbzhenren') {
+						$serviceClass = '\\App\\Services\\DbzhenrenService';
+					} elseif (strtolower($withApi) === 'dbevo') {
+						$serviceClass = '\\App\\Services\\DbevoService';
+					} elseif (strtolower($withApi) === 'dbkaiyuan') {
+						$serviceClass = '\\App\\Services\\DbkaiyuanService';
+					} else {
+						$serviceClass = '\\App\\Services\\TgService';
+					}
 				}
 				$service = new $serviceClass();
-				$res = $service->deposit($user->username, $amount, $order_no, $data['pay_way']);
+				$res = $service->deposit($user->username, $amount, $order_no, $platformType);
 
 				if ($res['code'] == 200) {
 					$user->balance -= abs($data['amount']);
@@ -737,7 +791,7 @@ class PayController extends Controller
 					$transferlog->after_money = $user->balance-$amount;
 					$transferlog->state = 1;
 					$transferlog->save();
-					$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
+					$User_Api = User_Api::where('api_code',$platformType)->where('user_id',$user->id)->first();
 					$User_Api->api_money += $amount;
 					$User_Api->save();
 					return $this->returnMsg(200,['balance' => $user->balance]);
@@ -748,7 +802,10 @@ class PayController extends Controller
                 $amount = intval($data['amount']);
                 $arr = [
                     'order_no' => $order_no,
-                    'api_type' => $data['pay_way'],
+                    // api_type 按 game_lists.with_api 写入
+                    'api_type' => $withApi,
+                    // platform_type 保存真实场馆 code
+                    'platform_type' => $platformType,
                     'user_id' => $user->id,
                     'transfer_type' => 1,
                     'money' => $amount,
@@ -760,12 +817,23 @@ class PayController extends Controller
                 ];
                 TransferLog::create($arr);
 				// 根据接口类型选择服务类
-				$serviceClass = '\\App\\Services\\' . ucfirst($data['pay_way']) . 'Service';
+				$serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
 				if (!class_exists($serviceClass)) {
-					$serviceClass = '\\App\\Services\\TgService';
+					// Special handling for DbDianzi/Dbzhenren/DbEvo/Dbkaiyuan
+					if (strtolower($withApi) === 'dbdianzi') {
+						$serviceClass = '\\App\\Services\\DbdianziService';
+					} elseif (strtolower($withApi) === 'dbzhenren') {
+						$serviceClass = '\\App\\Services\\DbzhenrenService';
+					} elseif (strtolower($withApi) === 'dbevo') {
+						$serviceClass = '\\App\\Services\\DbevoService';
+					} elseif (strtolower($withApi) === 'dbkaiyuan') {
+						$serviceClass = '\\App\\Services\\DbkaiyuanService';
+					} else {
+						$serviceClass = '\\App\\Services\\TgService';
+					}
 				}
 				$service = new $serviceClass();
-				$res = $service->withdrawal($user->username, $amount, $order_no, $data['pay_way']);
+				$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
 				if ($res['code'] == 200) {
 					$user->balance += $data['amount'];
 					$user->save();
@@ -773,7 +841,7 @@ class PayController extends Controller
 					$transferlog->after_money = $user->balance+$amount;
 					$transferlog->state = 1;
 					$transferlog->save();
-					$User_Api = User_Api::where('api_code',$data['pay_way'])->where('user_id',$user->id)->first();
+					$User_Api = User_Api::where('api_code',$platformType)->where('user_id',$user->id)->first();
 					if($User_Api->api_money <= $amount){
 						$User_Api->api_money = 0;
 						$User_Api->save();
@@ -794,28 +862,110 @@ class PayController extends Controller
         $token = $request->header('authorization');
         $token = str_replace('Bearer ','',$token) ;
         $user = User::where('api_token',$token)->first();
-        $transferlog = TransferLog::where('user_id', $user->id)->where('transfer_type', 0)->orderBy('id','desc')->first();
-		if(!$transferlog){
+        
+		// 优先从 user_api 表中查找有余额的记录
+		$userApi = User_Api::where('user_id', $user->id)
+			->where('api_money', '>', 0)
+			->orderBy('api_money', 'desc')
+			->first();
+		
+		$platformType = '';
+		$withApi = '';
+		$amount = 0;
+		
+		if ($userApi) {
+			// 直接从 user_api 表获取余额和场馆信息
+			$platformType = $this->normalizePlatformTypeCompat($userApi->api_code);
+			$withApi = $this->resolveWithApiByPlatformCompat($platformType);
+			$amount = intval($userApi->api_money);
+		} else {
+			// 如果没有 user_api 余额，尝试从 TransferLog 记录推断
+			$transferlog = TransferLog::where('user_id', $user->id)->where('transfer_type', 0)->orderBy('id','desc')->first();
+			if(!$transferlog){
+				return $this->returnMsg(200,'','没有可回收的金额');
+			}
+			// api_type 写的是 with_api；platform_type 写的是真实场馆（兼容旧数据）
+			$withApiFromLog = strtolower((string)($transferlog->api_type ?? ''));
+			$platformType = $transferlog->platform_type ? $this->normalizePlatformTypeCompat($transferlog->platform_type) : '';
+			$withApi = $transferlog->platform_type ? $withApiFromLog : '';
+
+			// 兼容旧数据：如果没有 platform_type（无法确定真实场馆），尝试从 user_api.api_money>0 的记录反推一个可回收的场馆
+			if ($platformType === '') {
+				$ua = User_Api::where('user_id', $user->id)
+					->where('api_money', '>', 0)
+					->orderBy('api_money', 'desc')
+					->first();
+				if ($ua) {
+					$platformType = $this->normalizePlatformTypeCompat($ua->api_code);
+					$withApi = $this->resolveWithApiByPlatformCompat($platformType);
+				} else {
+					// 再兜底：把 api_type 当成 platform_name（极旧数据）
+					$platformType = $this->normalizePlatformTypeCompat($withApiFromLog);
+					$withApi = $this->resolveWithApiByPlatformCompat($platformType);
+				}
+			}
+			if ($withApi === '') {
+				$withApi = $this->resolveWithApiByPlatformCompat($platformType);
+			}
+
+			// 根据接口类型选择服务类
+			$serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
+			if (!class_exists($serviceClass)) {
+				// Special handling for Dianzi, Dbzhenren and Evo
+				if (strtolower($withApi) === 'dbdianzi') {
+					$serviceClass = '\\App\\Services\\DbdianziService';
+				} elseif (strtolower($withApi) === 'dbzhenren') {
+					$serviceClass = '\\App\\Services\\DbzhenrenService';
+				} elseif (strtolower($withApi) === 'dbevo') {
+					$serviceClass = '\\App\\Services\\DbevoService';
+				} else {
+					$serviceClass = '\\App\\Services\\TgService';
+				}
+			}
+			$service = new $serviceClass();
+			// 优先用官方余额接口（若服务支持），否则退回 balance()
+			if (method_exists($service, 'balanceOfficial')) {
+				$result = $service->balanceOfficial($platformType, $user->username);
+			} else {
+				$result = $service->balance($platformType, $user->username);
+			}
+			if($result['code'] != 200){
+				return $this->returnMsg(201, '', $result['message']);
+			}
+			if($result['data'] < 1){
+				return $this->returnMsg(200,'','没有可回收的金额');
+			}
+			$amount = intval($result['data']);
+		}
+		
+		if ($amount < 1) {
 			return $this->returnMsg(200,'','没有可回收的金额');
 		}
-		// 根据接口类型选择服务类
-		$serviceClass = '\\App\\Services\\' . ucfirst($transferlog->api_type) . 'Service';
-		if (!class_exists($serviceClass)) {
-			$serviceClass = '\\App\\Services\\TgService';
+		
+		// 根据接口类型选择服务类（如果还没有选择）
+		if (!isset($serviceClass)) {
+			$serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
+			if (!class_exists($serviceClass)) {
+				// Special handling for Dianzi, Dbzhenren and Evo
+				if (strtolower($withApi) === 'dbdianzi') {
+					$serviceClass = '\\App\\Services\\DbdianziService';
+				} elseif (strtolower($withApi) === 'dbzhenren') {
+					$serviceClass = '\\App\\Services\\DbzhenrenService';
+				} elseif (strtolower($withApi) === 'dbevo') {
+					$serviceClass = '\\App\\Services\\DbevoService';
+				} else {
+					$serviceClass = '\\App\\Services\\TgService';
+				}
+			}
 		}
 		$service = new $serviceClass();
-		$result = $service->balance($transferlog->api_type, $user->username);
-		if($result['code'] != 200){
-			return $this->returnMsg(201, '', $result['message']);
-		}
-		if($result['data'] < 1){
-			return $this->returnMsg(200,'','没有可回收的金额');
-		}
 		$order_no = date('YmdHis').rand(100000,999999);
-		$amount = intval($result['data']);
 		$arr = [
 			'order_no' => $order_no,
-			'api_type' => $transferlog->api_type,
+			// api_type 按 game_lists.with_api 写入
+			'api_type' => $withApi,
+			// platform_type 保存真实场馆 code
+			'platform_type' => $platformType,
 			'user_id' => $user->id,
 			'transfer_type' => 1,
 			'money' => $amount,
@@ -826,7 +976,7 @@ class PayController extends Controller
 			'state' => 0
 		];
 		TransferLog::create($arr);
-		$res = $service->withdrawal($user->username, $amount, $order_no, $transferlog->api_type);
+		$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
 		if($res['code'] != 200){
 			return $this->returnMsg(201, '', $res['message']);
 		}
@@ -836,11 +986,16 @@ class PayController extends Controller
 		$transferlog->after_money = $user->balance+$amount;
 		$transferlog->state = 1;
 		$transferlog->save();
-		$User_Api = User_Api::where('api_code',$transferlog->api_type)->where('user_id',$user->id)->first();
-		if($User_Api->api_money <= $amount){
+		// 如果是从 user_api 表直接获取的，使用已有的对象；否则查询
+		if (isset($userApi) && $userApi) {
+			$User_Api = $userApi;
+		} else {
+			$User_Api = User_Api::where('api_code', $platformType)->where('user_id',$user->id)->first();
+		}
+		if($User_Api && $User_Api->api_money <= $amount){
 			$User_Api->api_money = 0;
 			$User_Api->save();
-		}else{
+		}elseif($User_Api){
 			$User_Api->api_money -= $amount;
 			$User_Api->save();
 		}
@@ -860,9 +1015,14 @@ class PayController extends Controller
     {
         $client_transfer_id = time() . $user->id . rand(1000, 9999);
         $amount = abs($money);
+        $platformType = $this->normalizePlatformTypeCompat($plat_name);
+        $withApi = $this->resolveWithApiByPlatformCompat($platformType);
         $arr = [
             'order_no' => $client_transfer_id,
-            'api_type' => $plat_name,
+            // api_type 按 game_lists.with_api 写入
+            'api_type' => $withApi,
+            // platform_type 保存真实场馆 code
+            'platform_type' => $platformType,
             'user_id' => $user->id,
             'transfer_type' => 1,
             'money' => $money,
@@ -1163,4 +1323,40 @@ class PayController extends Controller
 		echo 'success';
 		exit;
 	}
+
+    /**
+     * 兼容线上旧版本 Lib：如果缺少方法则本地兜底，避免 fatal error
+     */
+    private function normalizePlatformTypeCompat($platformName): string
+    {
+        if (class_exists(\App\Services\Lib::class) && method_exists(\App\Services\Lib::class, 'normalizePlatformType')) {
+            return \App\Services\Lib::normalizePlatformType($platformName);
+        }
+        return strtolower(trim((string) $platformName));
+    }
+
+    /**
+     * 返回的是 game_lists.with_api（不是 platform_name）
+     */
+    private function resolveWithApiByPlatformCompat($platformName, $gameCode = null): string
+    {
+        if (class_exists(\App\Services\Lib::class) && method_exists(\App\Services\Lib::class, 'resolveWithApiByPlatform')) {
+            return \App\Services\Lib::resolveWithApiByPlatform($platformName, $gameCode);
+        }
+        $platformName = strtolower(trim((string) $platformName));
+        $gameCode = $gameCode !== null ? trim((string) $gameCode) : null;
+        if ($platformName === '') {
+            return '';
+        }
+        try {
+            $query = \App\Models\GameList::where('platform_name', $platformName);
+            if (!empty($gameCode)) {
+                $query->where('game_code', $gameCode);
+            }
+            $withApi = strtolower(trim((string) $query->value('with_api')));
+            return $withApi !== '' ? $withApi : $platformName;
+        } catch (\Throwable $e) {
+            return $platformName;
+        }
+    }
 }

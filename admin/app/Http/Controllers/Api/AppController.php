@@ -36,6 +36,7 @@ use Illuminate\Support\Arr;
 use QrCode;
 use Illuminate\Support\Facades\File;
 use App\Services\PayService;
+use App\Services\Lib;
 class AppController extends Controller
 {
     protected $messages = [
@@ -780,9 +781,14 @@ class AppController extends Controller
 			if($api_money >= '1'){
 				$api_money = intval($api_money);
 				$client_transfer_id = time() . $user->id . rand(100000, 999999);
+				$lastPlatformType = Lib::normalizePlatformType($TransferLog->platform_type ?: $TransferLog->api_type);
+				$lastWithApi = $TransferLog->platform_type ? strtolower($TransferLog->api_type) : Lib::resolveWithApiByPlatform($lastPlatformType);
 				$arr = [
 					'order_no' => $client_transfer_id,
-					'api_type' => $TransferLog->api_type,
+					// api_type 按 game_lists.with_api 写入（此处沿用/解析上一笔）
+					'api_type' => $lastWithApi,
+                    // platform_type 保存真实场馆 code（此处沿用/解析上一笔）
+                    'platform_type' => $lastPlatformType,
 					'user_id' => $user->id,
 					'transfer_type' => 1,
 					'money' => $api_money,
@@ -794,7 +800,7 @@ class AppController extends Controller
 				];
 				$Transfers_id = TransferLog::create($arr);
 
-				$res = $tg->withdrawal($user->username, $api_money, $client_transfer_id, $TransferLog->api_type);
+				$res = $tg->withdrawal($user->username, $api_money, $client_transfer_id, $lastPlatformType);
 				if($res['code'] != 200){
 					$Transfers_id->delete();
 					return $res;
@@ -803,7 +809,7 @@ class AppController extends Controller
 				$transferlog = TransferLog::where('order_no', $client_transfer_id)->first();
 				$transferlog->state = 1;
 				$transferlog->save();
-				$user_api = User_Api::where('api_code', $TransferLog->api_type)->where('user_id', $user->id)->where('api_user', $user->username)->first();
+				$user_api = User_Api::where('api_code', $lastPlatformType)->where('user_id', $user->id)->where('api_user', $user->username)->first();
 				if($user_api->api_money <= $api_money){
 					$user_api->api_money = 0;
 					$user_api->save();						
@@ -1488,8 +1494,12 @@ class AppController extends Controller
         $user = User::where('id',$userid)->first();
 		$tg = new TgService;
 		$TransferLog = TransferLog::where('transfer_type', 0)->where('user_id', $user->id)->orderBy('id', 'desc')->first();
-        if($TransferLog && $TransferLog->api_type != $plat_name){			
-			$result = $tg->balance($TransferLog->api_type,$user->username);
+        // api_type 写的是 with_api；platform_type 写的是真实场馆。这里对比“真实场馆”是否一致。
+        $plat_name = Lib::normalizePlatformType($plat_name);
+        $lastPlatformType = $TransferLog ? Lib::normalizePlatformType($TransferLog->platform_type ?: $TransferLog->api_type) : '';
+        $lastWithApi = $TransferLog ? strtolower($TransferLog->api_type) : '';
+        if($TransferLog && $lastPlatformType !== $plat_name){			
+			$result = $tg->balance($lastPlatformType,$user->username);
 			if($result['code'] != 200){
 				return $result;
 			}
@@ -1499,7 +1509,10 @@ class AppController extends Controller
 				$client_transfer_id = time() . $user->id . rand(100000, 999999);
 				$arr = [
 					'order_no' => $client_transfer_id,
-					'api_type' => $TransferLog->api_type,
+					// api_type 按 game_lists.with_api 写入（此处沿用上一笔的 with_api）
+					'api_type' => $lastWithApi,
+                    // platform_type 保存真实场馆 code（此处沿用上一笔的 platform_type）
+                    'platform_type' => $lastPlatformType,
 					'user_id' => $user->id,
 					'transfer_type' => 1,
 					'money' => $api_money,
@@ -1511,7 +1524,7 @@ class AppController extends Controller
 				];
 				$Transfers_id = TransferLog::create($arr);
 
-				$res = $tg->withdrawal($user->username, $api_money, $client_transfer_id, $TransferLog->api_type);
+				$res = $tg->withdrawal($user->username, $api_money, $client_transfer_id, $lastPlatformType);
 				if($res['code'] != 200){
 					$Transfers_id->delete();
 					return $res;
@@ -1520,7 +1533,7 @@ class AppController extends Controller
 				$transferlog = TransferLog::where('order_no', $client_transfer_id)->first();
 				$transferlog->state = 1;
 				$transferlog->save();
-				$user_api = User_Api::where('api_code', $TransferLog->api_type)->where('user_id', $user->id)->where('api_user', $user->username)->first();
+				$user_api = User_Api::where('api_code', $lastPlatformType)->where('user_id', $user->id)->where('api_user', $user->username)->first();
 				if($user_api->api_money <= $api_money){
 					$user_api->api_money = 0;
 					$user_api->save();						
@@ -1534,9 +1547,14 @@ class AppController extends Controller
 		
 		if($balance >= '1'){            
 			$client_transfer_id = time() . $user->id . rand(100000, 999999);
+            $platformType = Lib::normalizePlatformType($plat_name);
+            $withApi = Lib::resolveWithApiByPlatform($platformType);
 			$arr = [
 				'order_no' => $client_transfer_id,
-				'api_type' => $plat_name,
+				// api_type 按 game_lists.with_api 写入
+				'api_type' => $withApi,
+                // platform_type 保存真实场馆 code
+                'platform_type' => $platformType,
 				'user_id' => $user->id,
 				'transfer_type' => 0,
 				'money' => -$balance,

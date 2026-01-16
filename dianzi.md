@@ -1,36 +1,27 @@
-# GM-Ag API 文档 (Dianzi)
+# GM-Ag API 文档 (Zhenren)
 
 ## 文档说明
 
 本文档基于 GM-Ag API Guide，参考链接：
 - [GM-Ag API Guide](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546629)
-- [打开游戏](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546574/2.)
 - [创建玩家](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546629)
 - [获取打开游戏令牌](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546648)
 - [查询玩家余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546661)
 - [玩家上分](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546674)
 - [玩家下分](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546687)
 - [查询交易信息](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546700)
-- [游戏报表](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546715)
-- [游戏历史记录](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546730)
-- [获取所有玩家余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546743)
-- [获取代理余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546756)
-- [更改玩家状态](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546769)
-- [加密代码示例](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546890/6.)
 - [编码信息](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)
+- [加密代码示例](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546890/6.)
 
 ## 接口地址说明
 
-GM-Ag API 有三个不同的接口地址：
+GM-Ag API 有两个不同的接口地址：
 
 1. **游戏接口地址** (`gmag_api_url`)：用于玩家操作、支付等
    - 创建玩家、获取令牌、查询余额、上分下分等
 
 2. **游戏数据接口地址** (`gmag_game_data_url`)：用于拉取游戏数据、历史记录等
    - 拉取游戏交易信息、游戏历史、游戏报表等
-
-3. **游戏启动地址** (`gmag_game_launch_url`)：用于生成游戏链接
-   - 生成游戏启动链接、获取游戏URL等
 
 ## 签名验证
 
@@ -153,208 +144,7 @@ public class HashExampleCode {
 
 ---
 
-## 1. 打开游戏
-
-### 打开游戏流程
-
-步骤1，玩家点击代理网站的游戏；
-
-步骤2，代理调用获取玩家令牌API，获取玩家的游戏令牌（token）；
-
-步骤3，代理获得游戏令牌，使用令牌及其他参数生成游戏打开链接；
-
-步骤4，代理发送游戏链接；
-
-步骤5，玩家获得游戏内容。
-
-### 1.1 获取玩家令牌
-
-**URL**: `https://{{gmag_api_url}}/player/getToken`
-
-**请求方式**: POST
-
-**功能描述**: 用户获取打开游戏的令牌。
-
-**详细内容请参见** [获取打开游戏令牌](#2-获取打开游戏令牌)
-
-### 1.2 生成游戏链接（直接进入游戏）
-
-**URI**: `https://{{gmag_game_launch_url}}/launcher`
-
-**请求方式**: GET
-
-**功能描述**: 代理使用从GM-Ag获得的游戏令牌和下列参数，生成指定游戏的链接，发送链接以获取游戏内容。
-
-#### 请求参数
-
-| **参数名**    | **类型**       | **必选** | **参数说明**                                                                                                                                    |
-| ---------- | ------------ | ------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| gameCode   | String(32)   | 是      | 代表游戏的编码。                                                                                                                                    |
-| token      | String(256)  | 是      | 使用 `/player/getToken` 获得的令牌。                                                                                                                      |
-| platform   | String(16)   | 是      | 打开游戏的设备平台 (web, mobile, download) 。                                                                                                           |
-| language   | String(8)    | 是      | 游戏屏幕显示语言。语言编码请参见[转账钱包语言编码](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information) 。                          |
-| tableAlias | String(32)   | 否      | 用于真人游戏，指定游戏打开的桌牌号码，而不是只进入大厅。                                                                                                            |
-| playerId   | String(24)   | 是      | 玩家的唯一标识。                                                                                                                                    |
-| brandId    | Int          | 是      | 代理的唯一标识。                                                                                                                                    |
-| mode       | Int          | 否      | 指定玩家打开方式：真钱、免费试玩。默认为真钱。（0 = 免费试玩, 1 = 真钱）                                                                                              |
-| backUrl    | String(1024) | 否      | 打开游戏失败时，重定向的大厅链接。                                                                                                                          |
-| cashierUrl | String(1024) | 否      | 代理网站的玩家存款页面。                                                                                                                              |
-| currency   | String(4)    | 是      | 新增参数(12/12/2023)在游戏中使用的货币                                                                                                                 |
-
-#### 响应
-
-1. **成功的响应**
-
-   当请求中的参数全部正确时，游戏内容被发送给玩家。
-
-2. **失败的响应**
-
-   如果参数错误或系统错误，游戏被重定向到代理指定的'backUrl'网址。同时，错误码（error）和错误信息（message）将附在重定向URL的末尾，用以说明错误原因。
-
-   例如, 当请求中的 'backUrl' 为：
-
-   `https://www.operator-back-url.com`，
-
-   失败响应的重定向链接为: 
-
-   `https://www.operator-back-url.com?error={{code}}&message={{error_message}}`。
-
-#### 请求示例
-
-```
-https://{{gmag_game_launch_url}}/launcher?gameCode=bfb&token=xxxx&platform=web&language=en&playerId=1234&brandId=101&mode=0&backUrl=backUrl&cashierUrl=cashierUrl
-```
-
-### 1.3 获取进入游戏链接
-
-**URI**: `https://{{gmag_game_launch_url}}/launcher/getUrl`
-
-**请求方式**: POST
-
-**功能描述**: 获取进入游戏的链接地址
-
-#### 请求参数
-
-请求使用的 content type 为 **application/json**
-
-| **参数名**    | **类型**       | **必选** | **参数说明**                                                                   |
-| ---------- | ------------ | ------ | -------------------------------------------------------------------------- |
-| gameCode   | String(32)   | 是      | 代表游戏的编码。                                                                   |
-| token      | String(255)  | 是      | 启动游戏的令牌，用于验证玩家的身份是否合法。                                                         |
-| platform   | String(16)   | 是      | 打开游戏的设备平台 (web, mobile, download) 。                                              |
-| language   | String(8)    | 是      | 游戏屏幕显示语言。                                                                  |
-| tableAlias | String(32)   | 否      | 用于真人游戏，指定游戏打开的桌牌号码，而不是只进入大厅。                                                       |
-| playerId   | String(20)   | 是      | 玩家的唯一标识。                                                                   |
-| brandId    | Int          | 是      | 代理的唯一标识。                                                                   |
-| mode       | Int          | 否      | 指定玩家打开方式：真钱、免费试玩。默认为真钱。0 = 免费试玩, 1 = 真钱, 2 = 游客（适用于体育类平台，ibc, betby）                     |
-| backUrl    | String(1024) | 否      | 打开游戏失败时，重定向的大厅链接。（在发送之前需要对URL进行转译）                                                |
-| cashierUrl | String(1024) | 否      | 代理网站的玩家存款页面。（在发送之前需要对URL进行转译）                                                      |
-| currency   | String(4)    | 是      | 新增参数(12/12/2023)在游戏中使用的货币                                                          |
-| hash       | String(34)   | 否      | 新增参数(12/03/2025)该属性用于防止玩家手动更改游戏代码进入游戏.hash 生成规则MD5(brandId+playerId+gameCode+SecretKey)如果hash 不匹配则返回 禁止切换游戏 错误提示 |
-
-语言编码，请参见[语言编码](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)。
-
-#### 响应
-
-响应使用的 content type 为 **text/plain;charset=UTF-8**.
-
-1. **成功的响应**
-
-   返回进入游戏的链接文本
-
-2. **失败的响应**
-
-   如果 backUrl 参数不为空那么返回到该地址否则使用默认地址 并加入error 和 message 参数.
-
-#### 请求示例
-
-```json
-{
-  "gameCode": "lobby",
-  "token": "4MDljZWZiNTdhMWM2M3edcSJ90192",
-  "platform": "web",
-  "language": "en",
-  "playerId": "1003233",
-  "brandId": "100",
-  "mode": "1",
-  "backUrl": "http://google.com"
-}
-```
-
-#### 响应示例
-
-```
-//success
-https://sg-server.ggravityportal.com/GameLauncher/Loader.aspx?GameCategory=Slots&GameName=Samurai&Token=stst173015908254861110274786&PortalName=goldenmatrix&ReturnUrl=https://bof.gmgoldmtn.com&Lang=en
-
-//error
-http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs7kDbeJ != 1003'
-```
-
----
-
-## 2. 获取打开游戏令牌
-
-**URL**: `https://{{gmag_api_url}}/player/getToken`
-
-**请求方式**: POST
-
-**功能描述**: 用于获取启动游戏的玩家令牌(token)，每一个令牌的过期时间是1个小时，但是建议玩家打开游戏的时候每次都获取新的令牌。
-
-### 请求参数
-
-| 参数名    | 类型   | 必选 | 参数说明     |
-| --------- | ------ | ---- | ------------ |
-| requestId | String | 是   | 请求唯一标识 |
-| brandId   | Int    | 是   | 代理标识     |
-| playerId  | String(24) | 是   | 代理定义的玩家唯一标识 |
-| hash      | String | 是   | 签名         |
-
-### 响应参数
-
-| 参数名    | 类型      | 必选 | 参数说明       |
-| --------- | --------- | ---- | -------------- |
-| requestId | String    | 是   | 请求唯一标识   |
-| token     | String(256) | 是   | 玩家启动游戏的令牌 |
-| error     | String    | 是   | 错误码         |
-| message   | String    | 是   | 错误信息       |
-
-### 请求示例
-
-```json
-{
-  "requestId": "requestId1234",
-  "brandId": 1001,
-  "playerId": "playerid1"
-}
-```
-
-### 响应示例
-
-**成功响应**:
-
-```json
-{
-  "requestId": "requestId1234",
-  "token": "token12314",
-  "error": "0",
-  "message": "success"
-}
-```
-
-**错误响应**:
-
-```json
-{
-  "requestId": "requestId1234",
-  "error": "P_02",
-  "message": "Invalid hash"
-}
-```
-
----
-
-## 3. 创建玩家
+## 1. 创建玩家
 
 **URL**: `https://{{gmag_api_url}}/player/create`
 
@@ -444,7 +234,68 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 
 ---
 
-## 4. 查询玩家余额
+## 2. 获取打开游戏令牌
+
+**URL**: `https://{{gmag_api_url}}/player/getToken`
+
+**请求方式**: POST
+
+**功能描述**: 用于获取启动游戏的玩家令牌(token)，每一个令牌的过期时间是1个小时，但是建议玩家打开游戏的时候每次都获取新的令牌。
+
+### 请求参数
+
+| 参数名    | 类型   | 必选 | 参数说明     |
+| --------- | ------ | ---- | ------------ |
+| requestId | String | 是   | 请求唯一标识 |
+| brandId   | Int    | 是   | 代理标识     |
+| playerId  | String(24) | 是   | 代理定义的玩家唯一标识 |
+| hash      | String | 是   | 签名         |
+
+### 响应参数
+
+| 参数名    | 类型      | 必选 | 参数说明       |
+| --------- | --------- | ---- | -------------- |
+| requestId | String    | 是   | 请求唯一标识   |
+| token     | String(256) | 是   | 玩家启动游戏的令牌 |
+| error     | String    | 是   | 错误码         |
+| message   | String    | 是   | 错误信息       |
+
+### 请求示例
+
+```json
+{
+  "requestId": "requestId1234",
+  "brandId": 1001,
+  "playerId": "playerid1"
+}
+```
+
+### 响应示例
+
+**成功响应**:
+
+```json
+{
+  "requestId": "requestId1234",
+  "token": "token12314",
+  "error": "0",
+  "message": "success"
+}
+```
+
+**错误响应**:
+
+```json
+{
+  "requestId": "requestId1234",
+  "error": "P_02",
+  "message": "Invalid hash"
+}
+```
+
+---
+
+## 3. 查询玩家余额
 
 **URL**: `https://{{gmag_api_url}}/player/balance`
 
@@ -516,7 +367,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 
 ---
 
-## 5. 玩家上分（转入游戏）
+## 4. 玩家上分（转入游戏）
 
 **URL**: `https://{{gmag_api_url}}/payment/player/deposit`
 
@@ -590,7 +441,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 
 ---
 
-## 6. 玩家下分（转出游戏）
+## 5. 玩家下分（转出游戏）
 
 **URL**: `https://{{gmag_api_url}}/payment/player/withdrawal`
 
@@ -682,7 +533,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 
 ---
 
-## 7. 查询交易信息
+## 6. 查询交易信息
 
 **URL**: `https://{{gmag_api_url}}/payment/player/checkTrans`
 
@@ -755,233 +606,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 
 ---
 
-## 8. 游戏报表
-
-**URL**: `https://{{gmag_game_data_url}}/report/game`
-
-**请求方式**: POST
-
-**功能描述**: 用于获取游戏报表数据，支持按玩家、游戏、供应商等维度查询。
-
-### 请求参数
-
-| 参数名     | 类型   | 必选 | 参数说明                                 |
-| ---------- | ------ | ---- | ---------------------------------------- |
-| requestId  | String | 是   | 请求唯一标识                             |
-| brandId    | Int    | 是   | 代理标识                                 |
-| startTime  | String | 是   | 开始时间（GMT+0, YYYY-MM-DD HH:mm:ss）   |
-| endTime    | String | 是   | 结束时间（GMT+0, YYYY-MM-DD HH:mm:ss）   |
-| reportBy   | String | 是   | 报表类型 (player, game, provider)        |
-| playerId   | String | 否   | 玩家ID（当 reportBy=player 时）         |
-| gameCode   | String | 否   | 游戏代码（当 reportBy=game 时）         |
-| hash       | String | 是   | 签名                                     |
-
-### 响应参数
-
-| 参数名     | 类型   | 必选 | 参数说明       |
-| ---------- | ------ | ---- | -------------- |
-| requestId  | String | 是   | 请求唯一标识   |
-| reports    | Array  | 是   | 报表数据列表   |
-| error      | String | 是   | 错误码         |
-| message    | String | 是   | 错误信息       |
-
-### 请求示例
-
-```json
-{
-  "requestId": "requestId1234",
-  "brandId": 1001,
-  "startTime": "2021-04-10 00:00:00",
-  "endTime": "2021-04-10 23:59:59",
-  "reportBy": "player",
-  "playerId": "playerid1"
-}
-```
-
-### 响应示例
-
-**成功响应**:
-
-```json
-{
-  "requestId": "requestId1234",
-  "reports": [
-    {
-      "playerId": "playerid1",
-      "gameCode": "bfb",
-      "totalBets": "1000.00",
-      "totalWins": "950.00",
-      "ggr": "50.00",
-      "games": 10
-    }
-  ],
-  "error": "0",
-  "message": "success"
-}
-```
-
----
-
-## 9. 游戏历史记录
-
-**URL**: `https://{{gmag_game_data_url}}/history/game`
-
-**请求方式**: POST
-
-**功能描述**: 用于获取游戏历史记录（单个注单），支持分页查询。
-
-### 请求参数
-
-| 参数名     | 类型   | 必选 | 参数说明                                 |
-| ---------- | ------ | ---- | ---------------------------------------- |
-| requestId  | String | 是   | 请求唯一标识                             |
-| brandId    | Int    | 是   | 代理标识                                 |
-| startTime  | String | 是   | 开始时间（GMT+0, YYYY-MM-DD HH:mm:ss）   |
-| endTime    | String | 是   | 结束时间（GMT+0, YYYY-MM-DD HH:mm:ss）   |
-| playerId   | String | 否   | 玩家ID（可选）                           |
-| gameCode   | String | 否   | 游戏代码（可选）                         |
-| page       | Int    | 否   | 页码（默认1）                            |
-| limit      | Int    | 否   | 每页数量（默认100）                      |
-| hash       | String | 是   | 签名                                     |
-
-### 响应参数
-
-| 参数名     | 类型   | 必选 | 参数说明       |
-| ---------- | ------ | ---- | -------------- |
-| requestId  | String | 是   | 请求唯一标识   |
-| data       | Array  | 是   | 游戏记录列表   |
-| total      | Int    | 是   | 总记录数       |
-| page       | Int    | 是   | 当前页码       |
-| limit      | Int    | 是   | 每页数量       |
-| error      | String | 是   | 错误码         |
-| message    | String | 是   | 错误信息       |
-
-### 请求示例
-
-```json
-{
-  "requestId": "requestId1234",
-  "brandId": 1001,
-  "startTime": "2021-04-10 00:00:00",
-  "endTime": "2021-04-10 23:59:59",
-  "page": 1,
-  "limit": 100
-}
-```
-
-### 响应示例
-
-**成功响应**:
-
-```json
-{
-  "requestId": "requestId1234",
-  "data": [
-    {
-      "betId": "bet123456",
-      "playerId": "playerid1",
-      "gameCode": "bfb",
-      "betAmount": "100.00",
-      "validAmount": "100.00",
-      "winAmount": "95.00",
-      "winLoss": "-5.00",
-      "status": "settled",
-      "betTime": "2021-04-10 10:12:00"
-    }
-  ],
-  "total": 100,
-  "page": 1,
-  "limit": 100,
-  "error": "0",
-  "message": "success"
-}
-```
-
----
-
-## 10. 获取所有玩家余额
-
-**URL**: `https://{{gmag_api_url}}/player/allBalance`
-
-**请求方式**: POST
-
-**功能描述**: 用于获取所有玩家的余额信息。
-
-### 请求参数
-
-| 参数名     | 类型   | 必选 | 参数说明     |
-| ---------- | ------ | ---- | ------------ |
-| requestId  | String | 是   | 请求唯一标识 |
-| brandId    | Int    | 是   | 代理标识     |
-| hash       | String | 是   | 签名         |
-
-### 响应参数
-
-| 参数名     | 类型   | 必选 | 参数说明       |
-| ---------- | ------ | ---- | -------------- |
-| requestId  | String | 是   | 请求唯一标识   |
-| data       | Array  | 是   | 玩家余额列表   |
-| error      | String | 是   | 错误码         |
-| message    | String | 是   | 错误信息       |
-
----
-
-## 11. 获取代理余额
-
-**URL**: `https://{{gmag_api_url}}/agent/balance`
-
-**请求方式**: POST
-
-**功能描述**: 用于获取代理的余额信息。
-
-### 请求参数
-
-| 参数名     | 类型   | 必选 | 参数说明     |
-| ---------- | ------ | ---- | ------------ |
-| requestId  | String | 是   | 请求唯一标识 |
-| brandId    | Int    | 是   | 代理标识     |
-| hash       | String | 是   | 签名         |
-
-### 响应参数
-
-| 参数名     | 类型        | 必选 | 参数说明       |
-| ---------- | ----------- | ---- | -------------- |
-| requestId  | String      | 是   | 请求唯一标识   |
-| balance    | numeric     | 是   | 代理余额       |
-| error      | String      | 是   | 错误码         |
-| message    | String      | 是   | 错误信息       |
-
----
-
-## 12. 更改玩家状态
-
-**URL**: `https://{{gmag_api_url}}/player/changeStatus`
-
-**请求方式**: POST
-
-**功能描述**: 用于更改玩家的状态（启用/禁用）。
-
-### 请求参数
-
-| 参数名     | 类型   | 必选 | 参数说明     |
-| ---------- | ------ | ---- | ------------ |
-| requestId  | String | 是   | 请求唯一标识 |
-| brandId    | Int    | 是   | 代理标识     |
-| playerId   | String | 是   | 玩家ID       |
-| status     | String | 是   | 状态（active/inactive） |
-| hash       | String | 是   | 签名         |
-
-### 响应参数
-
-| 参数名     | 类型   | 必选 | 参数说明       |
-| ---------- | ------ | ---- | -------------- |
-| requestId  | String | 是   | 请求唯一标识   |
-| error      | String | 是   | 错误码         |
-| message    | String | 是   | 错误信息       |
-
----
-
-## 13. 编码信息
+## 7. 编码信息
 
 ### 币种编码
 
@@ -997,7 +622,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 - `VND` - 越南盾
 - `INR` - 印度卢比
 
-更多币种编码请参考[官方文档](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)。
+更多币种编码请参考官方文档。
 
 ### 国家编码
 
@@ -1011,7 +636,7 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 - `VN` - 越南
 - `IN` - 印度
 
-更多国家编码请参考[官方文档](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)。
+更多国家编码请参考官方文档。
 
 ### 语言编码
 
@@ -1025,11 +650,11 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 - `TH` - 泰语
 - `VI` - 越南语
 
-更多语言编码请参考[官方文档](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)。
+更多语言编码请参考官方文档。
 
 ---
 
-## 14. 错误码说明
+## 8. 错误码说明
 
 | 错误码 | 说明           |
 | ------ | -------------- |
@@ -1041,54 +666,44 @@ http%3A%2F%2Fgoogle.com?error=P_19&message=Player info not matched 'PlayerId: qs
 | P_05   | 余额不足       |
 | P_06   | 交易已存在     |
 | P_07   | 交易失败       |
-| P_19   | 玩家信息不匹配 |
 
 更多错误码请参考官方文档。
 
 ---
 
-## 15. 注意事项
+## 9. 注意事项
 
-1. **请求格式**: 所有请求使用 POST 方法（除了游戏启动链接使用 GET），Content-Type 为 `application/json`
+1. **请求格式**: 所有请求使用 POST 方法，Content-Type 为 `application/json`
 2. **签名验证**: 所有请求必须包含有效的 `hash` 签名
 3. **请求ID**: `requestId` 建议使用唯一标识，便于追踪和排查问题
 4. **交易号**: `extTransId` 必须唯一，重复的交易号会被拒绝
 5. **金额精度**: 金额支持小数点后4位，建议格式化为字符串传递
 6. **时区**: 所有时间字段使用 GMT+0 时区
 7. **令牌有效期**: 游戏令牌有效期为1小时，建议每次打开游戏时重新获取
-8. **接口地址**: 注意区分游戏接口地址、数据接口地址和游戏启动地址
-9. **游戏链接**: 生成游戏链接时，`hash` 参数用于防止玩家手动更改游戏代码，生成规则为 `MD5(brandId+playerId+gameCode+SecretKey)`
+8. **接口地址**: 注意区分游戏接口地址和数据接口地址
 
 ---
 
-## 16. 对接流程
+## 10. 对接流程
 
-1. **获取配置信息**: 从 GM-Ag 获取 `brandId`、`secretKey`、`gmag_api_url`、`gmag_game_data_url`、`gmag_game_launch_url`
+1. **获取配置信息**: 从 GM-Ag 获取 `brandId`、`secretKey`、`gmag_api_url`、`gmag_game_data_url`
 2. **实现签名算法**: 根据提供的代码示例实现签名生成和验证
 3. **创建玩家**: 调用创建玩家接口注册新玩家
 4. **获取令牌**: 玩家登录时调用获取令牌接口
-5. **生成游戏链接**: 使用令牌和其他参数生成游戏启动链接
-6. **上分下分**: 根据业务需求调用上分和下分接口
-7. **查询余额**: 定期查询玩家余额保持同步
-8. **查询交易**: 根据外部交易号查询交易状态
-9. **同步游戏数据**: 定期拉取游戏历史记录和报表数据
+5. **上分下分**: 根据业务需求调用上分和下分接口
+6. **查询余额**: 定期查询玩家余额保持同步
+7. **查询交易**: 根据外部交易号查询交易状态
 
 ---
 
 ## 参考链接
 
 - [GM-Ag API Guide](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546629)
-- [打开游戏](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546574/2.)
 - [创建玩家](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546629)
 - [获取打开游戏令牌](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546648)
 - [查询玩家余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546661)
 - [玩家上分](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546674)
 - [玩家下分](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546687)
 - [查询交易信息](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546700)
-- [游戏报表](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546715)
-- [游戏历史记录](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546730)
-- [获取所有玩家余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546743)
-- [获取代理余额](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546756)
-- [更改玩家状态](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546769)
 - [编码信息](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243513252/Code+Information)
 - [加密代码示例](https://globaltllc.atlassian.net/wiki/spaces/GAG1/pages/1243546890/6.)

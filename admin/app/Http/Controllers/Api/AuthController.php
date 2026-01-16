@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use App\Services\TgService;
+use App\Services\Lib;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 class AuthController extends Controller
@@ -217,7 +218,10 @@ class AuthController extends Controller
 
                 $arr = [
                     'order_no' => $data['serialNumber'],
-                    'api_type' => $data['gametype'],
+                    // api_type 按 game_lists.with_api 写入
+                    'api_type' => Lib::resolveWithApiByPlatform($data['gametype']),
+                    // platform_type 保存真实场馆 code
+                    'platform_type' => Lib::normalizePlatformType($data['gametype']),
                     'user_id' => $user->id,
                     'transfer_type' => $transfer_type,
                     'money' => $amount,
@@ -404,7 +408,10 @@ class AuthController extends Controller
                         $client_transfer_id = time() . $user->id . rand(1000, 9999);
                         $arr[] = [
                             'order_no' => $client_transfer_id,
-                            'api_type' => $val['gamecode'],
+                            // api_type 按 game_lists.with_api 写入
+                            'api_type' => Lib::resolveWithApiByPlatform($val['gamecode']),
+                            // platform_type 保存真实场馆 code
+                            'platform_type' => Lib::normalizePlatformType($val['gamecode']),
                             'user_id' => $user->id,
                             'transfer_type' => 1,
                             'money' => $val['blance'],

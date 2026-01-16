@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Dcat\Admin\Widgets\Modal;
 use App\Admin\Forms\Userbalance;
 use App\Services\TgService;
+use App\Services\Lib;
 use App\User;
 use App\Models\TransferLog;
 use App\Models\User_Api;
@@ -49,9 +50,14 @@ class BackBalance extends RowAction
 
 		// 使用数据库事务确保数据一致性
 		return \DB::transaction(function () use ($user, $transferlog, $tg, $order_no, $amount) {
+			$platformType = Lib::normalizePlatformType($transferlog->platform_type ?: $transferlog->api_type);
+			$withApi = $transferlog->platform_type ? strtolower($transferlog->api_type) : Lib::resolveWithApiByPlatform($platformType);
 			$arr = [
 				'order_no' => $order_no,
-				'api_type' => $transferlog->api_type,
+				// api_type 按 game_lists.with_api 写入
+				'api_type' => $withApi,
+                // platform_type 保存真实场馆 code
+                'platform_type' => $platformType,
 				'user_id' => $user->id,
 				'transfer_type' => 1,
 				'money' => $amount,
@@ -63,7 +69,7 @@ class BackBalance extends RowAction
 			];
 			TransferLog::create($arr);   
 			
-			$res = $tg->withdrawal($user->username,$amount,$order_no,$transferlog->api_type);
+			$res = $tg->withdrawal($user->username,$amount,$order_no,$platformType);
 			if($res['code'] != 200){
 				return $this->response()->error($res['message'])->refresh();
 			} 
@@ -76,7 +82,7 @@ class BackBalance extends RowAction
 			$transferlog->state = 1;
 			$transferlog->save();
 			
-			$User_Api = User_Api::where('api_code',$transferlog->api_type)->where('user_id',$user->id)->first();
+			$User_Api = User_Api::where('api_code', $platformType)->where('user_id',$user->id)->first();
 			if($User_Api) {
 				if($User_Api->api_money <= $amount){
 					$User_Api->api_money = 0;

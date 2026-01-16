@@ -21,6 +21,7 @@ use App\Models\Template;
 use App\Services\Zgpay;
 use Illuminate\Support\Facades\Cookie;
 use Illuminate\Support\Facades\Hash;
+use App\Services\Lib;
 class PayController extends Controller
 {
     protected $path;
@@ -723,7 +724,8 @@ class PayController extends Controller
                 $user->save();
                 $arr = [
                     'order_no' => $order_no,
-                    'api_type' => 'ag',
+                    'api_type' => Lib::resolveWithApiByPlatform('ag'),
+                    'platform_type' => 'ag',
                     'user_id' => $user->id,
                     'transfer_type' => 1,
                     'money' => $amount,
@@ -748,7 +750,8 @@ class PayController extends Controller
                 $user->save();
                 $arr = [
                     'order_no' => $order_no,
-                    'api_type' => 'ag',
+                    'api_type' => Lib::resolveWithApiByPlatform('ag'),
+                    'platform_type' => 'ag',
                     'user_id' => $user->id,
                     'transfer_type' => 0,
                     'money' => $amount,
