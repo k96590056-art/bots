@@ -14768,7 +14768,7 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 ._2jLZUYlV {
-    height: 60px;
+    height: 90px;
     position: relative;
     background: #1b1e2a;
 }
@@ -14776,7 +14776,7 @@ textarea.ant-pagination-options-quick-jumper input {
 ._21_IWk7T {
     width: 100%;
     min-width: 1200px;
-    height: 60px;
+    height: 90px;
     position: fixed;
     z-index: 990;
     left: 0;
@@ -43250,13 +43250,13 @@ textarea.ant-pagination-options-quick-jumper input {
 
 /* 导航菜单字体增大 */
 .nRE1dUST ._9eNaWz24 {
-    font-size: 17px !important;
+    font-size: 20px !important;
 }
 
 /* 横线位置调整到底部 */
 .nRE1dUST ._9eNaWz24 ._5v-zJhSB .P4bUdpZY {
     position: absolute !important;
-    bottom: 18px !important;
+    bottom: 28px !important;
     left: 0 !important;
     width: 100% !important;
     height: 2px !important;
@@ -43288,7 +43288,7 @@ form.login-form-inline.ant-form._1_iN76zv {
     justify-content: flex-end !important;
     flex-wrap: nowrap !important;
     gap: 0 !important;
-    padding-top: 11px !important;
+    padding-top: 30px !important;
 }
 
 /* 登录按钮包裹容器 - 包含按钮和永久网址 */

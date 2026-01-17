@@ -1528,7 +1528,7 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-.nRE1dUST ._9eNaWz24{ font-size: 0.9vw !important; }
+.nRE1dUST ._9eNaWz24{ font-size: 1.2vw !important; }
 .gameNametop {
   padding-top: 30px;
   height: 60px;
