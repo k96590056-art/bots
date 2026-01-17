@@ -109,6 +109,24 @@ class Dbkaiyuan extends Command
 
                 $existing = GameRecord::where('bet_id', $betId)->where('platform_type', 'dbkaiyuan')->first();
 
+                [
+                    'username' => $user->username,
+                    'bet_id' => (string)$betId,
+                    'transfer_no' => $transferNo,
+                    'bet_point_name' => isset($this->betPoints[$betPointId]) ? $this->betPoints[$betPointId] : '',
+                    'game_type_id' => $gameTypeId,
+                    'game_type_name' => isset($this->gameTypes[$gameTypeId]) ? $this->gameTypes[$gameTypeId] : '',
+                    'game_code' => (string)$gameTypeId, // 添加game_code字段
+                    'platform_type' => $this->db_code,
+                    'game_type' => 'realbet', // 根据实际情况调整
+                    'bet_time' => $betTimeDatetime,
+                    'bet_amount' => $betAmount,
+                    'valid_amount' => $betAmount,
+                    'win_loss' => 0,
+                    'status' => 2, // 0=未结算
+                    'is_back' => 0,
+                    'before_amount' => $currentBalance,
+                ]
                 $recordData = [
                     'user_id' => $user->id,
                     'username' => $user->username,
