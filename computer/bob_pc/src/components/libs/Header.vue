@@ -982,7 +982,7 @@
           <input type="text" placeholder="用户名" maxlength="16" class="_10rTDi18 loginInput" autocomplete="none" id="name" v-model="username" />
           <div class="_1xLtCzwl">
             <input type="password" placeholder="密码" maxlength="16" class="_2uN-VcWm loginInput" id="password" v-model="psw" />
-            <a class="_1ZUvLsxY" @click="openKefu" href="javascript:;">忘记?</a>
+            <a v-show="!psw" class="_1ZUvLsxY" @click="openKefu" href="javascript:;">忘记?</a>
           </div>
           <div class="login-btn-wrapper">
             <div class="login-btn-group">
