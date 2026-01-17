@@ -43176,7 +43176,7 @@ textarea.ant-pagination-options-quick-jumper input {
     -webkit-box-pack: center;
     -webkit-justify-content: center;
     justify-content: center;
-    margin: 0 5px;
+    margin: 0 0.3vw;
     cursor: pointer;
     -webkit-transition: all .3s;
     transition: all .3s;
@@ -43189,16 +43189,26 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .header-icon-item img {
-    width: 32px !important;
-    height: 32px !important;
-    margin-bottom: 2px;
+    width: 1.8vw !important;
+    height: 1.8vw !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    margin-bottom: clamp(6px, 0.6vw, 12px);
     object-fit: contain;
 }
 
 .header-icon-item span {
-    font-size: 12px;
-    color: #fff;
+    font-size: clamp(12px, 0.9vw, 16px);
+    color: #ffffffb2;
     white-space: nowrap;
+}
+
+/* 存款、转账、取款、推广图标稍大 */
+.header-icon-large img {
+    width: 2.1vw !important;
+    height: 2.1vw !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
 }
 
 /* 图标区域左边间距 */
@@ -43215,20 +43225,27 @@ textarea.ant-pagination-options-quick-jumper input {
 
 /* logo区域 */
 .nRE1dUST ._6XowEZMC {
-    width: 100px !important;
-    margin-right: 20px !important;
+    width: 6vw !important;
+    min-width: 80px !important;
+    margin-right: 0 !important;
 }
 
-/* 导航菜单间距缩小 */
+@media screen and (max-width:1410px) {
+    .nRE1dUST ._6XowEZMC {
+        margin-right: 0 !important;
+    }
+}
+
+/* 导航菜单间距 */
 .nRE1dUST .X_9C3y3f > div {
-    padding-right: 12px !important;
+    padding-right: 0.8vw !important;
 }
 
 /* 已登录用户信息区域 - 新布局 */
 .user-info-panel {
     display: flex;
     align-items: center;
-    margin-left: 15px;
+    margin-left: 1vw;
     flex-shrink: 0;
 }
 
@@ -43246,7 +43263,7 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .user-name-row .username {
-    color: #fff;
+    color: #ffffffb2;
     font-size: 14px;
     font-weight: 500;
     margin-right: 6px;
@@ -43272,16 +43289,18 @@ textarea.ant-pagination-options-quick-jumper input {
     font-weight: 500;
 }
 
-.user-balance-row .balance-refresh {
-    margin-left: 6px;
+.user-balance-row .balance-toggle {
+    margin-left: 0.3vw;
     cursor: pointer;
-    font-size: 14px;
-    color: #888;
+    width: clamp(14px, 1vw, 18px);
+    height: clamp(14px, 1vw, 18px);
+    opacity: 0.7;
     transition: all 0.3s;
+    vertical-align: middle;
 }
 
-.user-balance-row .balance-refresh:hover {
-    color: #1c88ff;
+.user-balance-row .balance-toggle:hover {
+    opacity: 1;
 }
 
 .user-url-row {
@@ -43370,13 +43389,17 @@ textarea.ant-pagination-options-quick-jumper input {
 
 /* 导航菜单字体 */
 .nRE1dUST ._9eNaWz24 {
-    font-size: 16px !important;
+    font-size: 18px !important;
+    color: #ffffffb2 !important;
+    font-family: "PingFang SC", "DIN Pro", dinpro, PingFangSC-Regular, "SF Pro SC", "SF Pro Text", "Microsoft Yahei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+    font-feature-settings: "tnum" !important;
 }
 
 /* 导航栏滚动容器 */
 .nRE1dUST .X_9C3y3f.nav-scroll-container {
-    max-width: 450px !important;
+    max-width: 30vw !important;
     flex-shrink: 1 !important;
+    margin-left: 1.8vw !important;
 }
 
 /* 横线位置调整到底部 */
@@ -43414,7 +43437,14 @@ form.login-form-inline.ant-form._1_iN76zv {
     justify-content: flex-end !important;
     flex-wrap: nowrap !important;
     gap: 0 !important;
-    padding-top: 30px !important;
+    padding-top: 22px !important;
+}
+
+/* 账号密码输入框宽度和间距 */
+form.login-form-inline.ant-form._1_iN76zv ._10rTDi18,
+._1_iN76zv input._10rTDi18 {
+    width: clamp(100px, 7vw, 140px) !important;
+    margin-right: 4px !important;
 }
 
 /* 登录按钮包裹容器 - 包含按钮和永久网址 */
@@ -43429,17 +43459,18 @@ form.login-form-inline.ant-form._1_iN76zv {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 0;
+    gap: 4px;
+    margin-left: 4px;
 }
 
 /* 永久网址样式 - 在登录按钮下方，和按钮等宽 */
 .permanent-url-text {
-    font-size: 9px;
+    font-size: 10px;
     color: #888;
     white-space: nowrap;
     text-align: center;
-    margin-top: 3px;
-    letter-spacing: -0.5px;
+    margin-top: 8px;
+    letter-spacing: 0;
 }
 
 /* 登录表单样式调整 */

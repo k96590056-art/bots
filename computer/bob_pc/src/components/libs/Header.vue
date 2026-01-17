@@ -10,7 +10,7 @@
           <div class="_3_qzGcRD"><span class="_1N8mCmac">-</span><span>B</span><span>O</span><span>B</span><span>.</span><span>C</span><span>O</span><span>M</span><span class="_1N8mCmac">-</span></div>
         </div>
       </div>
-      <div class="_21_IWk7T">
+      <div class="_21_IWk7T" v-show="pcCategoriesLoaded">
         <div class="nRE1dUST">
           <div class="_6XowEZMC" @click="goNav('/')">
             <a href="javascript:;">
@@ -26,7 +26,7 @@
               </a>
             </div>
             <!-- 动态导航菜单 - 从API获取分类数据 -->
-            <template v-if="pcCategories.length > 0">
+            <template v-if="pcCategoriesLoaded && pcCategories.length > 0">
               <div class="_9eNaWz24 nav" v-for="(category, catIndex) in mainCategoryList" :key="'cat-' + category.id" @mouseenter="showDropdown($event)" @mouseleave="hideDropdown($event)">
                 <a @click="goNav(getCategoryRoute(category.code))" :class="isCategoryActive(category.code) ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB'" href="javascript:;">
                   {{ category.name }}
@@ -57,7 +57,7 @@
               </div>
             </template>
             <!-- 静态导航菜单 - 当API数据未加载时显示 -->
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/sports')" :class="url == '/sports' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >体育
                 <div class="_17Hw2tUT"></div>
@@ -173,7 +173,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/electronic')" :class="url == '/electronic' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电竞
                 <div class="_17Hw2tUT"></div>
@@ -269,7 +269,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/people')" :class="url == '/people' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >真人
                 <div class="_17Hw2tUT"></div>
@@ -371,7 +371,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/lottery')" :class="url == '/lottery' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >彩票
                 <div class="_17Hw2tUT"></div>
@@ -467,7 +467,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/cards')" :class="url == '/cards' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >棋牌
                 <div class="_17Hw2tUT"></div>
@@ -574,7 +574,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/amusement')" :class="url == '/amusement' || url == '/amusementList' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电子
                 <div class="_17Hw2tUT"></div>
@@ -895,18 +895,15 @@
                 </div>
               </div>
             </div>
-            <!-- <div class="_9eNaWz24" @click="goNav('/agent')"> -->
-            <div class="_9eNaWz24" @click="getAgentLoginUrl">
-              <div to="undefined" class="_5v-zJhSB">
-                代理登录
-                <div class="P4bUdpZY"><span></span><span></span></div>
-              </div>
-            </div>
           </div>
           <div class="_1XwyY7sN"></div>
         </div>
         <!-- 右侧图标按钮区域 -->
         <div class="header-icon-btns">
+          <div class="header-icon-item" @click="getAgentLoginUrl">
+            <img src="/static/image/shujuhutong.png" alt="代理登录" />
+            <span>代理登录</span>
+          </div>
           <div class="header-icon-item" @click="openKefu">
             <img src="/static/image/kefu.png" alt="客服" />
             <span>客服</span>
@@ -939,19 +936,19 @@
             <span>APP</span>
           </div>
           <!-- 登录后显示：存款、转账、取款、推广 -->
-          <div v-show="is_login == 1" class="header-icon-item" style="margin-left: 20px;" @click="goNav('/mine/deposit')">
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" style="margin-left: 20px;" @click="goNav('/mine/deposit')">
             <img src="/static/image/cunkuan.png" alt="存款" />
             <span>存款</span>
           </div>
-          <div v-show="is_login == 1" class="header-icon-item" @click="goNav('/mine/transfer')">
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/transfer')">
             <img src="/static/image/zhuanzhang.png" alt="转账" />
             <span>转账</span>
           </div>
-          <div v-show="is_login == 1" class="header-icon-item" @click="goNav('/mine/withdrawal')">
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/withdrawal')">
             <img src="/static/image/qukuan.png" alt="取款" />
             <span>取款</span>
           </div>
-          <div v-show="is_login == 1" class="header-icon-item" @click="goNav('/mine/agent')">
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/agent')">
             <img src="/static/image/tuiguang.png" alt="推广" />
             <span>推广</span>
           </div>
@@ -965,8 +962,8 @@
             </div>
             <div class="user-info-row user-balance-row">
               <span class="balance-symbol">¥</span>
-              <span class="balance-amount">{{ $store.state.userInfo.balance || '0.00' }}</span>
-              <span class="balance-refresh" @click="getUserInfo">⟳</span>
+              <span class="balance-amount">{{ balanceVisible ? ($store.state.userInfo.balance || '0.00') : '****' }}</span>
+              <img class="balance-toggle" @click="toggleBalanceVisible" :src="balanceVisible ? '/static/image/see.png' : '/static/image/no_see.png'" alt="" />
             </div>
             <div class="user-info-row user-url-row">
               <span>永久网址:</span>
@@ -1053,6 +1050,7 @@ export default {
       username: null,
       jumpUrl: null,
       show: false,
+      balanceVisible: true,
       realbetList: [],
       jokerList: [],
       gamingList: [],
@@ -1061,6 +1059,7 @@ export default {
       conciseList: [],
       activityDropdownList: [],
       pcCategories: [], // PC端游戏分类数据
+      pcCategoriesLoaded: false, // PC端游戏分类是否加载完成
       sportImg: {
         sbtest: '/static/image/img_saba_title.png',
         oap: '/static/image/img_ss_title.png',
@@ -1210,6 +1209,9 @@ export default {
     // that.getGameList('concise');
   },
   methods: {
+    toggleBalanceVisible() {
+      this.balanceVisible = !this.balanceVisible;
+    },
     changIndex() {
       this.index = parseInt(20 * Math.random());
     },
@@ -1220,8 +1222,10 @@ export default {
         if (res.code == 200) {
           that.pcCategories = res.data || [];
         }
+        that.pcCategoriesLoaded = true;
       }).catch(err => {
         console.error('获取PC端游戏分类失败:', err);
+        that.pcCategoriesLoaded = true;
         // 请求失败时保持 pcCategories 为空数组，将显示静态导航
       });
     },
@@ -1642,7 +1646,12 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-.nRE1dUST ._9eNaWz24{ font-size: 16px !important; }
+.nRE1dUST ._9eNaWz24{
+  font-size: 18px !important;
+  color: #ffffffb2 !important;
+  font-family: "PingFang SC", "DIN Pro", dinpro, PingFangSC-Regular, "SF Pro SC", "SF Pro Text", "Microsoft Yahei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  font-feature-settings: "tnum" !important;
+}
 
 // 导航栏整体布局优化
 ::v-deep .nRE1dUST {
@@ -1656,7 +1665,7 @@ export default {
 
 // 导航滚动容器样式
 .nav-scroll-container {
-  max-width: 450px !important; // 限制最大宽度
+  max-width: 30vw !important; // 限制最大宽度
   overflow-x: auto !important;
   overflow-y: hidden !important;
   flex-wrap: nowrap !important;
