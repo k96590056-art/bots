@@ -107,20 +107,26 @@ class Dbkaiyuan extends Command
                     continue;
                 }
 
-                $existing = GameRecord::where('bet_id', $betId)->where('platform_type', 'dbkaiyuan')->first();
+                $existing = GameRecord::where('bet_id', $betId)->where('platform_type', 'DBKY')->first();
 
+                // 从 $row 提取数据，参考优化字段映射
+                $gameTypeId = (string)($row['KindID'] ?? '');
+                $betAmount = (float)($row['AllBet'] ?? 0);
+                $validAmount = (float)($row['CellScore'] ?? $betAmount);
+                $betTimeDatetime = $row['GameEndTime'] ?? $row['GameStartTime'] ?? now()->toDateTimeString();
+                
                 $recordData = [
                     'user_id' => $user->id,
                     'username' => $user->username,
-                    'bet_id' => $betId,
-                    'bet_time' => $row['GameEndTime'] ?? $row['GameStartTime'] ?? now()->toDateTimeString(),
-                    'platform_type' => 'dbkaiyuan',
-                    'game_type' => (string)($row['KindID'] ?? ''),
+                    'bet_id' => (string)$betId,
+                    'bet_time' => $betTimeDatetime,
+                    'platform_type' => 'DBKY',
+                    'game_type' => $gameTypeId,
                     'game_code' => (string)($row['TableID'] ?? ''),
-                    'bet_amount' => (float)($row['AllBet'] ?? 0),
-                    'valid_amount' => (float)($row['CellScore'] ?? 0),
+                    'bet_amount' => $betAmount,
+                    'valid_amount' => $validAmount,
                     'win_loss' => (float)($row['Profit'] ?? 0),
-                    'status' => 1,
+                    'status' => 2, // 0=无效注单, 1=已结算, 2=未结算（参考代码使用2）
                     'is_back' => 0,
                 ];
 

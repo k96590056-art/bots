@@ -15,6 +15,7 @@ use Illuminate\Http\Request;
 
 Route::any('/test','Api\TestController@test');
 Route::get('/game/categories','Api\IndexController@getGameCategories'); // 获取游戏类目
+Route::get('/game/pc_categories','Api\IndexController@getGamePcCategories'); // 获取游戏类目
 Route::post('/captcha/generate','Api\CaptchaController@generate');
 Route::post('/captcha/verify','Api\CaptchaController@verify');
 Route::post('/login','Api\AuthController@login');
@@ -49,6 +50,7 @@ Route::get('/getVisitUrl','Api\IndexController@getVisitUrl');
 Route::any('/getApiUrl','Api\IndexController@getApiUrl');
 Route::get('/get_pay_way','Api\PayController@getPayWay');
 Route::get('/game/list','Api\IndexController@getAllGameList');
+Route::get('/game/pclist','Api\IndexController@getAllGamePcList');
 Route::get('/all/plat','Api\IndexController@getAllPlat');
 Route::post('/uservip','Api\IndexController@uservip');  
 Route::post('/article','Api\IndexController@article');

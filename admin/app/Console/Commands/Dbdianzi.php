@@ -145,7 +145,7 @@ class Dbdianzi extends Command
                 }
 
                 $existing = GameRecord::where('bet_id', $betId)
-                    ->where('platform_type', 'dbdianzi')
+                    ->where('platform_type', 'DBDZ')
                     ->first();
 
                 // 3) 组装写入（字段参考 Dbzhenren 的写法，尽量用通用字段）
@@ -162,7 +162,7 @@ class Dbdianzi extends Command
                     'username' => $user->username,
                     'bet_id' => $betId,
                     'round_no' => $record['roundNo'] ?? null,
-                    'platform_type' => 'dbdianzi',
+                    'platform_type' => 'DBDZ',
                     'game_type' => (string)($record['gameTypeName'] ?? ($record['gameType'] ?? '')),
                     'game_code' => (string)($record['gameCode'] ?? ($record['gameTypeId'] ?? '')),
                     'bet_time' => $betTime,

@@ -151,7 +151,7 @@ class Dbevo extends Command
 
                                 // 检查记录是否已存在
                                 $existing_record = GameRecord::where('bet_id', $bet_id)
-                                    ->where('platform_type', 'dbevo')
+                                    ->where('platform_type', 'EVO')
                                     ->first();
 
                                 $recordData = [
@@ -160,7 +160,7 @@ class Dbevo extends Command
                                     'bet_id' => $bet_id,
                                     // EVO 时间通常为 ISO8601（如 2026-01-15T02:55:21.098Z），需转成 MySQL DATETIME 格式
                                     'bet_time' => $this->normalizeBetTime($bet['placedOn'] ?? ($game['startedAt'] ?? null)),
-                                    'platform_type' => 'dbevo',
+                                    'platform_type' => 'EVO',
                                     'game_type' => $game['gameType'] ?? '',
                                     'game_code' => $game['table']['id'] ?? '',
                                     'bet_amount' => $bet['stake'] ?? 0,

@@ -98,7 +98,7 @@ class Dbgmag extends Command
         $this->info("时间范围：{$start_time} 至 {$end_time}");
 
         // 拉取游戏记录
-        $result = $service->getGameReport($start_time, $end_time);
+        $result = $service->getGameHistory($start_time, $end_time);
 
         if ($result['code'] != 200) {
             $this->error("拉取游戏记录失败：{$result['message']}");
@@ -145,7 +145,7 @@ class Dbgmag extends Command
                 }
 
                 $existing = GameRecord::where('bet_id', $betId)
-                    ->where('platform_type', 'dbgmag')
+                    ->where('platform_type', 'GMAG')
                     ->first();
 
                 // 3) 组装写入（字段参考 Dbzhenren 的写法，尽量用通用字段）
@@ -162,7 +162,7 @@ class Dbgmag extends Command
                     'username' => $user->username,
                     'bet_id' => $betId,
                     'round_no' => $record['roundNo'] ?? null,
-                    'platform_type' => 'dbgmag',
+                    'platform_type' => 'GMAG',
                     'game_type' => (string)($record['gameTypeName'] ?? ($record['gameType'] ?? '')),
                     'game_code' => (string)($record['gameCode'] ?? ($record['gameTypeId'] ?? '')),
                     'bet_time' => $betTime,

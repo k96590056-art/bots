@@ -880,10 +880,10 @@ class PayController extends Controller
 			$amount = intval($userApi->api_money);
 		} else {
 			// 如果没有 user_api 余额，尝试从 TransferLog 记录推断
-			$transferlog = TransferLog::where('user_id', $user->id)->where('transfer_type', 0)->orderBy('id','desc')->first();
-			if(!$transferlog){
-				return $this->returnMsg(200,'','没有可回收的金额');
-			}
+        $transferlog = TransferLog::where('user_id', $user->id)->where('transfer_type', 0)->orderBy('id','desc')->first();
+		if(!$transferlog){
+			return $this->returnMsg(200,'','没有可回收的金额');
+		}
 			// api_type 写的是 with_api；platform_type 写的是真实场馆（兼容旧数据）
 			$withApiFromLog = strtolower((string)($transferlog->api_type ?? ''));
 			$platformType = $transferlog->platform_type ? $this->normalizePlatformTypeCompat($transferlog->platform_type) : '';
@@ -929,13 +929,13 @@ class PayController extends Controller
 			} else {
 				$result = $service->balance($platformType, $user->username);
 			}
-			if($result['code'] != 200){
-				return $this->returnMsg(201, '', $result['message']);
-			}
-			if($result['data'] < 1){
-				return $this->returnMsg(200,'','没有可回收的金额');
-			}
-			$amount = intval($result['data']);
+		if($result['code'] != 200){
+			return $this->returnMsg(201, '', $result['message']);
+		}
+		if($result['data'] < 1){
+			return $this->returnMsg(200,'','没有可回收的金额');
+		}
+		$amount = intval($result['data']);
 		}
 		
 		if ($amount < 1) {
@@ -1358,5 +1358,5 @@ class PayController extends Controller
         } catch (\Throwable $e) {
             return $platformName;
         }
-    }
+	}
 }

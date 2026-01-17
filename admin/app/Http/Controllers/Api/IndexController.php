@@ -220,6 +220,119 @@ class IndexController extends Controller
         }
         return $this->returnMsg(200, $list);
     }
+    
+    /**
+     * PC端获取游戏类目（返回id、name、image、code字段，图片带域名前缀）
+     * 基于 getGameCategories 方法
+     * 增加子分类数量统计：通过 game_lists 表中属于该分类id且 child_id > 0 的不同 child_id 数量
+     * 增加游戏数据列表：返回 game_lists 表中 category_id 等于 game_categories 的 code 且 child_id 为 0 的游戏数组
+     */
+    public function getGamePcCategories(Request $request)
+    {
+        $list = GameCategory::select('id', 'name', 'image', 'code', 'pid')
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get()
+            ->toArray();
+        $apiUrl = env('APP_URL');
+        
+        // 统计每个分类下的子分类数量（通过 game_lists 表中 child_id > 0 的不同 child_id 数量）
+        $categoryIds = array_column($list, 'id');
+        $categoryCodes = array_column($list, 'code');
+        $childCounts = [];
+        if (!empty($categoryIds)) {
+            $childCounts = GameList::whereIn('category_id', $categoryIds)
+                ->where('child_id', '>', 0)
+                ->where('is_pc', 1)
+                ->where('site_state', 1)
+                ->select('category_id', 'child_id')
+                ->distinct()
+                ->get()
+                ->groupBy('category_id')
+                ->map(function ($items) {
+                    return $items->pluck('child_id')->unique()->count();
+                })
+                ->toArray();
+        }
+        
+        // 获取所有有效的接口
+        $validApis = Api::where('state', 1)->pluck('api_code')->toArray();
+        
+        // 预取 apis 表的 app_icon
+        $apiIcons = \DB::table('apis')->whereNotNull('app_icon')->pluck('app_icon', 'api_code')->toArray();
+        
+        // 获取每个分类下的游戏列表（根据游戏分类数据遍历，判断 code 等于 game_lists.category_id 且 pid = 0）
+        $categoryGamesMap = [];
+        
+        // 遍历游戏分类数据，只处理 pid = 0 的主分类
+        foreach ($list as $category) {
+            $categoryCode = $category['code'];
+            $categoryPid = $category['pid'] ?? 0;
+            
+            // 只处理主分类（pid = 0）
+            if ($categoryPid != 0) {
+                continue;
+            }
+            
+            // 查询 category_id 等于该分类 code 且 child_id 为空或等于 0 的游戏
+            $games = GameList::where('category_id', $categoryCode)
+                ->where(function($query) {
+                    $query->where('child_id', 0)
+                          ->orWhereNull('child_id');
+                })
+                ->where('is_pc', 1)
+                ->where('site_state', 1)
+                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                ->orderBy('order_by', 'asc')
+                ->get();
+            
+            $categoryGamesMap[$categoryCode] = [];
+            
+            foreach ($games as $game) {
+                if (!in_array($game->platform_name, $validApis)) {
+                    continue;
+                }
+                
+                $apiCode = $game->platform_name ?? '';
+                $iconPath = $apiIcons[$apiCode] ?? ($game->app_icon ?? '');
+                
+                $categoryGamesMap[$categoryCode][] = [
+                    'id' => $game->id,
+                    'name' => $game->name,
+                    'platform_name' => $game->platform_name,
+                    'category_id' => $game->category_id,
+                    'child_id' => $game->child_id,
+                    'tag_id' => $game->tag_id,
+                    'game_code' => $game->game_code,
+                    'is_hot' => $game->is_hot,
+                    'is_new' => $game->is_new,
+                    'is_recommend' => $game->is_recommend,
+                    'check_yes_img' => $game->check_yes_img ? env('APP_URL').'/uploads/'.$game->check_yes_img : '',
+                    'check_no_img' => $game->check_no_img ? env('APP_URL').'/uploads/'.$game->check_no_img : '',
+                    'api_logo_img' => $game->api_logo_img ? env('APP_URL').'/uploads/'.$game->api_logo_img : '',
+                    'mobile_img' => $game->mobile_img ? env('APP_URL').'/uploads/'.$game->mobile_img : '',
+                    'header_logo' => $game->header_logo ? env('APP_URL').'/uploads/'.$game->header_logo : '',
+                    'app_img' => $game->app_img ? env('APP_URL').'/uploads/'.$game->app_img : '',
+                    'app_icon' => $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '',
+                ];
+            }
+        }
+        
+        foreach ($list as $key => $value) {
+            if (!empty($value['image'])) {
+                $img = $value['image'];
+                // 如果image不是完整的URL，则拼接API地址和uploads目录
+                if (stripos($img, 'http://') !== 0 && stripos($img, 'https://') !== 0) {
+                    $list[$key]['image'] = rtrim($apiUrl, '/') . '/uploads/' . ltrim($img, '/');
+                }
+            }
+            // 添加子分类数量
+            $list[$key]['children_count'] = $childCounts[$value['id']] ?? 0;
+            // 添加游戏数据列表（category_id = code 且 child_id = 0）
+            $list[$key]['games'] = $categoryGamesMap[$value['code']] ?? [];
+        }
+        return $this->returnMsg(200, $list);
+    }
     /**
      * 个人消息
      *
@@ -1809,6 +1922,155 @@ class IndexController extends Controller
 		}
         $listarray = array_merge($listarray);
         return $this->returnMsg(200,$listarray);
+    }
+    
+    /**
+     * PC端获取游戏列表
+     * 重构后的逻辑：按子分类和标签组织数据
+     * 
+     * 请求参数：
+     * - category_id: 分类ID（必填，game_categories表的code）
+     * - platform: 平台名称（可选）
+     * - child_id: 子分类ID（可选，如果传入则过滤游戏数据）
+     * - tag_id: 标签ID（可选，如果传入则过滤游戏数据）
+     */
+    public function getAllGamePcList(Request $request)
+    {
+        $platform = $request->input('platform') ?? '';
+        $categoryId = $request->input('category_id') ?? '';
+        $childId = $request->input('child_id') ?? '';
+        $tagId = $request->input('tag_id') ?? '';
+        
+        // 必须传入 category_id 参数
+        if (empty($categoryId)) {
+            return $this->returnMsg(400, [], '参数错误：必须传入 category_id');
+        }
+        
+        // 声明变量
+        $child_games = [];
+        $tag_games = [];
+        $games = [];
+        
+        // 1. 获取 game_lists 表中 category_id 等于传来的 category_id 且 child_id > 0 的游戏数据
+        $gameListQuery = GameList::when($platform, function ($query) use ($platform) {
+            return $query->where('platform_name', $platform);
+        })
+        ->where('category_id', $categoryId)
+        ->where('child_id', '>', 0)
+        ->where(function($query) {
+            $query->where('site_state', 1)
+                  ->orWhere('app_state', 1);
+        })
+        ->where('is_pc', 1)
+        ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon', 'site_state', 'app_state')
+        ->orderBy('order_by', 'asc');
+        
+        $game_list = $gameListQuery->get()->toArray();
+        
+        // 2. 根据传来的 category_id（这是 code），获取 game_categories 表中 code 等于 category_id 的记录的 id
+        $category = GameCategory::where('code', $categoryId)->first();
+        if (!$category) {
+            return $this->returnMsg(400, [], '分类不存在');
+        }
+        $categoryIdValue = $category->id;
+        
+        // 3. 根据这个 id 去获取 pid 等于这个 id 的所有 game_categories 数据，作为 $child_games
+        $childCategories = GameCategory::where('pid', $categoryIdValue)
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get()
+            ->toArray();
+        
+        // 初始化 $child_games 数组结构
+        foreach ($childCategories as $childCategory) {
+            $child_games[] = [
+                'child_id' => $childCategory['id'],
+                'name' => $childCategory['name'] ?? '',
+                'code' => $childCategory['code'] ?? '',
+                'image' => !empty($childCategory['image']) ? env('APP_URL').'/uploads/'.$childCategory['image'] : '',
+                'count' => 0, // 稍后统计
+            ];
+        }
+        
+        // 4. 通过遍历获得的游戏数据，按标签 ID 和子分类 ID 分别组织数组
+        $tagGamesMap = []; // 以标签 ID 为键的数组
+        $childGamesMap = []; // 以子分类 ID 为键的数组
+        
+        foreach ($game_list as $game) {
+            $gameTagId = $game['tag_id'] ?? null;
+            $gameChildId = $game['child_id'] ?? null;
+            
+            // 按标签 ID 组织数组
+            if ($gameTagId) {
+                if (!isset($tagGamesMap[$gameTagId])) {
+                    $tagGamesMap[$gameTagId] = [];
+                }
+                $tagGamesMap[$gameTagId][] = $game;
+            }
+            
+            // 按子分类 ID 组织数组
+            if ($gameChildId) {
+                if (!isset($childGamesMap[$gameChildId])) {
+                    $childGamesMap[$gameChildId] = [];
+                }
+                $childGamesMap[$gameChildId][] = $game;
+            }
+        }
+        
+        // 5. 游戏数据单独复制到 $games
+        $games = $game_list;
+        
+        // 如果传入了 child_id 或 tag_id，过滤游戏数据
+        if (!empty($childId) || !empty($tagId)) {
+            $games = [];
+            foreach ($game_list as $game) {
+                $match = true;
+                if (!empty($childId) && ($game['child_id'] ?? null) != $childId) {
+                    $match = false;
+                }
+                if (!empty($tagId) && ($game['tag_id'] ?? null) != $tagId) {
+                    $match = false;
+                }
+                if ($match) {
+                    $games[] = $game;
+                }
+            }
+        }
+        
+        // 6. 获取标签信息
+        $gameTagIds = array_keys($tagGamesMap);
+        $gameTags = [];
+        if (!empty($gameTagIds)) {
+            $gameTags = \DB::table('game_tags')
+                ->whereIn('id', $gameTagIds)
+                ->get()
+                ->keyBy('id')
+                ->toArray();
+        }
+        
+        // 7. 遍历 $child_games，通过刚才组装的数组获取每个子分类包含的游戏数
+        foreach ($child_games as &$childGame) {
+            $childIdKey = $childGame['child_id'];
+            $childGame['count'] = isset($childGamesMap[$childIdKey]) ? count($childGamesMap[$childIdKey]) : 0;
+        }
+        unset($childGame);
+        
+        // 8. 遍历 $tag_games，通过刚才组装的数组获取每个标签包含的游戏数
+        foreach ($tagGamesMap as $tagIdKey => $tagGamesArray) {
+            $tag = $gameTags[$tagIdKey] ?? null;
+            $tag_games[] = [
+                'tag_id' => $tagIdKey,
+                'name' => $tag ? ($tag->name ?? '') : '',
+                'count' => count($tagGamesArray), // 通过组装的数组获取游戏数量
+            ];
+        }
+        
+        // 9. 整合数据并返回
+        return $this->returnMsg(200, [
+            'games' => $games,
+            'tag_games' => $tag_games,
+            'child_games' => $child_games,
+        ]);
     }   
     public function getAppUrl()
     {

@@ -207,7 +207,7 @@ class Dbzhenren extends Command
                 }
 
                 $existing = GameRecord::where('bet_id', $betId)
-                    ->where('platform_type', 'dbzhenren')
+                    ->where('platform_type', 'DBZR')
                     ->first();
 
                 // 4) 写入 game_records（参考 DbzhenrenService::betConfirm 字段风格）
@@ -235,7 +235,7 @@ class Dbzhenren extends Command
                     'game_type_id' => $gameTypeId,
                     'game_type_name' => $record['gameTypeName'] ?? '',
                     'game_code' => isset($gameTypeId) ? (string)$gameTypeId : '',
-                    'platform_type' => 'dbzhenren',
+                    'platform_type' => 'DBZR',
                     'game_type' => 'realbet',
                     'platform_id' => $record['platformId'] ?? null,
                     'platform_name' => $record['platformName'] ?? null,

@@ -627,13 +627,51 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
 
             case 'reclaim_balance':
-                // 回收余额（待实现）
+                // 回收余额 - 调用一键回收方法
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                
+                // 确保用户有 api_token
+                if (empty($user->api_token)) {
+                    $user->api_token = Str::random(60);
+                    $user->save();
+                }
+                
+                // 创建 PayController 实例并调用 transAll 方法
+                $payController = new \App\Http\Controllers\Api\PayController();
+                $request = Request::create('/api/pay/transAll', 'POST', [], [], [], [
+                    'HTTP_AUTHORIZATION' => 'Bearer ' . $user->api_token
+                ]);
+                $request->headers->set('authorization', 'Bearer ' . $user->api_token);
+                
+                try {
+                    $result = $payController->transAll($request);
+                    // returnMsg 返回的是 Response 对象，需要获取 JSON 内容
+                    $resultData = json_decode($result->getContent(), true);
+                    
+                    // 根据返回结果生成提示语
+                    if (isset($resultData['code']) && $resultData['code'] == 200) {
+                        $message = !empty($resultData['message']) ? $resultData['message'] : '回收成功';
+                        $tipMessage = '✅ ' . $message;
+                    } else {
+                        $message = !empty($resultData['message']) ? $resultData['message'] : '回收失败，请稍后重试';
+                        $tipMessage = '❌ ' . $message;
+                    }
+                } catch (\Throwable $e) {
+                    Log::error('Telegram一键回收异常', [
+                        'user_id' => $user->id,
+                        'username' => $user->username,
+                        'error' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine()
+                    ]);
+                    $tipMessage = '❌ 回收失败：' . $e->getMessage();
+                }
+                
                 $telegramUserInfo = [
                     'first_name' => $callbackQuery['from']['first_name'] ?? null,
                     'username' => $callbackQuery['from']['username'] ?? null
                 ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, $tipMessage);
 
             case 'deposit_withdraw':
                 // 充值提现二级菜单

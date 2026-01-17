@@ -47,8 +47,15 @@ Route::group([
     $router->resource('game-records','GameRecordController');
     $router->resource('apis','ApiController');
     $router->post('apis/{id}/toggle', 'ApiController@toggle');
+    // 获取子分类路由必须在 resource 之前定义，避免被 {id} 匹配
+    $router->get('game-categories/children', 'GameCategoryController@getChildren');
     $router->resource('game-categories','GameCategoryController');
+    $router->resource('game-tags','GameTagController');
+    // 获取子分类路由必须在 resource 之前定义，避免被 {id} 匹配
+    $router->get('game-lists/child-categories', 'GameListController@getChildCategories');
     $router->resource('game-lists','GameListController');
+    // 获取子分类路由必须在 resource 之前定义
+    $router->get('game-lists-app/child-categories', 'GameListAppController@getChildCategories');
     $router->resource('game-lists-app','GameListAppController');
     $router->get('/system-setting','SystemConfigController@siteSetting');
     $router->resource('bet-report','BetReportController');
