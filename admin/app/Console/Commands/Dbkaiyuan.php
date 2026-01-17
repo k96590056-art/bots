@@ -64,13 +64,14 @@ class Dbkaiyuan extends Command
         $this->info("时间范围：{$start_time} 至 {$end_time}");
 
         $result = $service->getGameReport($start_time, $end_time);
-        if (($result['code'] ?? 201) != 200) {
+        Log::error('Dbkaiyuan同步游戏记录失败', ['row' => $result]);
+        if (($result['code'] ?? 201) != 200 && ($result['code'] ?? 201) != 16) {
             $this->error("拉取游戏记录失败：{$result['message']}");
             return;
         }
 
         $records = $result['data'] ?? [];
-        if (empty($records)) {
+        if (empty($records) || $result["code"] == 16) {
             $this->info('没有需要同步的游戏记录');
             return;
         }
@@ -85,6 +86,12 @@ class Dbkaiyuan extends Command
                 if ($player === '') {
                     $fail++;
                     continue;
+                }
+
+                // 移除 ChannelID_ 前缀
+                $channelId = $row['ChannelID'] ?? '';
+                if ($channelId !== '' && strpos($player, $channelId . '_') === 0) {
+                    $player = substr($player, strlen($channelId . '_'));
                 }
 
                 $user = User::where('username', $player)->first();

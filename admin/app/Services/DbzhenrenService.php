@@ -2640,12 +2640,6 @@ class DbzhenrenService
         // 在公共方法中统一设置 lang 固定为1
         $businessParams['lang'] = 1;
         
-        // 记录原始业务参数
-        Log::info('Dbzhenren 开始组装加密请求参数', [
-            'business_params' => $businessParams,
-            'merchant_code' => $this->merchant_code
-        ]);
-        
         // 1. 将业务参数转为JSON字符串
         // 注意：JavaScript 的 JSON.stringify 会保持数字类型为数字，字符串为字符串
         // 但参考代码中有些字段是字符串类型（如 deviceType: "1"），需要确保类型一致
@@ -2658,27 +2652,10 @@ class DbzhenrenService
             ]);
             return null;
         }
-        
-        // 记录JSON字符串（用于调试对比）
-        Log::info('Dbzhenren 业务参数JSON字符串', [
-            'source_json' => $sourceJson,
-            'json_length' => strlen($sourceJson),
-            'business_params' => $businessParams
-        ]);
-        
         // 2. 生成MD5签名：MD5(原始JSON + md5Key)
         // 参考代码：var signature = CryptoJS.MD5(params + md5Kye).toString().toUpperCase();
         $signString = $sourceJson . $this->secret_key;
         $signature = strtoupper(md5($signString));
-        
-        Log::info('Dbzhenren 生成MD5签名', [
-            'source_json' => $sourceJson,
-            'secret_key' => $this->secret_key,
-            'sign_string' => $signString, // 完整签名字符串，用于对比
-            'sign_string_length' => strlen($signString),
-            'signature' => $signature
-        ]);
-        
         // 3. AES加密：AES/ECB/PKCS5Padding
         $encryptedParams = $this->aesEncrypt($sourceJson, $this->aes_key);
         
@@ -2690,31 +2667,12 @@ class DbzhenrenService
             return null;
         }
         
-        Log::info('Dbzhenren AES加密完成', [
-            'encrypted_params_length' => strlen($encryptedParams),
-            'encrypted_params_preview' => substr($encryptedParams, 0, 50) . '...'
-        ]);
-        
         // 4. 构建最终请求参数（只包含三个字段：merchantCode, params, signature）
         $finalParams = [
             'merchantCode' => $this->merchant_code,
             'params' => $encryptedParams, // AES加密后的Base64字符串
             'signature' => $signature      // MD5签名（大写）
         ];
-        
-        // 记录最终组装的参数
-        Log::info('Dbzhenren 请求参数组装完成', [
-            'merchant_code' => $this->merchant_code,
-            'params_length' => strlen($encryptedParams),
-            'signature' => $signature,
-            'final_params_keys' => array_keys($finalParams), // 确认只有三个字段
-            'final_params' => [
-                'merchantCode' => $finalParams['merchantCode'],
-                'params' => substr($encryptedParams, 0, 50) . '... (AES加密后的Base64)',
-                'signature' => $finalParams['signature']
-            ],
-            'note' => '最终请求参数只包含三个字段：merchantCode, params, signature'
-        ]);
         
         return $finalParams;
     }
@@ -2733,18 +2691,6 @@ class DbzhenrenService
      */
     private function sendRequest($url, $params = [], $method = 'POST', $contentType = 'application/json', $headers = [], $needEncrypt = true)
     {
-        // 请求前日志记录
-        Log::info('Dbzhenren 请求开始', [
-            'url' => $url,
-            'method' => $method,
-            'content_type' => $contentType,
-            'need_encrypt' => $needEncrypt,
-            'original_params' => $params,
-            'headers' => $headers,
-            'params_count' => count($params),
-            'timestamp' => date('Y-m-d H:i:s')
-        ]);
-
         $startTime = microtime(true); // 记录请求开始时间
         
         $ch = curl_init();
@@ -2757,15 +2703,6 @@ class DbzhenrenService
             // GET请求不加密（如 /api/merchant/ok）
             $queryString = http_build_query($params);
             $requestUrl = $url . '?' . $queryString;
-            
-            // 记录GET请求参数
-            Log::info('Dbzhenren GET请求参数组装完成', [
-                'url' => $url,
-                'request_url' => $requestUrl,
-                'params' => $params,
-                'query_string' => $queryString
-            ]);
-            
             curl_setopt($ch, CURLOPT_URL, $requestUrl);
             curl_setopt($ch, CURLOPT_POST, false);
             $requestBody = $queryString;
@@ -2866,21 +2803,6 @@ class DbzhenrenService
         if ($method === 'GET') {
             $finalRequestParams = $params;
         }
-        
-        Log::info('Dbzhenren 最终请求参数和原始字符串', [
-            'url' => $requestUrl,
-            'method' => $method,
-            'content_type' => $contentType,
-            'final_request_params' => $finalRequestParams, // 最终请求的参数数组（加密请求应该是 merchantCode, params, signature）
-            'final_request_params_keys' => $finalRequestParams ? array_keys($finalRequestParams) : [], // 确认字段名称
-            'final_request_params_count' => $finalRequestParams ? count($finalRequestParams) : 0, // 确认字段数量
-            'request_body_raw_string' => $requestBody, // 请求的原始JSON字符串（完整内容）
-            'request_body_length' => strlen($requestBody),
-            'business_params' => $businessParams, // 原始业务参数（用于对比）
-            'need_encrypt' => $needEncrypt,
-            'note' => $needEncrypt && $contentType === 'application/json' ? '加密请求：最终参数应该是 merchantCode, params, signature 三个字段' : ''
-        ]);
-
         $response = curl_exec($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlError = curl_error($ch);
@@ -2917,14 +2839,6 @@ class DbzhenrenService
 
         // 记录响应日志
         $responseData = json_decode($response, true);
-        Log::info('Dbzhenren API响应', [
-            'url' => $requestUrl,
-            'method' => $method,
-            'http_code' => $httpCode,
-            'response' => $responseData ?: $response,
-            'response_length' => strlen($response),
-            'duration_ms' => $duration
-        ]);
 
         // 如果HTTP状态码不是200，统一返回错误格式
         if ($httpCode !== 200) {
@@ -2999,19 +2913,6 @@ class DbzhenrenService
             }
         }
 
-        // 请求后日志记录（成功）
-        $status = ($responseData['code'] == 200 || $responseData['code'] == '200') ? 'success' : 'failed';
-        Log::info('Dbzhenren 请求结束', [
-            'url' => $requestUrl,
-            'method' => $method,
-            'http_code' => $httpCode,
-            'response_code' => $responseData['code'] ?? 'unknown',
-            'duration_ms' => $duration,
-            'status' => $status,
-            'message' => $responseData['message'] ?? '',
-            'timestamp' => date('Y-m-d H:i:s')
-        ]);
-
         return $responseData;
     }
 
@@ -3050,13 +2951,6 @@ class DbzhenrenService
             $cipher = 'AES-256-ECB';
         }
         
-        Log::info('Dbzhenren AES加密参数', [
-            'key_length' => $keyLength,
-            'padded_key_length' => strlen($paddedKey),
-            'cipher' => $cipher,
-            'data_length' => strlen($data)
-        ]);
-        
         // PHP的openssl_encrypt默认使用PKCS7填充（等同于PKCS5）
         $encrypted = openssl_encrypt($data, $cipher, $paddedKey, OPENSSL_RAW_DATA);
         
@@ -3073,12 +2967,6 @@ class DbzhenrenService
         
         // CryptoJS 返回的是 Base64 编码的字符串
         $base64Result = base64_encode($encrypted);
-        
-        Log::info('Dbzhenren AES加密成功', [
-            'encrypted_length' => strlen($encrypted),
-            'base64_length' => strlen($base64Result),
-            'base64_preview' => substr($base64Result, 0, 50) . '...'
-        ]);
         
         return $base64Result;
     }

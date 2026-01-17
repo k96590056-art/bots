@@ -850,8 +850,7 @@ class TelegramBotService
                 return ['code' => 500, 'message' => '设置Bot命令菜单失败', 'data' => $result];
             }
 
-            Log::info('Telegram设置Bot命令菜单成功', [
-                'commands' => $commands,
+            // Bot命令菜单设置成功
                 'response' => $result
             ]);
 
@@ -935,11 +934,6 @@ class TelegramBotService
                 ]);
                 return ['code' => 500, 'message' => '设置菜单按钮失败', 'data' => $result];
             }
-
-            Log::info('Telegram设置菜单按钮成功', [
-                'type' => $type,
-                'response' => $result
-            ]);
 
             return ['code' => 200, 'message' => '成功', 'data' => $result];
         } catch (\Exception $e) {

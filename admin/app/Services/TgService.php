@@ -249,9 +249,7 @@ class TgService
         ];
         
         $data['code'] = $this->generateCode($data);
-        $res = $this->sendRequest($this->api_url."/api/login",$data);
-              \Illuminate\Support\Facades\Log::info("Iglogin游戏记录参数");
-               \Illuminate\Support\Facades\Log::info($data);      
+        $res = $this->sendRequest($this->api_url."/api/login",$data);      
         return $res;
     }
 

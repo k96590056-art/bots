@@ -176,15 +176,6 @@ class DpService
             ];
         }
 
-        // 记录请求和响应日志（用于调试）
-        Log::info('DP接口请求详情', [
-            'url' => $url,
-            'http_code' => $httpCode,
-            'request_body' => $body_data,
-            'response_raw' => $contents,
-            'response_length' => strlen($contents)
-        ]);
-
         $result = json_decode($contents, TRUE);
         
         if (!$result || !is_array($result)) {
@@ -223,14 +214,6 @@ class DpService
      */
     public function register($userName, $password = '123456', $currency = 'USDT', $lang = 'zh_CN')
     {
-        Log::info('DP注册 - 开始调用', [
-            'userName' => $userName,
-            'api_url' => $this->api_url,
-            'api_account' => $this->api_account,
-            'currency' => $currency,
-            'lang' => $lang
-        ]);
-
         $return = [
             'code' => 200,
             'message' => '成功'
@@ -257,21 +240,8 @@ class DpService
 
         // 发送JSON请求到注册接口
         $apiUrl = rtrim($this->api_url, '/') . '/member/register/v1';
-        Log::info('DP注册 - 请求参数', [
-            'userName' => $userName,
-            'body_data' => $bodyData,
-            'full_url' => $apiUrl,
-            'api_account' => $this->api_account
-        ]);
         
         $res = $this->sendJsonRequest($apiUrl, $bodyData);
-        
-        Log::info('DP注册 - 接口返回', [
-            'userName' => $userName,
-            'response_code' => $res['code'] ?? 'unknown',
-            'response_message' => $res['message'] ?? 'unknown',
-            'full_response' => $res
-        ]);
         
         // 检查响应结果（DP接口返回code=0表示成功）
         if (!isset($res['code']) || $res['code'] != 0) {
@@ -284,11 +254,6 @@ class DpService
             ]);
             return $return;
         }
-
-        Log::info('DP注册成功', [
-            'userName' => $userName,
-            'response' => $res
-        ]);
 
         return $return;
     }
@@ -311,18 +276,6 @@ class DpService
      */
     public function login($userName, $venueCode = '', $currency = 'USDT', $gameId = 0, $deviceType = 2, $lang = 'zh_CN', $userClientIp = '')
     {
-        Log::info('DP登录 - 开始调用', [
-            'userName' => $userName,
-            'venueCode' => $venueCode,
-            'currency' => $currency,
-            'gameId' => $gameId,
-            'deviceType' => $deviceType,
-            'lang' => $lang,
-            'userClientIp' => $userClientIp,
-            'api_url' => $this->api_url,
-            'api_account' => $this->api_account
-        ]);
-
         $return = [
             'code' => 200,
             'message' => '成功'
@@ -370,26 +323,8 @@ class DpService
 
         // 发送JSON请求到获取游戏链接接口
         $apiUrl = rtrim($this->api_url, '/') . '/member/getLaunchURL/v1';
-        Log::info('DP登录 - 请求参数', [
-            'userName' => $userName,
-            'venueCode' => $venueCode,
-            'body_data' => $bodyData,
-            'full_url' => $apiUrl,
-            'api_account' => $this->api_account
-        ]);
         
         $res = $this->sendJsonRequest($apiUrl, $bodyData);
-        
-        Log::info('DP登录 - 接口返回', [
-            'userName' => $userName,
-            'venueCode' => $venueCode,
-            'gameId' => $gameId,
-            'response_code' => $res['code'] ?? 'unknown',
-            'response_message' => $res['message'] ?? 'unknown',
-            'has_data' => isset($res['data']),
-            'has_content' => isset($res['data']['content']),
-            'full_response' => $res
-        ]);
         
         // 检查响应结果（DP接口返回code=0表示成功）
         if (!isset($res['code']) || $res['code'] != 0) {
@@ -423,15 +358,6 @@ class DpService
 
         $return['data'] = $gameUrl;
         $return['traceId'] = $res['traceId'] ?? '';
-
-        Log::info('DP登录成功', [
-            'userName' => $userName,
-            'venueCode' => $venueCode,
-            'gameId' => $gameId,
-            'game_url' => $gameUrl,
-            'url_length' => strlen($gameUrl),
-            'traceId' => $return['traceId']
-        ]);
 
         return $return;
     }
@@ -512,12 +438,6 @@ class DpService
             return $return;
         }
 
-        Log::info('DP充值成功', [
-            'username' => $username,
-            'amount' => $amount,
-            'transferno' => $transferno
-        ]);
-
         return $return;
     }
 
@@ -559,12 +479,6 @@ class DpService
             ]);
             return $return;
         }
-
-        Log::info('DP提现成功', [
-            'username' => $username,
-            'amount' => $amount,
-            'transferno' => $transferno
-        ]);
 
         return $return;
     }
@@ -623,16 +537,6 @@ class DpService
 
         // 发送JSON请求到游戏列表接口
         $apiUrl = rtrim($this->api_url, '/') . '/member/game/list/v1';
-        Log::info('DP获取游戏列表请求', [
-            'api_url' => $this->api_url,
-            'full_url' => $apiUrl,
-            'venueCode' => $venueCode,
-            'currency' => $currency,
-            'pageNum' => $pageNum,
-            'pageSize' => $pageSize,
-            'body_data' => $bodyData,
-            'api_account' => $this->api_account
-        ]);
 
         $res = $this->sendJsonRequest($apiUrl, $bodyData);
         
@@ -655,13 +559,6 @@ class DpService
         // 返回游戏列表数据
         $return['data'] = $res['data'] ?? [];
         $return['traceId'] = $res['traceId'] ?? '';
-
-        Log::info('DP获取游戏列表成功', [
-            'venueCode' => $venueCode,
-            'currency' => $currency,
-            'total_record' => $res['data']['totalRecord'] ?? 0,
-            'list_count' => isset($res['data']['list']) ? count($res['data']['list']) : 0
-        ]);
 
         return $return;
     }
