@@ -313,10 +313,6 @@ class DbevoService
 
         // User Authentication API 成功时返回 entry 和 entryEmbedded
         if (isset($res['entry']) || isset($res['entryEmbedded'])) {
-            Log::info('Evo注册成功', [
-                'username' => $username,
-                'uuid' => $uuid
-            ]);
             return $return;
         }
 
@@ -347,9 +343,6 @@ class DbevoService
         $ecrRes = $this->sendGetRequest($ecrUrl);
         
         if (isset($ecrRes['code']) && $ecrRes['code'] == 200) {
-            Log::info('Evo注册成功（eCashier方式）', [
-                'username' => $username
-            ]);
             return $return;
         }
 
@@ -444,12 +437,6 @@ class DbevoService
             
             $return['data'] = $gameUrl;
             $return['session_id'] = $session_id;
-            
-            Log::info('Evo登录成功', [
-                'username' => $username,
-                'game_code' => $game_code,
-                'game_url' => $gameUrl
-            ]);
             
             return $return;
         }
@@ -605,12 +592,6 @@ class DbevoService
                     'balance' => round((float)$balance, 2),
                 ];
                 
-                Log::info('Evo上分成功（eCashier）', [
-                    'username' => $username,
-                    'amount' => $amount,
-                    'ext_trans_id' => $ext_trans_id
-                ]);
-                
                 return $return;
             }
         }
@@ -679,12 +660,6 @@ class DbevoService
                     'balance' => round((float)$balance, 2),
                     'amount' => $amount,
                 ];
-                
-                Log::info('Evo下分成功（eCashier）', [
-                    'username' => $username,
-                    'amount' => $amount,
-                    'ext_trans_id' => $ext_trans_id
-                ]);
                 
                 return $return;
             }
@@ -982,12 +957,6 @@ class DbevoService
                 $return['status'] = 'OK';
                 $return['balance'] = round($userApi->api_money, 2);
                 $return['uuid'] = $requestData['uuid'] ?? '';
-                
-                Log::info('Evo One Wallet Debit成功', [
-                    'userId' => $userId,
-                    'amount' => $amount,
-                    'transId' => $transId
-                ]);
                 break;
 
             case 'credit':
@@ -1001,12 +970,6 @@ class DbevoService
                 $return['status'] = 'OK';
                 $return['balance'] = round($userApi->api_money, 2);
                 $return['uuid'] = $requestData['uuid'] ?? '';
-                
-                Log::info('Evo One Wallet Credit成功', [
-                    'userId' => $userId,
-                    'amount' => $amount,
-                    'transId' => $transId
-                ]);
                 break;
 
             case 'cancel':
@@ -1022,12 +985,6 @@ class DbevoService
                 $return['status'] = 'OK';
                 $return['balance'] = round($userApi->api_money, 2);
                 $return['uuid'] = $requestData['uuid'] ?? '';
-                
-                Log::info('Evo One Wallet Cancel成功', [
-                    'userId' => $userId,
-                    'amount' => $amount,
-                    'transId' => $transId
-                ]);
                 break;
 
             default:

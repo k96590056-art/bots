@@ -13,6 +13,7 @@ use App\Models\SystemConfig;
 use App\Models\GameRecord;
 use App\Models\Recharge;
 use App\Models\Withdraw;
+use App\Models\TransferLog;
 use App\Models\TelegramRebindToken;
 use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
@@ -20,6 +21,11 @@ use App\Services\TronUsdtService;
 use App\Services\DpService;
 use App\Services\TgService;
 use App\Services\PussyService;
+use App\Services\DbzhenrenService;
+use App\Services\DbdianziService;
+use App\Services\DbgmagService;
+use App\Services\DbkaiyuanService;
+use App\Services\DbevoService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -35,10 +41,35 @@ class TelegramWebhookController extends Controller
 
     public function __construct()
     {
-        $this->telegramBot = new TelegramBotService();
-        $this->dpService = new DpService();
-        $this->tgService = new TgService();
-        $this->pussyService = new PussyService();
+        $logFile = storage_path('logs/telegram_webhook.log');
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramWebhookController 构造函数开始 ===' . PHP_EOL, FILE_APPEND);
+        
+        try {
+            $this->telegramBot = new TelegramBotService();
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramBotService 实例化成功 ===' . PHP_EOL, FILE_APPEND);
+        } catch (\Throwable $e) {
+            // 记录构造函数错误到文件，因为Log可能还没初始化
+            $errorLog = date('Y-m-d H:i:s') . ' === 构造函数错误: TelegramBotService实例化失败 ===' . PHP_EOL;
+            $errorLog .= 'Error: ' . $e->getMessage() . PHP_EOL;
+            $errorLog .= 'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+            $errorLog .= 'Trace: ' . $e->getTraceAsString() . PHP_EOL;
+            $errorLog .= '---' . PHP_EOL;
+            @file_put_contents($logFile, $errorLog, FILE_APPEND);
+            // 重新抛出异常，让框架处理
+            throw $e;
+        }
+        
+        try {
+            $this->dpService = new DpService();
+            $this->tgService = new TgService();
+            $this->pussyService = new PussyService();
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 其他Service实例化成功 ===' . PHP_EOL, FILE_APPEND);
+        } catch (\Throwable $e) {
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 构造函数错误: Service实例化失败 ===' . PHP_EOL . 'Error: ' . $e->getMessage() . PHP_EOL . '---' . PHP_EOL, FILE_APPEND);
+            throw $e;
+        }
+        
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramWebhookController 构造函数完成 ===' . PHP_EOL, FILE_APPEND);
     }
 
     /**
@@ -80,6 +111,12 @@ class TelegramWebhookController extends Controller
     public function webhook(Request $request)
     {
         // 使用文件直接写入日志，确保即使Log facade失败也能记录
+        // 创建日志目录（如果不存在）
+        $logDir = storage_path('logs');
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        
         $logFile = storage_path('logs/telegram_webhook.log');
         $logEntry = date('Y-m-d H:i:s') . ' === Telegram Webhook 开始处理 ===' . PHP_EOL;
         $logEntry .= 'Method: ' . $request->method() . PHP_EOL;
@@ -88,6 +125,8 @@ class TelegramWebhookController extends Controller
         $logEntry .= 'Content-Length: ' . ($request->header('Content-Length') ?? 'N/A') . PHP_EOL;
         $logEntry .= 'Raw Input: ' . $request->getContent() . PHP_EOL;
         $logEntry .= 'All Input: ' . json_encode($request->all(), JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        $logEntry .= 'URI: ' . $request->getRequestUri() . PHP_EOL;
+        $logEntry .= 'Route: ' . ($request->route() ? $request->route()->getName() : 'N/A') . PHP_EOL;
         $logEntry .= '---' . PHP_EOL;
         @file_put_contents($logFile, $logEntry, FILE_APPEND);
 
@@ -192,6 +231,11 @@ class TelegramWebhookController extends Controller
      */
     protected function handleMessage($message)
     {
+        $logFile = storage_path('logs/telegram_webhook.log');
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 开始 ===' . PHP_EOL . 
+            'Message: ' . json_encode($message, JSON_UNESCAPED_UNICODE) . PHP_EOL . 
+            '---' . PHP_EOL, FILE_APPEND);
+        
         try {
             $chatId = $message['chat']['id'] ?? null;
             $telegramId = $message['from']['id'] ?? null;
@@ -199,8 +243,16 @@ class TelegramWebhookController extends Controller
             $username = $message['from']['username'] ?? '';
             $firstName = $message['from']['first_name'] ?? '';
 
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 解析消息 ===' . PHP_EOL . 
+                'Chat ID: ' . ($chatId ?? 'NULL') . PHP_EOL . 
+                'Telegram ID: ' . ($telegramId ?? 'NULL') . PHP_EOL . 
+                'Text: ' . $text . PHP_EOL . 
+                'Username: ' . $username . PHP_EOL . 
+                '---' . PHP_EOL, FILE_APPEND);
+
             if (!$chatId || !$telegramId) {
                 Log::error('Telegram消息缺少必要字段', ['message' => $message]);
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 错误: 缺少必要字段 ===' . PHP_EOL, FILE_APPEND);
                 return response()->json(['ok' => false, 'error' => '缺少必要字段'], 400);
             }
 
@@ -271,6 +323,12 @@ class TelegramWebhookController extends Controller
         }
 
         // 处理/start命令或首次进入
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 检查是否为 /start 命令 ===' . PHP_EOL . 
+            'Text: "' . $text . '"' . PHP_EOL . 
+            'Text === /start: ' . ($text === '/start' ? 'Yes' : 'No') . PHP_EOL . 
+            'Empty text: ' . (empty($text) ? 'Yes' : 'No') . PHP_EOL . 
+            '---' . PHP_EOL, FILE_APPEND);
+        
         if ($text === '/start' || empty($text)) {
             // 清除用户状态，避免残留状态影响
             $this->clearUserState($telegramId);
@@ -279,17 +337,46 @@ class TelegramWebhookController extends Controller
                 'chat_id' => $chatId,
                 'user_id' => $user->id,
                 'text' => $text,
-                'is_new_user' => $isNewUser
+                'is_new_user' => $isNewUser,
+                'line' => __LINE__
             ]);
+            
+            // 记录到文件日志
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 触发显示主菜单 ===' . PHP_EOL . 
+                'Chat ID: ' . $chatId . PHP_EOL . 
+                'User ID: ' . $user->id . PHP_EOL . 
+                'Text: ' . $text . PHP_EOL . 
+                'Is New User: ' . ($isNewUser ? 'Yes' : 'No') . PHP_EOL . 
+                '准备调用 showMainMenu...' . PHP_EOL . 
+                '---' . PHP_EOL, FILE_APPEND);
+            
             // showMainMenu会自动检查first_password并显示密码（如果是新用户）
             // 传递 Telegram 用户信息以获取最新的名称、用户名和ID
             $telegramUserInfo = [
                 'first_name' => $firstName,
                 'username' => $username
             ];
-            $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
-            Log::info('showMainMenu返回结果', ['result' => $result]);
-            return $result;
+            
+            try {
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
+                $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用完成 ===' . PHP_EOL . 
+                    'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL . 
+                    '---' . PHP_EOL, FILE_APPEND);
+                Log::info('showMainMenu返回结果', ['result' => $result]);
+                return $result;
+            } catch (\Throwable $e) {
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL . 
+                    'Error: ' . $e->getMessage() . PHP_EOL . 
+                    'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL . 
+                    '---' . PHP_EOL, FILE_APPEND);
+                Log::error('showMainMenu调用异常', [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+                throw $e;
+            }
         }
 
         // 处理/help命令
@@ -384,6 +471,15 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
         }
         } catch (\Exception $e) {
+            $logFile = storage_path('logs/telegram_webhook.log');
+            $errorLog = date('Y-m-d H:i:s') . ' === handleMessage 异常 ===' . PHP_EOL;
+            $errorLog .= 'Error: ' . $e->getMessage() . PHP_EOL;
+            $errorLog .= 'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+            $errorLog .= 'Trace: ' . $e->getTraceAsString() . PHP_EOL;
+            $errorLog .= 'Message: ' . json_encode($message ?? null, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+            $errorLog .= '---' . PHP_EOL;
+            @file_put_contents($logFile, $errorLog, FILE_APPEND);
+            
             Log::error('处理Telegram消息异常', [
                 'message' => $message ?? null,
                 'error' => $e->getMessage(),
@@ -510,6 +606,7 @@ class TelegramWebhookController extends Controller
                 return $this->startGame($chatId, $messageId, $user, $param, $callbackQueryId);
 
             case 'back_main':
+            case 'back_to_main_menu':
                 // 返回主菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
                 $telegramUserInfo = [
@@ -634,13 +731,37 @@ class TelegramWebhookController extends Controller
                 return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
             case 'welfare_activities':
-                // 福利活动（待实现）
+                // 福利活动 - 使用webapp形式打开活动页面
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                
+                // 获取游戏入口URL（与主菜单一致）
+                $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
+                $activityUrl = rtrim($gameUrl, '/') . '/#/activity';
+                
+                // 构建Inline Keyboard，使用web_app类型按钮
+                $inlineKeyboard = [[
+                    [
+                        'text' => '🎁 福利活动',
+                        'web_app' => [
+                            'url' => $activityUrl
+                        ]
+                    ]
+                ], [
+                    [
+                        'text' => '← 返回',
+                        'callback_data' => 'back_to_main_menu'
+                    ]
+                ]];
+                
+                // 编辑消息，显示福利活动按钮
+                $text = "🎁 点击下方按钮进入福利活动页面";
+                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+                if ($result['code'] != 200) {
+                    // 如果编辑失败，尝试发送新消息
+                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
+                }
+                
+                return response()->json(['ok' => true]);
 
             case 'language':
                 // 语言切换（待实现）
@@ -820,6 +941,13 @@ class TelegramWebhookController extends Controller
         }
 
         // 如果系统logo也没有，尝试使用默认路径（向后兼容）
+        Log::error('TelegramWebhookController::getMainMenuImageUrl 使用默认图片路径', [
+            'line' => 854,
+            'app_url' => env('APP_URL'),
+            'main_image_path' => $mainImagePath ?? null,
+            'app_logo' => $appLogo ?? null,
+            'default_path' => env('APP_URL') . '/images/telegram/main_banner.jpg'
+        ]);
         return env('APP_URL') . '/images/telegram/main_banner.jpg';
     }
 
@@ -1312,37 +1440,7 @@ class TelegramWebhookController extends Controller
         }
 
         try {
-            // 统一使用DP服务进行注册和登录
-            Log::info('开始游戏 - 使用DP服务', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'platform' => $platformName,
-                'game_code' => $gameCode
-            ]);
-
-            // 生成注册用的用户名：游戏编码（如果没有特殊字符则直接使用，否则去除特殊字符）+ 用户名
-            // 检查游戏编码是否包含特殊字符（非字母数字字符）
-            if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
-                // 包含特殊字符，去除特殊字符
-                $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
-            } else {
-                // 没有特殊字符，直接使用原游戏编码
-                $cleanGameCode = $gameCode;
-            }
-            $dpUserName = $cleanGameCode . $user->username; // 拼接用户名
-
-            // 使用DP服务时，不需要先调用register接口，直接调用login接口
-            // DP服务支持自动注册（如果用户不存在，login时会自动创建）
-            Log::info('开始游戏 - 使用DP服务，跳过注册步骤，直接登录', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'game_code' => $gameCode,
-                'clean_game_code' => $cleanGameCode,
-                'dp_user_name' => $dpUserName,
-                'platform' => $platformName
-            ]);
-
-            // 获取游戏信息，用于确定venueCode和gameId
+            // 获取游戏信息
             $game = GameList::where('platform_name', $platformName)
                 ->where('game_code', $gameCode)
                 ->first();
@@ -1357,70 +1455,270 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            // 确定venueCode（场馆编码），使用游戏信息中的venue_code字段
-            $venueCode = $game->venue_code ?? $platformName; // 如果venue_code不存在，使用platformName作为后备
-            // 确定gameId，如果gameCode是数字则作为gameId，否则为0（从游戏列表接口获取的ID）
-            $gameId = is_numeric($gameCode) ? (int)$gameCode : 0;
-            // 币种默认USDT
-            $currency = 'USDT';
-            // 设备类型：2=h5（适合Telegram Mini App）
-            $deviceType = 2;
-            // 语言默认zh_CN
-            $lang = 'zh_CN';
+            // 检查游戏状态
+            if (((int)$game->site_state !== 1) || ((int)$game->app_state !== 1)) {
+                Log::error('开始游戏 - 游戏已关闭', [
+                    'user_id' => $user->id,
+                    'platform' => $platformName,
+                    'game_code' => $gameCode,
+                    'site_state' => $game->site_state,
+                    'app_state' => $game->app_state
+                ]);
+                $this->telegramBot->sendMessage($chatId, '该游戏已关闭');
+                return response()->json(['ok' => true]);
+            }
 
-            Log::info('开始游戏 - 调用DP登录接口', [
+            // 根据游戏的 with_api 字段确定使用哪个服务类
+            $withApi = strtolower($game->with_api ?? 'dp');
+            $password = "123456";
+            $is_mobile_url = 1; // Telegram Mini App 使用移动端URL
+
+            Log::info('开始游戏 - 根据游戏信息确定服务类', [
                 'user_id' => $user->id,
                 'username' => $user->username,
-                'dp_user_name' => $dpUserName,
                 'platform' => $platformName,
                 'game_code' => $gameCode,
-                'venue_code' => $game->venue_code ?? null,
-                'venueCode' => $venueCode,
-                'gameId' => $gameId,
-                'currency' => $currency,
-                'deviceType' => $deviceType,
-                'lang' => $lang
+                'with_api' => $withApi,
+                'game_id' => $game->id ?? null
             ]);
-            // 登录时使用用户名（游戏编码+用户名）
-            $loginResult = $this->dpService->login($dpUserName, $venueCode, $currency, $gameId, $deviceType, $lang);
-            Log::info('开始游戏 - DP登录接口返回', [
+
+            // 根据 with_api 确定服务类
+            $serviceClass = '\\App\\Services\\' . ucfirst($withApi) . 'Service';
+            if (!class_exists($serviceClass)) {
+                // Special handling for Dianzi, Dbzhenren and Evo as their class names don't follow the *Service suffix pattern
+                if ($withApi === 'dbdianzi') {
+                    $serviceClass = '\\App\\Services\\DbdianziService';
+                } elseif ($withApi === 'dbgmag') {
+                    $serviceClass = '\\App\\Services\\DbgmagService';
+                } elseif ($withApi === 'dbzhenren') {
+                    $serviceClass = '\\App\\Services\\DbzhenrenService';
+                } elseif ($withApi === 'dbevo') {
+                    $serviceClass = '\\App\\Services\\DbevoService';
+                } elseif ($withApi === 'dbkaiyuan') {
+                    $serviceClass = '\\App\\Services\\DbkaiyuanService';
+                } else {
+                    Log::error('开始游戏 - 接口服务类不存在', [
+                        'service_class' => $serviceClass,
+                        'with_api' => $withApi,
+                        'user_id' => $user->id
+                    ]);
+                    $this->telegramBot->sendMessage($chatId, '接口服务不存在');
+                    return response()->json(['ok' => true]);
+                }
+            }
+            $service = new $serviceClass();
+
+            // 重要：转账/免转 开关以 game_lists 当前游戏的 transferstatus 为准
+            $gameTransferstatus = $game->transferstatus ?? ($game->transfer_status ?? ($game->transferStatus ?? null));
+            $effectiveTransferstatus = ($gameTransferstatus === null) ? (int)($user->transferstatus ?? 0) : (int)$gameTransferstatus;
+
+            // 处理用户注册逻辑（参考 IndexController::getGameUrl）
+            $User_Api = null;
+            if ($withApi === 'dp') {
+                Log::info('开始游戏 - DP接口 - 从 user_api 获取登录信息', [
+                    'user_id' => $user->id,
+                    'username' => $user->username,
+                    'api_code' => $platformName,
+                    'game_code' => $gameCode
+                ]);
+                
+                // 根据 api_code（platform_name）从 user_api 表获取登录信息
+                $User_Api = User_Api::where('api_code', $platformName)->where('user_id', $user->id)->first();
+                
+                if (!$User_Api || empty($User_Api->api_user)) {
+                    // 如果 user_api 记录不存在或 api_user 为空，根据 game_code 生成登录用户名
+                    Log::info('开始游戏 - DP接口 - user_api 记录不存在，根据 game_code 生成登录用户名', [
+                        'user_id' => $user->id,
+                        'api_code' => $platformName,
+                        'game_code' => $gameCode
+                    ]);
+                    
+                    // 生成 dp 登录用户名：从 venue_code 提取前缀 + 用户名
+                    $venueCode = $game->venue_code ?? $platformName;
+                    $cleanGameCode = '';
+                    
+                    if (!empty($venueCode)) {
+                        // 提取前2位字母（忽略数字和其他字符）
+                        preg_match('/[a-zA-Z]{1,2}/', $venueCode, $matches);
+                        $cleanGameCode = isset($matches[0]) ? strtoupper($matches[0]) : '';
+                    }
+                    
+                    // 如果提取不到字母，使用 gameCode 清理后的值作为后备
+                    if (empty($cleanGameCode) && !empty($gameCode)) {
+                        if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
+                            $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
+                        } else {
+                            $cleanGameCode = $gameCode;
+                        }
+                    }
+                    
+                    // 生成 dp 用户名：前缀 + 用户名
+                    $dpUserName = $cleanGameCode . $user->username;
+                    
+                    // 创建或更新 user_api 记录
+                    if ($User_Api) {
+                        $User_Api->api_user = $dpUserName;
+                        $User_Api->api_pass = '123456';
+                        $User_Api->save();
+                    } else {
+                        $User_Api = User_Api::create([
+                            'user_id' => $user->id,
+                            'api_code' => $platformName,
+                            'api_user' => $dpUserName,
+                            'api_pass' => '123456',
+                            'api_money' => 0
+                        ]);
+                    }
+                }
+            } elseif (in_array($withApi, ['tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dbkaiyuan', 'dbevo'], true)) {
+                Log::info('开始游戏 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $platformName, 'with_api' => $withApi]);
+                $User_Api = User_Api::where('api_code', $platformName)->where('user_id', $user->id)->first();
+                if (!$User_Api) {
+                    Log::info('开始游戏 - User_Api不存在，调用注册接口', ['username' => $user->username, 'api_code' => $platformName, 'with_api' => $withApi]);
+                    $result = $service->register($platformName, $user->username, $password);
+                    if ($result['code'] != 200) {
+                        Log::error('开始游戏 - 注册失败', [
+                            'user_id' => $user->id,
+                            'with_api' => $withApi,
+                            'result' => $result
+                        ]);
+                        $this->telegramBot->sendMessage($chatId, '注册失败：' . ($result['message'] ?? '未知错误'));
+                        return response()->json(['ok' => true]);
+                    }
+                    $arr = [
+                        'user_id' => $user->id,
+                        'api_user' => $user->username,
+                        'api_pass' => 123456,
+                        'api_code' => $platformName,
+                    ];
+                    $User_Api = User_Api::create($arr);
+                }
+            }
+
+            // 自动上分 / 免转逻辑（在登录前执行）
+            if (in_array($withApi, ['dp', 'tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dbevo', 'dbkaiyuan'], true)) {
+                if (!isset($User_Api) || !$User_Api) {
+                    $User_Api = User_Api::where('api_code', $platformName)->where('user_id', $user->id)->first();
+                }
+                if ($effectiveTransferstatus === 1) {
+                    // 转账模式：将余额通过对应游戏平台接口转入到当前场馆
+                    $transRes = $this->transferToGameForLogin($platformName, $user);
+                    if (isset($transRes['code']) && (int)$transRes['code'] !== 200) {
+                        Log::error('开始游戏 - 自动转账到游戏失败', [
+                            'user_id' => $user->id,
+                            'platform' => $platformName,
+                            'result' => $transRes
+                        ]);
+                        $this->telegramBot->sendMessage($chatId, '自动转账失败：' . ($transRes['message'] ?? '未知错误'));
+                        return response()->json(['ok' => true]);
+                    }
+                } else {
+                    // 免转模式：同步 user_api.api_money
+                    if ($User_Api) {
+                        $User_Api->api_money = $user->balance;
+                        $User_Api->save();
+                    }
+                }
+            }
+
+            // 调用登录接口获取游戏链接（参考 IndexController::getGameUrl）
+            $loginResult = null;
+            if ($withApi === 'dp') {
+                // 确保 $User_Api 变量存在
+                if (!isset($User_Api) || empty($User_Api->api_user)) {
+                    Log::error('开始游戏 - DP接口 - user_api 记录未正确创建', [
+                        'user_id' => $user->id,
+                        'api_code' => $platformName
+                    ]);
+                    $this->telegramBot->sendMessage($chatId, '用户登录信息获取失败');
+                    return response()->json(['ok' => true]);
+                }
+                
+                // 从 user_api 表获取登录用户名
+                $dpUserName = $User_Api->api_user;
+                
+                // 确定 venueCode（场馆编码）
+                $venueCode = $game->venue_code ?? $platformName;
+                // 确定 gameId，如果 gameCode 是数字则作为 gameId，否则为 0
+                $gameId = !empty($gameCode) && is_numeric($gameCode) ? (int)$gameCode : 0;
+                // 币种默认 USDT
+                $currency = 'USDT';
+                // 设备类型：2=H5（适合Telegram Mini App）
+                $deviceType = 2;
+                // 语言默认 zh_CN
+                $lang = 'zh_CN';
+                
+                Log::info('开始游戏 - DP接口 - 准备调用登录接口', [
+                    'user_id' => $user->id,
+                    'users_username' => $user->username,
+                    'user_api_api_user' => $dpUserName,
+                    'venue_code' => $venueCode,
+                    'game_code' => $gameCode,
+                    'game_id' => $gameId,
+                    'currency' => $currency,
+                    'device_type' => $deviceType,
+                    'lang' => $lang
+                ]);
+                
+                // 调用 DP 服务登录接口
+                $loginResult = $service->login($dpUserName, $password, $venueCode, $currency, $gameId, $deviceType, $lang, request()->getClientIp());
+            } elseif ($withApi === 'tg') {
+                $leixing = '1'; // 默认游戏类型
+                $loginResult = $service->login($user->username, $password, $platformName, $leixing, $is_mobile_url, $gameCode);
+            } elseif ($withApi === 'dbzhenren') {
+                $loginResult = $service->login($user->username, $password, $platformName, $is_mobile_url, $gameCode);
+                // 如果返回的是token，需要构建游戏URL
+                if ($loginResult['code'] == 200 && isset($loginResult['token'])) {
+                    $loginResult['data'] = $loginResult['token'];
+                }
+            } elseif ($withApi === 'dbdianzi') {
+                $leixing = '1'; // 默认游戏类型
+                $loginResult = $service->login($user->username, $password, $platformName, $leixing, $is_mobile_url, $game->game_code ?? '');
+            } elseif ($withApi === 'dbgmag') {
+                $loginResult = $service->login($user->username, $platformName, $is_mobile_url, $game->game_code ?? '');
+            } elseif ($withApi === 'dbkaiyuan') {
+                $leixing = '1'; // 默认游戏类型
+                $loginResult = $service->login($user->username, $platformName, $leixing, $is_mobile_url, $game->game_code ?? '');
+            } elseif ($withApi === 'dbevo') {
+                $loginResult = $service->login($user->username, $platformName, $is_mobile_url, $game->game_code ?? '');
+            } else {
+                Log::error('开始游戏 - 不支持的接口', [
+                    'with_api' => $withApi,
+                    'user_id' => $user->id
+                ]);
+                $this->telegramBot->sendMessage($chatId, '不支持的接口');
+                return response()->json(['ok' => true]);
+            }
+
+            Log::info('开始游戏 - 登录接口返回', [
                 'user_id' => $user->id,
                 'username' => $user->username,
                 'telegram_id' => $user->telegram_id,
-                'dp_user_name' => $dpUserName,
                 'platform' => $platformName,
                 'game_code' => $gameCode,
+                'with_api' => $withApi,
                 'login_code' => $loginResult['code'] ?? 'unknown',
                 'login_message' => $loginResult['message'] ?? 'unknown',
-                'has_game_url' => isset($loginResult['data']),
-                'game_url_length' => isset($loginResult['data']) ? strlen($loginResult['data']) : 0,
                 'login_result' => $loginResult
             ]);
 
-            if ($loginResult['code'] != 200) {
-                Log::error('开始游戏 - DP登录失败', [
+            if (!isset($loginResult['code']) || $loginResult['code'] != 200 || empty($loginResult['data'])) {
+                Log::error('开始游戏 - 登录失败', [
                     'user_id' => $user->id,
                     'username' => $user->username,
                     'telegram_id' => $user->telegram_id,
-                    'dp_user_name' => $dpUserName,
                     'platform' => $platformName,
                     'game_code' => $gameCode,
+                    'with_api' => $withApi,
                     'login_result' => $loginResult
                 ]);
-                $this->telegramBot->sendMessage($chatId, '登录失败：' . $loginResult['message']);
+                $this->telegramBot->sendMessage($chatId, '登录失败：' . ($loginResult['message'] ?? '未知错误'));
                 return response()->json(['ok' => true]);
             }
 
             $gameUrl = $loginResult['data'];
-            Log::info('开始游戏 - DP获取游戏链接成功', [
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'telegram_id' => $user->telegram_id,
-                'dp_user_name' => $dpUserName,
-                'platform' => $platformName,
-                'game_code' => $gameCode,
+            Log::info('开始游戏 - 获取游戏链接成功', [
                 'game_url' => $gameUrl,
-                'game_url_length' => strlen($gameUrl)
             ]);
 
             // 注意：不调用answerCallbackQuery以避免显示绿色图标
@@ -1557,7 +1855,93 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * 转入游戏
+     * 转账到游戏（只做"余额 -> 指定场馆"上分，不做回收上一场馆）
+     * - transferstatus=1 时由 startGame 登录前调用
+     * - 写入 TransferLog：api_type=with_api，platform_type=真实场馆
+     * 
+     * @param string $plat_name 平台名称
+     * @param User $user 用户对象
+     * @return array
+     */
+    protected function transferToGameForLogin(string $plat_name, User $user): array
+    {
+        $balance = (float) ($user->balance ?? 0);
+        if ($balance < 1) {
+            return ['code' => 200, 'message' => '无需转账', 'data' => 0];
+        }
+        
+        $platformType = $this->normalizePlatformTypeCompat($plat_name);
+        $withApi = $this->resolveWithApiByPlatformCompat($platformType);
+        
+        $client_transfer_id = time() . $user->id . rand(100000, 999999);
+        $amount = (int) $balance;
+
+        $arr = [
+            'order_no' => $client_transfer_id,
+            'api_type' => $withApi,
+            'platform_type' => $platformType,
+            'user_id' => $user->id,
+            'transfer_type' => 0,
+            'money' => -$amount,
+            'cash_fee' => 0,
+            'real_money' => -$amount,
+            'before_money' => $user->balance,
+            'after_money' => $user->balance - $amount,
+            'state' => 2,
+        ];
+
+        $transferLog = TransferLog::create($arr);
+        
+        // 根据 with_api 选择服务类（上分接口）
+        $serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
+        if (!class_exists($serviceClass)) {
+            if (strtolower($withApi) === 'dbdianzi') {
+                $serviceClass = '\\App\\Services\\DbdianziService';
+            } elseif (strtolower($withApi) === 'dbzhenren') {
+                $serviceClass = '\\App\\Services\\DbzhenrenService';
+            } elseif (strtolower($withApi) === 'dbevo') {
+                $serviceClass = '\\App\\Services\\DbevoService';
+            } elseif (strtolower($withApi) === 'dbgmag') {
+                $serviceClass = '\\App\\Services\\DbgmagService';
+            } elseif (strtolower($withApi) === 'dbkaiyuan') {
+                $serviceClass = '\\App\\Services\\DbkaiyuanService';
+            } else {
+                $serviceClass = '\\App\\Services\\TgService';
+            }
+        }
+        $service = new $serviceClass();
+
+        // 兼容不同平台 deposit 方法签名
+        if (strtolower($withApi) === 'dp') {
+            $res = $service->deposit($user->username, $amount, $client_transfer_id);
+        } else {
+            $res = $service->deposit($user->username, $amount, $client_transfer_id, $platformType);
+        }
+        
+        if (!isset($res['code']) || (int) $res['code'] !== 200) {
+            $transferLog->delete();
+            return [
+                'code' => (int)($res['code'] ?? 201),
+                'message' => $res['message'] ?? '转账到游戏失败',
+                'data' => $res,
+            ];
+        }
+
+        // 上分成功：扣减余额，更新流水与 user_api
+        $user->decrement('balance', $amount);
+        $transferLog->state = 1;
+        $transferLog->save();
+
+        $userApi = User_Api::where('api_code', $platformType)->where('user_id', $user->id)->first();
+        if ($userApi) {
+            $userApi->increment('api_money', $amount);
+        }
+
+        return ['code' => 200, 'message' => '成功', 'data' => $amount];
+    }
+
+    /**
+     * 转入游戏（按钮回调）
      *
      * @param int $chatId
      * @param int $messageId
@@ -1576,6 +1960,43 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
         return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+    }
+
+    /**
+     * 标准化平台类型（兼容方法）
+     */
+    private function normalizePlatformTypeCompat($platformName): string
+    {
+        if (class_exists(\App\Services\Lib::class) && method_exists(\App\Services\Lib::class, 'normalizePlatformType')) {
+            return \App\Services\Lib::normalizePlatformType($platformName);
+        }
+        return strtolower(trim((string) $platformName));
+    }
+
+    /**
+     * 根据平台名称解析 with_api（兼容方法）
+     */
+    private function resolveWithApiByPlatformCompat($platformName, $gameCode = null): string
+    {
+        if (class_exists(\App\Services\Lib::class) && method_exists(\App\Services\Lib::class, 'resolveWithApiByPlatform')) {
+            return \App\Services\Lib::resolveWithApiByPlatform($platformName, $gameCode);
+        }
+        // 线上若还是旧版 Lib，这里直接查 game_lists.with_api，避免回退成 platform_name
+        $platformName = strtolower(trim((string) $platformName));
+        $gameCode = $gameCode !== null ? trim((string) $gameCode) : null;
+        if ($platformName === '') {
+            return '';
+        }
+        try {
+            $query = GameList::where('platform_name', $platformName);
+            if (!empty($gameCode)) {
+                $query->where('game_code', $gameCode);
+            }
+            $withApi = strtolower(trim((string) $query->value('with_api')));
+            return $withApi !== '' ? $withApi : $platformName;
+        } catch (\Throwable $e) {
+            return $platformName;
+        }
     }
 
     /**

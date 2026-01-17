@@ -73,7 +73,8 @@ class IndexController extends Controller
 		$tg = New TgService;
 		$data = $tg->credit($api_code);
         return $data;
-    }	
+    }
+    
     /**
      * 公告列表
      *
@@ -395,7 +396,7 @@ class IndexController extends Controller
         }
         $gameQuery = GameList::where('platform_name', $api_code);
         if (!empty($gameCode)) {
-            $gameQuery->where('game_code', $gameCode);
+            $gameQuery->where('game_code', $gameType);
         }
         $gameItem = $gameQuery->first();
         if ($gameItem && (((int)$gameItem->site_state !== 1) || ((int)$gameItem->app_state !== 1))) {
@@ -751,7 +752,7 @@ class IndexController extends Controller
             ]);
             
             // 调用 DP 服务登录接口，使用 user_api 表中的 api_user
-            $res = $service->login($dpUserName,$password, $venueCode, $currency, $gameId, $deviceType, $lang, $request->getClientIp());
+            $res = $service->login($dpUserName, $venueCode, $currency, $gameId, $deviceType, $lang, $request->getClientIp());
             
             Log::info('DP接口 - 登录接口返回', [
                 'user_id' => $user->id,
@@ -809,7 +810,7 @@ class IndexController extends Controller
             $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
         } elseif ($withApi === 'dbkaiyuan') {
             // Kaiyuan接口登录（返回完整URL）
-            $res = $service->login($user->username,$password, $api_code, $leixing, $is_mobile_url, $gameType);
+            $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameType);
         } elseif ($withApi === 'dbevo') {
             // Evo接口登录，参数：username, api_code, game_type, is_mobile, game_code
             // DbevoService 的 login 方法返回完整的游戏URL

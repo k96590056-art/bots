@@ -145,13 +145,6 @@ class PussyService
      */
     public function getRandomUserName($userNamePrefix = 'c111111', $userAreaId = '')
     {
-        Log::info('Pussy获取随机用户名 - 开始调用', [
-            'userNamePrefix' => $userNamePrefix,
-            'userAreaId' => $userAreaId,
-            'api_url' => $this->api_url,
-            'api_account' => $this->api_account
-        ]);
-
         $return = [
             'code' => 200,
             'message' => '成功'
@@ -182,18 +175,8 @@ class PussyService
         ];
 
         $apiUrl = rtrim($this->api_url, '/') . '/ashx/account/account.ashx';
-        Log::info('Pussy获取随机用户名 - 请求参数', [
-            'userNamePrefix' => $userNamePrefix,
-            'params' => $params,
-            'api_url' => $apiUrl
-        ]);
 
         $res = $this->sendRequest($apiUrl, $params);
-
-        Log::info('Pussy获取随机用户名 - 接口返回', [
-            'userNamePrefix' => $userNamePrefix,
-            'response' => $res
-        ]);
 
         // 检查响应结果
         // 返回格式：{"account":"my869556103","code":0,"msg":"","success":true}
@@ -224,12 +207,6 @@ class PussyService
             return $return;
         }
 
-        Log::info('Pussy获取随机用户名成功', [
-            'userNamePrefix' => $userNamePrefix,
-            'randomUserName' => $randomUserName,
-            'response' => $res
-        ]);
-
         $return['data'] = $randomUserName;
         return $return;
     }
@@ -257,11 +234,6 @@ class PussyService
      */
     public function register($password = '123456', $agent = '', $name = 'N/A', $tel = 'N/A', $memo = 'N/A', $userType = 1, $userNamePrefix = 'c111111', $user = null, $platformName = 'pussy')
     {
-        Log::info('Pussy注册 - 开始调用', [
-            'api_url' => $this->api_url,
-            'api_account' => $this->api_account
-        ]);
-
         $return = [
             'code' => 200,
             'message' => '成功'
@@ -287,11 +259,6 @@ class PussyService
         }
 
         // 步骤1：通过RandomUserName接口生成随机用户名
-        Log::info('Pussy注册 - 开始获取随机用户名', [
-            'userNamePrefix' => $userNamePrefix,
-            'user_id' => $user->id
-        ]);
-        
         $randomUserNameResult = $this->getRandomUserName($userNamePrefix);
         
         if ($randomUserNameResult['code'] != 200 || empty($randomUserNameResult['data'])) {
@@ -305,10 +272,6 @@ class PussyService
         }
         
         $randomUserName = $randomUserNameResult['data'];
-        Log::info('Pussy注册 - 成功获取随机用户名', [
-            'randomUserName' => $randomUserName,
-            'user_id' => $user->id
-        ]);
 
         // 步骤2：将生成的随机用户名和明文密码等信息存入user_api表
         try {
@@ -324,12 +287,6 @@ class PussyService
                 $existingUserApi->api_money = $existingUserApi->api_money ?? 0;
                 $existingUserApi->updated_at = now();
                 $existingUserApi->save();
-                
-                Log::info('Pussy注册 - User_Api记录已更新', [
-                    'user_id' => $user->id,
-                    'api_code' => $platformName,
-                    'api_user' => $randomUserName
-                ]);
             } else {
                 // 创建新记录
                 $userApiData = [
@@ -343,12 +300,6 @@ class PussyService
                 ];
                 
                 User_Api::create($userApiData);
-                
-                Log::info('Pussy注册 - User_Api记录已创建', [
-                    'user_id' => $user->id,
-                    'api_code' => $platformName,
-                    'api_user' => $randomUserName
-                ]);
             }
         } catch (\Exception $e) {
             $return['code'] = 201;
@@ -363,11 +314,6 @@ class PussyService
         }
 
         // 步骤3：使用生成的随机用户名调用Pussy注册接口进行注册
-        Log::info('Pussy注册 - 使用随机用户名进行Pussy平台注册', [
-            'randomUserName' => $randomUserName,
-            'user_id' => $user->id
-        ]);
-
         $time = $this->getTimeStamp();
         $agent = $agent ?: $this->agent;
 
@@ -388,18 +334,8 @@ class PussyService
         ];
 
         $apiUrl = rtrim($this->api_url, '/') . '/ashx/account/account.ashx';
-        Log::info('Pussy注册 - 请求参数', [
-            'randomUserName' => $randomUserName,
-            'params' => $params,
-            'api_url' => $apiUrl
-        ]);
 
         $res = $this->sendRequest($apiUrl, $params);
-
-        Log::info('Pussy注册 - 接口返回', [
-            'randomUserName' => $randomUserName,
-            'response' => $res
-        ]);
 
         // 检查响应结果（code=0表示成功）
         if (!isset($res['success']) || !$res['success'] || (isset($res['code']) && $res['code'] != 0)) {
@@ -412,12 +348,6 @@ class PussyService
             ]);
             return $return;
         }
-
-        Log::info('Pussy注册成功', [
-            'randomUserName' => $randomUserName,
-            'response' => $res,
-            'user_id' => $user->id
-        ]);
 
         // 返回注册成功的随机用户名
         $return['data'] = $randomUserName;
@@ -438,12 +368,6 @@ class PussyService
      */
     public function login($userName, $gameCode = '', $isMobile = 1)
     {
-        Log::info('Pussy登录 - 开始调用', [
-            'userName' => $userName,
-            'gameCode' => $gameCode,
-            'isMobile' => $isMobile
-        ]);
-
         $return = [
             'code' => 200,
             'message' => '成功'
@@ -474,21 +398,9 @@ class PussyService
             return $return;
         }
 
-        Log::info('Pussy登录 - 获取到api_user', [
-            'userName' => $userName,
-            'api_user' => $apiUserName,
-            'user_id' => $user->id
-        ]);
-
         // TODO: Pussy API文档中没有明确说明登录接口
         // 这里使用api_user进行登录，但接口实现需要根据实际API文档补充
-        Log::warning('Pussy登录接口未实现', [
-            'userName' => $userName,
-            'api_user' => $apiUserName,
-            'gameCode' => $gameCode,
-            'isMobile' => $isMobile
-        ]);
-
+        
         // 暂时返回错误，提示需要补充登录接口信息
         // 实际实现时，应该使用 $apiUserName 调用Pussy登录接口
         return [
@@ -600,13 +512,6 @@ class PussyService
             return $return;
         }
 
-        Log::info('Pussy充值成功', [
-            'userName' => $userName,
-            'amount' => $amount,
-            'transferno' => $transferno,
-            'response' => $res
-        ]);
-
         return $return;
     }
 
@@ -658,13 +563,6 @@ class PussyService
             ]);
             return $return;
         }
-
-        Log::info('Pussy提现成功', [
-            'userName' => $userName,
-            'amount' => $amount,
-            'transferno' => $transferno,
-            'response' => $res
-        ]);
 
         return $return;
     }

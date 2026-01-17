@@ -65,8 +65,7 @@ class TronUsdtService
         // 第一次：正常校验证书
         [$resp, $errno, $status, $errMsg] = $doRequest(false);
         if ($errno === 60) {
-            // SSL 证书校验失败，自动降级重试（仅本次进程），并记录告警日志
-            Log::warning('cURL SSL verify failed (errno 60), retry without verify', [ 'url' => $url ]);
+            // SSL 证书校验失败，自动降级重试（仅本次进程）
             [$resp, $errno, $status, $errMsg] = $doRequest(true);
         }
 
@@ -143,28 +142,15 @@ class TronUsdtService
                 $result = Redis::set($redisKey, time(), 'EX', $expireSeconds, 'NX');
 
                 if ($result) {
-                    Log::info('生成唯一充值金额', [
-                        'base_amount' => $baseAmount,
-                        'final_amount' => $finalAmount,
-                        'attempts' => $i + 1
-                    ]);
                     return $finalAmount;
                 }
             } catch (\Exception $e) {
                 // Redis 不可用时降级为直接返回（有小概率重复风险）
-                Log::warning('Redis不可用，降级生成充值金额', [
-                    'error' => $e->getMessage(),
-                    'amount' => $finalAmount
-                ]);
                 return $finalAmount;
             }
         }
 
         // 如果100次都没生成成功（极低概率），直接返回最后一次的金额
-        Log::warning('生成唯一金额达到最大尝试次数', [
-            'base_amount' => $baseAmount,
-            'attempts' => $maxAttempts
-        ]);
         return round($baseAmount + (mt_rand(1, 999) / 1000), 3);
     }
 
@@ -179,10 +165,7 @@ class TronUsdtService
             $redisKey = 'tron_recharge_amount:' . number_format($amount, 3, '.', '');
             Redis::del($redisKey);
         } catch (\Exception $e) {
-            Log::warning('释放充值金额占用失败', [
-                'error' => $e->getMessage(),
-                'amount' => $amount
-            ]);
+            // 释放失败，忽略
         }
     }
 
@@ -276,12 +259,6 @@ class TronUsdtService
             if ($user) {
                 $user->balance += $recharge->amount;
                 $user->save();
-                Log::info('TRON USDT充值成功:', [
-                    'user_id' => $user->id,
-                    'amount' => $recharge->amount,
-                    'usdt_amount' => $amount,
-                    'tx_hash' => $txHash
-                ]);
             }
         } catch (\Exception $e) {
             Log::error('处理TRON USDT充值失败:', [
@@ -296,7 +273,6 @@ class TronUsdtService
     public function handleCallback($callbackData)
     {
         try {
-            Log::info('收到TRON USDT充值回调:', $callbackData);
             $txHash = $callbackData['txid'] ?? $callbackData['tx_hash'] ?? '';
             $outTradeNo = $callbackData['out_trade_no'] ?? $callbackData['order_no'] ?? '';
             if (empty($txHash) || empty($outTradeNo)) {
@@ -325,7 +301,6 @@ class TronUsdtService
             $json = $this->httpGet($url, $this->buildHeaders());
         } catch (\Exception $e) {
             // 400/限流等异常直接回退，让上层用 trc20TransferInfo
-            Log::warning('Tronscan events 请求失败，使用 trc20TransferInfo 回退', ['url' => $url, 'error' => $e->getMessage()]);
             return null;
         }
         $data = json_decode($json, true);
@@ -401,26 +376,17 @@ class TronUsdtService
                 'limit' => $limit,
             ]);
 
-            Log::info('TronGrid查询USDT转账记录', ['url' => $url]);
-
             $json = $this->httpGet($url, $this->buildHeaders());
             $data = json_decode($json, true);
 
             if (!is_array($data) || !isset($data['success']) || $data['success'] !== true) {
-                Log::warning('TronGrid返回异常', ['response' => substr($json, 0, 500)]);
                 return [];
             }
 
             $transfers = $data['data'] ?? [];
             if (empty($transfers)) {
-                Log::info('TronGrid未找到USDT转账记录', ['address' => $address]);
                 return [];
             }
-
-            Log::info('TronGrid找到USDT转账记录', [
-                'address' => $address,
-                'count' => count($transfers)
-            ]);
 
             // 格式化返回数据
             $result = [];
@@ -439,10 +405,6 @@ class TronUsdtService
             return $result;
 
         } catch (\Exception $e) {
-            Log::warning('TronGrid查询失败，将回退到TronScan', [
-                'error' => $e->getMessage(),
-                'address' => $address
-            ]);
             return [];
         }
     }

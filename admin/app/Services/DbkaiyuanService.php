@@ -47,6 +47,8 @@ class DbkaiyuanService
         ]);
 
         $res = $this->callChannelHandle($param);
+        
+        Log::error('Db开元棋牌 注册返回信息）', $res);
         if ($this->isOk($res)) {
             return $return;
         }
@@ -74,8 +76,10 @@ class DbkaiyuanService
             'lineCode' => $this->lineCode,
             'KindID' => $kindId,
         ]);
-        Log::error('Kaiyuan请求失败', ['url' => $url, 'error' => $param]);
         $res = $this->callChannelHandle($param);
+        
+        
+        Log::error('Db开元棋牌 登录返回信息）', ["param"=>$param,"res"=>$res]);
         if ($this->isOk($res)) {
             $url = $res['d']['url'] ?? '';
             if ($url !== '') {
@@ -392,11 +396,12 @@ class DbkaiyuanService
         $key = $this->md5KeyFor($timestamp);
         $base = $baseServer ?: $this->server;
         $base = rtrim((string)$base, '/');
-        return $base . $path
-            . '?agent=' . urlencode($this->agent)
-            . '&timestamp=' . urlencode($timestamp)
-            . '&param=' . $paramEncrypted
-            . '&key=' . urlencode($key);
+        $url = $base . $path
+        . '?agent=' . urlencode($this->agent)
+        . '&timestamp=' . urlencode($timestamp)
+        . '&param=' . $paramEncrypted
+        . '&key=' . urlencode($key);
+        return $url;
     }
 
     private function callChannelHandle(string $paramPlain): array
@@ -430,10 +435,6 @@ class DbkaiyuanService
         $err = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
-
-        $this->err["提交地址"] = $url;
-        $this->err["返回参数"] = $resp;
-        Log::error('Db开元棋牌 GET方式）', $this->err);
         if ($err) {
             Log::error('Kaiyuan请求失败', ['url' => $url, 'error' => $err, 'http_code' => $httpCode]);
             return ['_error' => $err, '_http' => $httpCode];

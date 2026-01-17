@@ -111,7 +111,7 @@ class DbgmagService
      * @param array $post_data 请求参数
      * @return array
      */
-    private function sendRequest($url, $post_data = [])
+    private function sendRequest($url, $post_data = [], $is_log = false)
     {
         // 生成签名
         $hash = $this->generateHash($post_data);
@@ -136,7 +136,15 @@ class DbgmagService
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
         curl_close($ch);
-
+        if($is_log){
+            Log::error('Dbgmag接口请求详情', [
+                'url' => $url,
+                'post_data' => $post_data,
+                'contents' => $contents,
+                'http_code' => $httpCode,
+                'error' => $error
+            ]);
+        }
         if ($error) {
             Log::error('Dbgmag接口请求失败', [
                 'url' => $url,
@@ -254,11 +262,6 @@ class DbgmagService
             return $return;
         }
 
-        Log::info('Dbgmag注册成功', [
-            'username' => $username,
-            'response' => $res
-        ]);
-
         return $return;
     }
 
@@ -371,14 +374,6 @@ class DbgmagService
         }
 
         // 如果 POST 失败或返回的不是有效URL，尝试使用 GET 方式
-        Log::warning('Dbgmag POST方式获取游戏URL失败，尝试GET方式', [
-            'username' => $username,
-            'game_code' => $game_code,
-            'post_response' => $game_url,
-            'error' => $error,
-            'http_code' => $httpCode
-        ]);
-
         $get_params = $launch_params;
         unset($get_params['hash']); // GET 方式不需要 hash
         $get_url = $this->gmag_game_launch_url . '/launcher?' . http_build_query($get_params);
@@ -387,10 +382,6 @@ class DbgmagService
         if ($game_url_get !== false && is_string($game_url_get) && !empty($game_url_get) && strpos(trim($game_url_get), 'http') === 0) {
             $return['data'] = trim($game_url_get);
             $return['token'] = $token;
-            Log::info('Dbgmag登录成功（GET方式）', [
-                'username' => $username,
-                'game_code' => $game_code
-            ]);
             return $return;
         } else {
             $return['code'] = 201;
@@ -404,12 +395,6 @@ class DbgmagService
             ]);
             return $return;
         }
-
-        Log::info('Dbgmag登录成功', [
-            'username' => $username,
-            'game_code' => $game_code,
-            'has_url' => !empty($return['data'])
-        ]);
 
         return $return;
     }
@@ -518,13 +503,6 @@ class DbgmagService
             'balance' => $res['balance'] ?? 0,
         ];
 
-        Log::info('Dbgmag上分成功', [
-            'username' => $username,
-            'amount' => $amount,
-            'ext_trans_id' => $ext_trans_id,
-            'trans_id' => $res['transId'] ?? ''
-        ]);
-
         return $return;
     }
 
@@ -589,13 +567,6 @@ class DbgmagService
             'balance' => $res['balance'] ?? 0,
             'amount' => $res['amount'] ?? $amount,  // 实际下分金额
         ];
-
-        Log::info('Dbgmag下分成功', [
-            'username' => $username,
-            'amount' => $res['amount'] ?? $amount,
-            'ext_trans_id' => $ext_trans_id,
-            'trans_id' => $res['transId'] ?? ''
-        ]);
 
         return $return;
     }
@@ -719,8 +690,6 @@ class DbgmagService
             'brandId' => $this->brand_id,
             'startTime' => $start_time,
             'endTime' => $end_time,
-            'page' => $page,
-            'limit' => $limit,
         ];
 
         if (!empty($player_id)) {
@@ -731,15 +700,8 @@ class DbgmagService
             $data['gameCode'] = $game_code;
         }
 
-        $url = $this->gmag_game_data_url . '/history/game?hash='.$this->generateHash($data,true);
-        $res = $this->sendRequest($url, $data);
-        Log::error('Dbgmag拉取游戏记录失败', [
-            'url'=>$url,
-            'data'=>$data,
-            'start_time' => $start_time,
-            'end_time' => $end_time,
-            'response' => $res
-        ]);
+        $url = $this->gmag_game_data_url . '/history/game';
+        $res = $this->sendRequest($url, $data, true);
         if (isset($res['error']) && $res['error'] != '0') {
             $return['code'] = 201;
             $return['message'] = $res['message'] ?? '拉取游戏历史记录失败';

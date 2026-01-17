@@ -227,11 +227,6 @@ class DbdianziService
             return $return;
         }
 
-        Log::info('Dianzi注册成功', [
-            'username' => $username,
-            'response' => $res
-        ]);
-
         return $return;
     }
 
@@ -337,22 +332,10 @@ class DbdianziService
         if (!$error && is_string($game_url) && !empty($game_url) && strpos(trim($game_url), 'http') === 0) {
             $return['data'] = trim($game_url);
             $return['token'] = $token;
-            Log::info('Dianzi登录成功（POST方式）', [
-                'username' => $username,
-                'game_code' => $game_code
-            ]);
             return $return;
         }
 
         // 如果 POST 失败或返回的不是有效URL，尝试使用 GET 方式
-        Log::warning('Dianzi POST方式获取游戏URL失败，尝试GET方式', [
-            'username' => $username,
-            'game_code' => $game_code,
-            'post_response' => $game_url,
-            'error' => $error,
-            'http_code' => $httpCode
-        ]);
-
         $get_params = $launch_params;
         unset($get_params['hash']); // GET 方式不需要 hash
         $get_url = $this->gmag_game_launch_url . '/launcher?' . http_build_query($get_params);
@@ -361,10 +344,6 @@ class DbdianziService
         if ($game_url_get !== false && is_string($game_url_get) && !empty($game_url_get) && strpos(trim($game_url_get), 'http') === 0) {
             $return['data'] = trim($game_url_get);
             $return['token'] = $token;
-            Log::info('Dianzi登录成功（GET方式）', [
-                'username' => $username,
-                'game_code' => $game_code
-            ]);
             return $return;
         } else {
             $return['code'] = 201;
@@ -378,12 +357,6 @@ class DbdianziService
             ]);
             return $return;
         }
-
-        Log::info('Dianzi登录成功', [
-            'username' => $username,
-            'game_code' => $game_code,
-            'has_url' => !empty($return['data'])
-        ]);
 
         return $return;
     }
@@ -492,13 +465,6 @@ class DbdianziService
             'balance' => $res['balance'] ?? 0,
         ];
 
-        Log::info('Dianzi上分成功', [
-            'username' => $username,
-            'amount' => $amount,
-            'ext_trans_id' => $ext_trans_id,
-            'trans_id' => $res['transId'] ?? ''
-        ]);
-
         return $return;
     }
 
@@ -563,13 +529,6 @@ class DbdianziService
             'balance' => $res['balance'] ?? 0,
             'amount' => $res['amount'] ?? $amount,  // 实际下分金额
         ];
-
-        Log::info('Dianzi下分成功', [
-            'username' => $username,
-            'amount' => $res['amount'] ?? $amount,
-            'ext_trans_id' => $ext_trans_id,
-            'trans_id' => $res['transId'] ?? ''
-        ]);
 
         return $return;
     }
