@@ -400,9 +400,7 @@ class PussyService
 
         // TODO: Pussy API文档中没有明确说明登录接口
         // 这里使用api_user进行登录，但接口实现需要根据实际API文档补充
-            'isMobile' => $isMobile
-        ]);
-
+        
         // 暂时返回错误，提示需要补充登录接口信息
         // 实际实现时，应该使用 $apiUserName 调用Pussy登录接口
         return [

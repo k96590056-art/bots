@@ -13,104 +13,145 @@ use Illuminate\Support\Facades\DB;
 class TestController extends Controller
 {
     /**
-     * 测试接口：调用 DbgmagService::getGameList 拉取游戏列表
-     *
+     * 测试接口：排查 TelegramWebhookController 问题
+     * 
      * 访问路径：/api/test
-     * 可选参数（query 或 body 均可）：
-     * - providerCode
-     * - gameType
-     * - gameCode
-     * - page
-     * - size
+     * 
+     * 测试步骤：
+     * 1. 测试 TelegramBotService 能否正常实例化
+     * 2. 测试 TelegramWebhookController 能否正常实例化
+     * 3. 测试相关方法是否能正常调用
      */
     public function test(Request $request)
     {
-        // 如果传入了 game 参数，执行批量写入 user_api 的逻辑
-        $game = (string) $request->input('game', '');
-        if ($game !== '') {
-            return $this->batchCreateUserApi($game);
-        }
-        
-        // 原有的游戏列表逻辑
-        $providerCode = (string) $request->input('providerCode', '');
-        $gameType = (string) $request->input('gameType', '');
-        $gameCode = (string) $request->input('gameCode', '');
-        $page = (int) $request->input('page', 1);
-        $size = (int) $request->input('size', 10000);
+        $result = [
+            'timestamp' => date('Y-m-d H:i:s'),
+            'tests' => []
+        ];
 
-        $service = new DbgmagService();
-        $res = $service->getGameList($providerCode, $gameType, $gameCode, $page, $size);
-
-        if (!isset($res['code']) || (int)$res['code'] !== 200) {
-            return response()->json($res);
-        }
-
-        $records = $res['data'] ?? [];
-        if (!is_array($records)) {
-            return response()->json(['code' => 500, 'message' => 'Dbgmag 返回 records 格式错误', 'data' => $res]);
-        }
-
-        // 1) 先把 GMAG records 重组成游戏数据
-        $mappedRows = [];
-        foreach ($records as $r) {
-            if (!is_array($r)) continue;
-            
-            // 映射字段：
-            // game_code = gameCode
-            // category_id = gameType
-            // name = cnName
-            // name_en = enName
-            $row = [
-                'game_code' => (string)($r['gameCode'] ?? ''),
-                'category_id' => (string)($r['gameType'] ?? ''),
-                'name' => (string)($r['cnName'] ?? ''),
-                'name_en' => (string)($r['enName'] ?? ''),
+        // 测试 1: 检查 TelegramBotService 文件语法
+        try {
+            $telegramBotServiceFile = app_path('Services/TelegramBotService.php');
+            $syntaxCheck = shell_exec("php -l \"{$telegramBotServiceFile}\" 2>&1");
+            $result['tests']['telegram_bot_service_syntax'] = [
+                'file' => $telegramBotServiceFile,
+                'syntax_check' => trim($syntaxCheck ?? ''),
+                'is_valid' => strpos($syntaxCheck ?? '', 'No syntax errors') !== false
             ];
-            
-            // 保留原始数据中的其他字段（如果有需要）
-            if (isset($r['providerCode'])) {
-                $row['provider_code'] = (string)$r['providerCode'];
-            }
-            
-            $mappedRows[] = $row;
+        } catch (\Exception $e) {
+            $result['tests']['telegram_bot_service_syntax'] = [
+                'error' => $e->getMessage()
+            ];
         }
 
-        if (empty($mappedRows)) {
-            return response("没有采集到游戏列表数据\n", 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+        // 测试 2: 尝试实例化 TelegramBotService
+        try {
+            $telegramBotService = new \App\Services\TelegramBotService();
+            $result['tests']['telegram_bot_service_instantiation'] = [
+                'status' => 'success',
+                'message' => 'TelegramBotService 实例化成功',
+                'class' => get_class($telegramBotService)
+            ];
+        } catch (\Throwable $e) {
+            $result['tests']['telegram_bot_service_instantiation'] = [
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ];
         }
 
-        // 2) 检查每个游戏是否已存在，并输出 JSON
-        $lines = [];
-        $existsCache = [];
-        $validCount = 0; // 统计有效游戏数量（有 game_code 的）
-        
-        foreach ($mappedRows as $row) {
-            $gameCodeValue = (string)($row['game_code'] ?? '');
-            if ($gameCodeValue === '') {
-                // 无 game_code 的数据跳过
-                continue;
-            }
-
-            $validCount++; // 统计有效游戏
-
-            // 检查 game_code 是否已存在于 game_lists 表
-            if (!array_key_exists($gameCodeValue, $existsCache)) {
-                $existsCache[$gameCodeValue] = GameList::query()
-                    ->where('game_code', $gameCodeValue)
-                    ->exists();
-            }
-            
-            // 标记是否存在
-            $row['exists'] = $existsCache[$gameCodeValue];
-            $row['exists_text'] = $existsCache[$gameCodeValue] ? '已存在' : '不存在';
-            
-            // 每行输出一个 JSON
-            $lines[] = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        // 测试 3: 尝试实例化 TelegramWebhookController
+        try {
+            $webhookController = new \App\Http\Controllers\Api\TelegramWebhookController();
+            $result['tests']['telegram_webhook_controller_instantiation'] = [
+                'status' => 'success',
+                'message' => 'TelegramWebhookController 实例化成功',
+                'class' => get_class($webhookController)
+            ];
+        } catch (\Throwable $e) {
+            $result['tests']['telegram_webhook_controller_instantiation'] = [
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ];
         }
 
-        // 在最开始输出游戏总数
-        $output = "本次获取到的游戏总数: {$validCount}\n" . implode("\n", $lines) . "\n";
-        return response($output, 200, ['Content-Type' => 'text/plain; charset=utf-8']);
+        // 测试 4: 检查 TelegramBotService.php 第854行内容
+        try {
+            $telegramBotServiceFile = app_path('Services/TelegramBotService.php');
+            if (file_exists($telegramBotServiceFile)) {
+                $lines = file($telegramBotServiceFile);
+                $line854 = isset($lines[853]) ? trim($lines[853]) : 'N/A';
+                $context850 = isset($lines[849]) ? trim($lines[849]) : 'N/A';
+                $context851 = isset($lines[850]) ? trim($lines[850]) : 'N/A';
+                $context852 = isset($lines[851]) ? trim($lines[851]) : 'N/A';
+                $context853 = isset($lines[852]) ? trim($lines[852]) : 'N/A';
+                $context855 = isset($lines[854]) ? trim($lines[854]) : 'N/A';
+                $context856 = isset($lines[855]) ? trim($lines[855]) : 'N/A';
+                $context857 = isset($lines[856]) ? trim($lines[856]) : 'N/A';
+                
+                $result['tests']['telegram_bot_service_line_854'] = [
+                    'file' => $telegramBotServiceFile,
+                    'line_850' => $context850,
+                    'line_851' => $context851,
+                    'line_852' => $context852,
+                    'line_853' => $context853,
+                    'line_854' => $line854,
+                    'line_855' => $context855,
+                    'line_856' => $context856,
+                    'line_857' => $context857,
+                    'line_854_contains_catch' => strpos($line854, 'catch') !== false,
+                    'line_854_contains_arrow' => strpos($line854, '=>') !== false,
+                    'has_error' => strpos($line854, 'response') !== false && strpos($line854, '=>') !== false,
+                ];
+                
+                // 提供修复建议
+                if (strpos($line854, 'response') !== false && strpos($line854, '=>') !== false) {
+                    $result['tests']['telegram_bot_service_line_854']['fix_required'] = true;
+                    $result['tests']['telegram_bot_service_line_854']['correct_lines'] = [
+                        'line_853' => "            return ['code' => 200, 'message' => '成功', 'data' => \$result];",
+                        'line_854' => "        } catch (\\Exception \$e) {",
+                        'line_855' => "            Log::error('Telegram设置Bot命令菜单异常', [",
+                    ];
+                } else {
+                    $result['tests']['telegram_bot_service_line_854']['fix_required'] = false;
+                }
+            }
+        } catch (\Exception $e) {
+            $result['tests']['telegram_bot_service_line_854'] = [
+                'error' => $e->getMessage()
+            ];
+        }
+
+        // 测试 5: 尝试调用 TelegramWebhookController 的 getGameCategories 方法
+        try {
+            $webhookController = new \App\Http\Controllers\Api\TelegramWebhookController();
+            // 使用反射调用 protected 方法
+            $reflection = new \ReflectionClass($webhookController);
+            $method = $reflection->getMethod('getGameCategories');
+            $method->setAccessible(true);
+            $categories = $method->invoke($webhookController);
+            
+            $result['tests']['get_game_categories_method'] = [
+                'status' => 'success',
+                'message' => 'getGameCategories 方法调用成功',
+                'categories_count' => count($categories),
+                'categories' => $categories
+            ];
+        } catch (\Throwable $e) {
+            $result['tests']['get_game_categories_method'] = [
+                'status' => 'failed',
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ];
+        }
+
+        return response()->json($result, 200, [], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
     }
     
     /**

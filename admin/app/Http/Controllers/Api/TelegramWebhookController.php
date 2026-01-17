@@ -41,10 +41,35 @@ class TelegramWebhookController extends Controller
 
     public function __construct()
     {
-        $this->telegramBot = new TelegramBotService();
-        $this->dpService = new DpService();
-        $this->tgService = new TgService();
-        $this->pussyService = new PussyService();
+        $logFile = storage_path('logs/telegram_webhook.log');
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramWebhookController 构造函数开始 ===' . PHP_EOL, FILE_APPEND);
+        
+        try {
+            $this->telegramBot = new TelegramBotService();
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramBotService 实例化成功 ===' . PHP_EOL, FILE_APPEND);
+        } catch (\Throwable $e) {
+            // 记录构造函数错误到文件，因为Log可能还没初始化
+            $errorLog = date('Y-m-d H:i:s') . ' === 构造函数错误: TelegramBotService实例化失败 ===' . PHP_EOL;
+            $errorLog .= 'Error: ' . $e->getMessage() . PHP_EOL;
+            $errorLog .= 'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+            $errorLog .= 'Trace: ' . $e->getTraceAsString() . PHP_EOL;
+            $errorLog .= '---' . PHP_EOL;
+            @file_put_contents($logFile, $errorLog, FILE_APPEND);
+            // 重新抛出异常，让框架处理
+            throw $e;
+        }
+        
+        try {
+            $this->dpService = new DpService();
+            $this->tgService = new TgService();
+            $this->pussyService = new PussyService();
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 其他Service实例化成功 ===' . PHP_EOL, FILE_APPEND);
+        } catch (\Throwable $e) {
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 构造函数错误: Service实例化失败 ===' . PHP_EOL . 'Error: ' . $e->getMessage() . PHP_EOL . '---' . PHP_EOL, FILE_APPEND);
+            throw $e;
+        }
+        
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === TelegramWebhookController 构造函数完成 ===' . PHP_EOL, FILE_APPEND);
     }
 
     /**
@@ -86,6 +111,12 @@ class TelegramWebhookController extends Controller
     public function webhook(Request $request)
     {
         // 使用文件直接写入日志，确保即使Log facade失败也能记录
+        // 创建日志目录（如果不存在）
+        $logDir = storage_path('logs');
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        
         $logFile = storage_path('logs/telegram_webhook.log');
         $logEntry = date('Y-m-d H:i:s') . ' === Telegram Webhook 开始处理 ===' . PHP_EOL;
         $logEntry .= 'Method: ' . $request->method() . PHP_EOL;
@@ -94,6 +125,8 @@ class TelegramWebhookController extends Controller
         $logEntry .= 'Content-Length: ' . ($request->header('Content-Length') ?? 'N/A') . PHP_EOL;
         $logEntry .= 'Raw Input: ' . $request->getContent() . PHP_EOL;
         $logEntry .= 'All Input: ' . json_encode($request->all(), JSON_UNESCAPED_UNICODE) . PHP_EOL;
+        $logEntry .= 'URI: ' . $request->getRequestUri() . PHP_EOL;
+        $logEntry .= 'Route: ' . ($request->route() ? $request->route()->getName() : 'N/A') . PHP_EOL;
         $logEntry .= '---' . PHP_EOL;
         @file_put_contents($logFile, $logEntry, FILE_APPEND);
 
@@ -198,6 +231,11 @@ class TelegramWebhookController extends Controller
      */
     protected function handleMessage($message)
     {
+        $logFile = storage_path('logs/telegram_webhook.log');
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 开始 ===' . PHP_EOL . 
+            'Message: ' . json_encode($message, JSON_UNESCAPED_UNICODE) . PHP_EOL . 
+            '---' . PHP_EOL, FILE_APPEND);
+        
         try {
             $chatId = $message['chat']['id'] ?? null;
             $telegramId = $message['from']['id'] ?? null;
@@ -205,8 +243,16 @@ class TelegramWebhookController extends Controller
             $username = $message['from']['username'] ?? '';
             $firstName = $message['from']['first_name'] ?? '';
 
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 解析消息 ===' . PHP_EOL . 
+                'Chat ID: ' . ($chatId ?? 'NULL') . PHP_EOL . 
+                'Telegram ID: ' . ($telegramId ?? 'NULL') . PHP_EOL . 
+                'Text: ' . $text . PHP_EOL . 
+                'Username: ' . $username . PHP_EOL . 
+                '---' . PHP_EOL, FILE_APPEND);
+
             if (!$chatId || !$telegramId) {
                 Log::error('Telegram消息缺少必要字段', ['message' => $message]);
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === handleMessage 错误: 缺少必要字段 ===' . PHP_EOL, FILE_APPEND);
                 return response()->json(['ok' => false, 'error' => '缺少必要字段'], 400);
             }
 
@@ -277,6 +323,12 @@ class TelegramWebhookController extends Controller
         }
 
         // 处理/start命令或首次进入
+        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 检查是否为 /start 命令 ===' . PHP_EOL . 
+            'Text: "' . $text . '"' . PHP_EOL . 
+            'Text === /start: ' . ($text === '/start' ? 'Yes' : 'No') . PHP_EOL . 
+            'Empty text: ' . (empty($text) ? 'Yes' : 'No') . PHP_EOL . 
+            '---' . PHP_EOL, FILE_APPEND);
+        
         if ($text === '/start' || empty($text)) {
             // 清除用户状态，避免残留状态影响
             $this->clearUserState($telegramId);
@@ -285,17 +337,46 @@ class TelegramWebhookController extends Controller
                 'chat_id' => $chatId,
                 'user_id' => $user->id,
                 'text' => $text,
-                'is_new_user' => $isNewUser
+                'is_new_user' => $isNewUser,
+                'line' => __LINE__
             ]);
+            
+            // 记录到文件日志
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 触发显示主菜单 ===' . PHP_EOL . 
+                'Chat ID: ' . $chatId . PHP_EOL . 
+                'User ID: ' . $user->id . PHP_EOL . 
+                'Text: ' . $text . PHP_EOL . 
+                'Is New User: ' . ($isNewUser ? 'Yes' : 'No') . PHP_EOL . 
+                '准备调用 showMainMenu...' . PHP_EOL . 
+                '---' . PHP_EOL, FILE_APPEND);
+            
             // showMainMenu会自动检查first_password并显示密码（如果是新用户）
             // 传递 Telegram 用户信息以获取最新的名称、用户名和ID
             $telegramUserInfo = [
                 'first_name' => $firstName,
                 'username' => $username
             ];
-            $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
-            Log::info('showMainMenu返回结果', ['result' => $result]);
-            return $result;
+            
+            try {
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
+                $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用完成 ===' . PHP_EOL . 
+                    'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL . 
+                    '---' . PHP_EOL, FILE_APPEND);
+                Log::info('showMainMenu返回结果', ['result' => $result]);
+                return $result;
+            } catch (\Throwable $e) {
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL . 
+                    'Error: ' . $e->getMessage() . PHP_EOL . 
+                    'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL . 
+                    '---' . PHP_EOL, FILE_APPEND);
+                Log::error('showMainMenu调用异常', [
+                    'error' => $e->getMessage(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]);
+                throw $e;
+            }
         }
 
         // 处理/help命令
@@ -390,6 +471,15 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
         }
         } catch (\Exception $e) {
+            $logFile = storage_path('logs/telegram_webhook.log');
+            $errorLog = date('Y-m-d H:i:s') . ' === handleMessage 异常 ===' . PHP_EOL;
+            $errorLog .= 'Error: ' . $e->getMessage() . PHP_EOL;
+            $errorLog .= 'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+            $errorLog .= 'Trace: ' . $e->getTraceAsString() . PHP_EOL;
+            $errorLog .= 'Message: ' . json_encode($message ?? null, JSON_UNESCAPED_UNICODE) . PHP_EOL;
+            $errorLog .= '---' . PHP_EOL;
+            @file_put_contents($logFile, $errorLog, FILE_APPEND);
+            
             Log::error('处理Telegram消息异常', [
                 'message' => $message ?? null,
                 'error' => $e->getMessage(),
@@ -851,6 +941,13 @@ class TelegramWebhookController extends Controller
         }
 
         // 如果系统logo也没有，尝试使用默认路径（向后兼容）
+        Log::error('TelegramWebhookController::getMainMenuImageUrl 使用默认图片路径', [
+            'line' => 854,
+            'app_url' => env('APP_URL'),
+            'main_image_path' => $mainImagePath ?? null,
+            'app_logo' => $appLogo ?? null,
+            'default_path' => env('APP_URL') . '/images/telegram/main_banner.jpg'
+        ]);
         return env('APP_URL') . '/images/telegram/main_banner.jpg';
     }
 
