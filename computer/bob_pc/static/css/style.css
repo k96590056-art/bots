@@ -43189,8 +43189,8 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .header-icon-item img {
-    width: 24px !important;
-    height: 24px !important;
+    width: 32px !important;
+    height: 32px !important;
     margin-bottom: 2px;
     object-fit: contain;
 }
@@ -43213,10 +43213,10 @@ textarea.ant-pagination-options-quick-jumper input {
     padding: 0 15px;
 }
 
-/* logo区域缩小 */
+/* logo区域 */
 .nRE1dUST ._6XowEZMC {
-    width: 60px !important;
-    margin-right: 15px !important;
+    width: 100px !important;
+    margin-right: 20px !important;
 }
 
 /* 导航菜单间距缩小 */
@@ -43263,12 +43263,12 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .user-balance-row .balance-symbol {
-    color: #1c88ff;
+    color: #fff;
     margin-right: 2px;
 }
 
 .user-balance-row .balance-amount {
-    color: #1c88ff;
+    color: #fff;
     font-weight: 500;
 }
 
@@ -43290,7 +43290,7 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .user-url-row .site-url {
-    color: #1c88ff;
+    color: #888;
     margin-left: 4px;
 }
 
@@ -43370,7 +43370,7 @@ textarea.ant-pagination-options-quick-jumper input {
 
 /* 导航菜单字体 */
 .nRE1dUST ._9eNaWz24 {
-    font-size: 14px !important;
+    font-size: 16px !important;
 }
 
 /* 导航栏滚动容器 */

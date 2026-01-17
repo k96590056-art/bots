@@ -939,7 +939,7 @@
             <span>APP</span>
           </div>
           <!-- 登录后显示：存款、转账、取款、推广 -->
-          <div v-show="is_login == 1" class="header-icon-item" @click="goNav('/mine/deposit')">
+          <div v-show="is_login == 1" class="header-icon-item" style="margin-left: 20px;" @click="goNav('/mine/deposit')">
             <img src="/static/image/cunkuan.png" alt="存款" />
             <span>存款</span>
           </div>
@@ -957,7 +957,7 @@
           </div>
         </div>
         <!--已登录-->
-        <div v-show="is_login == 1" class="user-info-panel">
+        <div v-if="is_login == 1" class="user-info-panel">
           <div class="user-info-left">
             <div class="user-info-row user-name-row">
               <a href="javascript:;" @click="goNav('/mine/myVip')" class="username">{{ $store.state.userInfo.username ? $store.state.userInfo.username : '' }}</a>
@@ -970,8 +970,7 @@
             </div>
             <div class="user-info-row user-url-row">
               <span>永久网址:</span>
-              <span class="site-url">{{ $store.state.appInfo.h5_url || 'jiuyou.com' }}</span>
-              <span class="copy-icon" @click="copyUrl">📋</span>
+              <span class="site-url">{{ ($store.state.appInfo.h5_url || 'jiuyou.com').replace(/^https?:\/\//, '') }}</span>
             </div>
           </div>
           <div class="user-info-right">
@@ -982,7 +981,7 @@
         </div>
         <!--已登录-->
         <!--未登录-->
-        <form v-show="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv login-form-inline">
+        <form v-if="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv login-form-inline">
           <input type="text" placeholder="用户名" maxlength="16" class="_10rTDi18 loginInput" autocomplete="none" id="name" v-model="username" />
           <div class="_1xLtCzwl">
             <input type="password" placeholder="密码" maxlength="16" class="_2uN-VcWm loginInput" id="password" v-model="psw" />
@@ -1643,7 +1642,7 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-.nRE1dUST ._9eNaWz24{ font-size: 14px !important; }
+.nRE1dUST ._9eNaWz24{ font-size: 16px !important; }
 
 // 导航栏整体布局优化
 ::v-deep .nRE1dUST {
