@@ -43202,7 +43202,8 @@ textarea.ant-pagination-options-quick-jumper input {
     margin-left: 30px;
 }
 
-/* 调整导航菜单顺序 - 当前:首页、体育、电竞、真人、彩票、棋牌、电子 -> 目标:首页、棋牌、电子、彩票、真人、体育、电竞 */
+/* 调整导航菜单顺序 - 已禁用，现在使用动态导航，按API返回顺序显示 */
+/*
 .nRE1dUST .X_9C3y3f > div:nth-child(1) {
     -webkit-order: 1;
     order: 1;
@@ -43242,6 +43243,7 @@ textarea.ant-pagination-options-quick-jumper input {
     -webkit-order: 8;
     order: 8;
 }
+*/
 
 /* 隐藏导航菜单的下拉箭头，使用横线代替 */
 .nRE1dUST ._9eNaWz24 ._5v-zJhSB ._17Hw2tUT {

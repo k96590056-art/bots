@@ -18,14 +18,46 @@
               <img src="/static/image/logo.png" v-else class="_2LPmZ99H" alt="" />
             </a>
           </div>
-          <div class="X_9C3y3f">
+          <div class="X_9C3y3f nav-scroll-container">
             <div class="_9eNaWz24">
               <a aria-current="page" @click="goNav('/')" :class="url == '/' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >首页
                 <div class="P4bUdpZY"><span></span><span></span></div>
               </a>
             </div>
-            <div class="_9eNaWz24 nav">
+            <!-- 动态导航菜单 - 从API获取分类数据 -->
+            <template v-if="pcCategories.length > 0">
+              <div class="_9eNaWz24 nav" v-for="(category, catIndex) in mainCategoryList" :key="'cat-' + category.id" @mouseenter="showDropdown($event)" @mouseleave="hideDropdown($event)">
+                <a @click="goNav(getCategoryRoute(category.code))" :class="isCategoryActive(category.code) ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB'" href="javascript:;">
+                  {{ category.name }}
+                  <div class="_17Hw2tUT" v-if="category.games && category.games.length > 0"></div>
+                  <div class="P4bUdpZY _3hNI-m60"><span></span><span></span></div>
+                </a>
+                <div class="PjlHS4wt" style="display: none; background: #1b1e2a;" v-if="category.games && category.games.length > 0">
+                  <div class="_1b6LLqfO">
+                    <ul class="_2q_0n3sH pc-category-games">
+                      <li class="_3xMhR1us" v-for="(game, gameIndex) in category.games" :key="'game-' + category.id + '-' + gameIndex" @click.stop="onGameClick(game)">
+                        <div class="d9QhCBa4 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.2s">
+                          <div class="_3Ii96E8G">
+                            <img class="_2ywsn6BQ" :src="game.app_icon" alt="" v-if="game.app_icon" />
+                          </div>
+                          <div class="_2qIXCuoN">
+                            <img alt="" class="ls-is-cached lazyloaded" :src="game.app_img" v-if="game.app_img" />
+                          </div>
+                          <div class="game-name-overlay">{{ game.name }}</div>
+                          <div class="_349CzCYy xJQe3jRu _1IpIguRl">
+                            <span>进入场馆</span>
+                          </div>
+                        </div>
+                        <div class="_3qsc2gtG"></div>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </template>
+            <!-- 静态导航菜单 - 当API数据未加载时显示 -->
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/sports')" :class="url == '/sports' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >体育
                 <div class="_17Hw2tUT"></div>
@@ -141,7 +173,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/electronic')" :class="url == '/electronic' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电竞
                 <div class="_17Hw2tUT"></div>
@@ -237,7 +269,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/people')" :class="url == '/people' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >真人
                 <div class="_17Hw2tUT"></div>
@@ -339,7 +371,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/lottery')" :class="url == '/lottery' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >彩票
                 <div class="_17Hw2tUT"></div>
@@ -435,7 +467,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/cards')" :class="url == '/cards' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >棋牌
                 <div class="_17Hw2tUT"></div>
@@ -542,7 +574,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav">
+            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
               <a @click="goNav('/amusement')" :class="url == '/amusement' || url == '/amusementList' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电子
                 <div class="_17Hw2tUT"></div>
@@ -1033,6 +1065,7 @@ export default {
       lotteryList: [],
       conciseList: [],
       activityDropdownList: [],
+      pcCategories: [], // PC端游戏分类数据
       sportImg: {
         sbtest: '/static/image/img_saba_title.png',
         oap: '/static/image/img_ss_title.png',
@@ -1150,6 +1183,12 @@ export default {
 
     };
   },
+  computed: {
+    // 获取主分类列表（pid = 0）
+    mainCategoryList() {
+      return this.pcCategories.filter(cat => cat.pid == 0 || !cat.pid);
+    }
+  },
   created() {
     // console.log(this.$store.state.userInfo)
     let that = this;
@@ -1168,6 +1207,7 @@ export default {
     that.url = this.$route.fullPath;
     that.getGameList();
     that.getActivityDropdown();
+    that.getPcCategories(); // 获取PC端游戏分类
     // that.getGameList('joker');
     // that.getGameList('gaming');
     // that.getGameList('sport');
@@ -1177,6 +1217,69 @@ export default {
   methods: {
     changIndex() {
       this.index = parseInt(20 * Math.random());
+    },
+    // 获取PC端游戏分类数据
+    getPcCategories() {
+      let that = this;
+      that.$apiFun.get('/api/game/pc_categories', {}).then(res => {
+        if (res.code == 200) {
+          that.pcCategories = res.data || [];
+        }
+      }).catch(err => {
+        console.error('获取PC端游戏分类失败:', err);
+        // 请求失败时保持 pcCategories 为空数组，将显示静态导航
+      });
+    },
+    // 获取分类对应的路由路径
+    getCategoryRoute(code) {
+      const routeMap = {
+        'sport': '/sports',
+        'gaming': '/electronic',
+        'realbet': '/people',
+        'joker': '/cards',
+        'lottery': '/lottery',
+        'concise': '/amusement'
+      };
+      return routeMap[code] || '/';
+    },
+    // 判断分类是否激活
+    isCategoryActive(code) {
+      const routeMap = {
+        'sport': ['/sports'],
+        'gaming': ['/electronic'],
+        'realbet': ['/people'],
+        'joker': ['/cards'],
+        'lottery': ['/lottery'],
+        'concise': ['/amusement', '/amusementList']
+      };
+      const routes = routeMap[code] || [];
+      return routes.includes(this.url);
+    },
+    // 点击游戏进入
+    onGameClick(game) {
+      this.goGamePage(game.platform_name, game.game_code, '');
+    },
+    // 显示下拉菜单
+    showDropdown(event) {
+      const dropdown = event.currentTarget.querySelector('.PjlHS4wt');
+      if (dropdown) {
+        dropdown.style.display = 'block';
+      }
+      const overlay = document.querySelector('._1XwyY7sN');
+      if (overlay) {
+        overlay.classList.add('_2fDy0Bg6');
+      }
+    },
+    // 隐藏下拉菜单
+    hideDropdown(event) {
+      const dropdown = event.currentTarget.querySelector('.PjlHS4wt');
+      if (dropdown) {
+        dropdown.style.display = 'none';
+      }
+      const overlay = document.querySelector('._1XwyY7sN');
+      if (overlay) {
+        overlay.classList.remove('_2fDy0Bg6');
+      }
     },
     getGameList() {
       let that = this;
@@ -1529,6 +1632,55 @@ export default {
 </script>
 <style lang="scss" scoped>
 .nRE1dUST ._9eNaWz24{ font-size: 1.2vw !important; }
+
+// 导航滚动容器样式
+.nav-scroll-container {
+  max-width: 55vw !important; // 限制最大宽度
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  flex-wrap: nowrap !important;
+  scrollbar-width: none !important; // Firefox 隐藏滚动条
+  -ms-overflow-style: none !important; // IE 隐藏滚动条
+  &::-webkit-scrollbar {
+    display: none !important; // Chrome/Safari 隐藏滚动条
+  }
+}
+
+// 重置所有子元素的 order 属性，覆盖 style.css 中的 nth-child order 规则
+// 确保动态导航按照 DOM 顺序显示（首页 -> 动态分类 -> 代理登录）
+::v-deep .nRE1dUST .X_9C3y3f.nav-scroll-container > div {
+  -webkit-order: 0 !important;
+  order: 0 !important;
+}
+
+// 动态导航菜单游戏名称覆盖层样式
+.game-name-overlay {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  padding: 5px;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
+}
+
+// 动态导航游戏列表样式
+.pc-category-games {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 15px !important;
+  padding: 15px !important;
+}
+
+.pc-category-games li {
+  flex: 0 0 calc(25% - 12px) !important;
+  min-width: 180px !important;
+}
+
 .gameNametop {
   padding-top: 30px;
   height: 60px;
