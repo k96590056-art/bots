@@ -516,6 +516,7 @@ class TelegramWebhookController extends Controller
                 return $this->startGame($chatId, $messageId, $user, $param, $callbackQueryId);
 
             case 'back_main':
+            case 'back_to_main_menu':
                 // 返回主菜单
                 // 不调用answerCallbackQuery以避免显示绿色图标
                 $telegramUserInfo = [
