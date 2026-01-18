@@ -262,6 +262,7 @@ SCRIPT;
             });
             
             $form->image('image', '缩略图')->uniqueName()->help('游戏类目缩略图');
+            $form->image('banner', 'Banner广告图')->uniqueName()->help('Banner广告图');
             $form->number('order', '排序')->default(0)->help('数字越小越靠前');
             
             $form->display('created_at');

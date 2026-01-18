@@ -229,7 +229,7 @@ class IndexController extends Controller
      */
     public function getGamePcCategories(Request $request)
     {
-        $list = GameCategory::select('id', 'name', 'image', 'code', 'pid')
+        $list = GameCategory::select('id', 'name', 'image', 'banner', 'code', 'pid')
             ->orderBy('order')
             ->orderBy('id')
             ->get()
@@ -282,7 +282,7 @@ class IndexController extends Controller
                 })
                 ->where('is_pc', 1)
                 ->where('site_state', 1)
-                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id','game_icon','game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
                 ->orderBy('order_by', 'asc')
                 ->get();
             
@@ -310,6 +310,8 @@ class IndexController extends Controller
                     'check_yes_img' => $game->check_yes_img ? env('APP_URL').'/uploads/'.$game->check_yes_img : '',
                     'check_no_img' => $game->check_no_img ? env('APP_URL').'/uploads/'.$game->check_no_img : '',
                     'api_logo_img' => $game->api_logo_img ? env('APP_URL').'/uploads/'.$game->api_logo_img : '',
+                    'game_icon' => $game->game_icon ? env('APP_URL').'/uploads/'.$game->game_icon : '',
+                    'game_title_img' => $game->game_title_img ? env('APP_URL').'/uploads/'.$game->game_title_img : '',
                     'mobile_img' => $game->mobile_img ? env('APP_URL').'/uploads/'.$game->mobile_img : '',
                     'header_logo' => $game->header_logo ? env('APP_URL').'/uploads/'.$game->header_logo : '',
                     'app_img' => $game->app_img ? env('APP_URL').'/uploads/'.$game->app_img : '',
@@ -319,13 +321,8 @@ class IndexController extends Controller
         }
         
         foreach ($list as $key => $value) {
-            if (!empty($value['image'])) {
-                $img = $value['image'];
-                // 如果image不是完整的URL，则拼接API地址和uploads目录
-                if (stripos($img, 'http://') !== 0 && stripos($img, 'https://') !== 0) {
-                    $list[$key]['image'] = rtrim($apiUrl, '/') . '/uploads/' . ltrim($img, '/');
-                }
-            }
+            $list[$key]['image'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"]: '';
+            $list[$key]['banner'] = $value["banner"] ? env('APP_URL').'/uploads/'. $value["banner"] : '';
             // 添加子分类数量
             $list[$key]['children_count'] = $childCounts[$value['id']] ?? 0;
             // 添加游戏数据列表（category_id = code 且 child_id = 0）

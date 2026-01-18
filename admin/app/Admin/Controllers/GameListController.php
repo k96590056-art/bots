@@ -254,6 +254,9 @@ class GameListController extends AdminController
 				->default($currentTagId)
 				->help('选择游戏标签（可选）');
 			
+			$form->image('game_title_img', '标题图标')->uniqueName()->help('游戏标题图标');
+			$form->image('game_icon', '导航图标')->uniqueName()->help('游戏导航图标');
+			
 			$form->image('api_logo_img','接口图标')->uniqueName();
             //$form->image('check_yes_img','PC选中状态')->uniqueName();
             //$form->image('check_no_img','PC未选中状态')->uniqueName();
