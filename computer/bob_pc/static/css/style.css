@@ -14324,8 +14324,14 @@ textarea.ant-pagination-options-quick-jumper input {
     }
 }
 
-._1_iN76zv input:-webkit-autofill {
-    box-shadow: inset 0 0 0 1000px #fff !important;
+._1_iN76zv input:-webkit-autofill,
+._1_iN76zv input:-webkit-autofill:hover,
+._1_iN76zv input:-webkit-autofill:focus,
+._1_iN76zv input:-webkit-autofill:active {
+    -webkit-transition: background-color 99999s ease-out, color 99999s ease-out;
+    transition: background-color 99999s ease-out, color 99999s ease-out;
+    -webkit-text-fill-color: #fff !important;
+    caret-color: #fff !important;
     outline: none
 }
 
@@ -14339,8 +14345,8 @@ textarea.ant-pagination-options-quick-jumper input {
     height: 32px;
     padding: 0 9px;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    width: 5.7vw;
-    min-width: 80px;
+    width: 8vw;
+    min-width: 120px;
     display: inline-block;
     font-size: 12px;
     margin-right: 4px
@@ -14401,11 +14407,15 @@ textarea.ant-pagination-options-quick-jumper input {
     border-radius: 4px;
     height: 32px;
     border: 1px solid rgba(255, 255, 255, 0.3);
-    width: 5.7vw;
-    min-width: 95px;
+    width: 8vw;
+    min-width: 120px;
     display: inline-block;
     font-size: .75vw;
     padding: 0 42px 0 9px
+}
+
+._1_iN76zv ._1xLtCzwl {
+    margin-right: clamp(3px, 0.2vw, 5px)
 }
 
 ._1_iN76zv ._1xLtCzwl ._2uN-VcWm:focus,
@@ -14472,7 +14482,7 @@ textarea.ant-pagination-options-quick-jumper input {
 ._1_iN76zv ._3iaWcDfb {
     width: 72px;
     height: 36px;
-    margin-left: 8px
+    margin-left: 0
 }
 
 ._1_iN76zv ._3iaWcDfb a {
@@ -14788,7 +14798,9 @@ textarea.ant-pagination-options-quick-jumper input {
     -webkit-justify-content: center;
     justify-content: center;
     background: #1b1e2a;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, .3)
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .3);
+    padding: 0 20px;
+    box-sizing: border-box;
 }
 
 ._4ICMeQUV {
@@ -43157,6 +43169,7 @@ textarea.ant-pagination-options-quick-jumper input {
     align-items: center;
     margin-left: 0;
     margin-right: 2px;
+    flex-shrink: 0;
 }
 
 .header-icon-item {
@@ -43173,7 +43186,7 @@ textarea.ant-pagination-options-quick-jumper input {
     -webkit-box-pack: center;
     -webkit-justify-content: center;
     justify-content: center;
-    margin: 0 8px;
+    margin: 0 0.3vw;
     cursor: pointer;
     -webkit-transition: all .3s;
     transition: all .3s;
@@ -43186,20 +43199,154 @@ textarea.ant-pagination-options-quick-jumper input {
 }
 
 .header-icon-item img {
-    width: 24px;
-    height: 24px;
-    margin-bottom: 2px;
+    width: 1.8vw !important;
+    height: 1.8vw !important;
+    min-width: 28px !important;
+    min-height: 28px !important;
+    margin-bottom: clamp(6px, 0.6vw, 12px);
+    object-fit: contain;
 }
 
 .header-icon-item span {
-    font-size: 12px;
-    color: #fff;
+    font-size: clamp(12px, 0.9vw, 16px);
+    color: #ffffffb2;
     white-space: nowrap;
+}
+
+/* 存款、转账、取款、推广图标稍大 */
+.header-icon-large img {
+    width: 2.1vw !important;
+    height: 2.1vw !important;
+    min-width: 34px !important;
+    min-height: 34px !important;
 }
 
 /* 图标区域左边间距 */
 ._21_IWk7T .header-icon-btns {
-    margin-left: 30px;
+    margin-left: 15px;
+}
+
+/* 导航栏整体居中布局优化 */
+.nRE1dUST {
+    max-width: 100%;
+    justify-content: center;
+    padding: 0 15px;
+}
+
+/* logo区域 */
+.nRE1dUST ._6XowEZMC {
+    width: 6vw !important;
+    min-width: 80px !important;
+    margin-right: 0 !important;
+}
+
+@media screen and (max-width:1410px) {
+    .nRE1dUST ._6XowEZMC {
+        margin-right: 0 !important;
+    }
+}
+
+/* 导航菜单间距 */
+.nRE1dUST .X_9C3y3f > div {
+    padding-right: 0.8vw !important;
+}
+
+/* 已登录用户信息区域 - 新布局 */
+.user-info-panel {
+    display: flex;
+    align-items: center;
+    margin-left: 1vw;
+    flex-shrink: 0;
+}
+
+.user-info-left {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-right: 12px;
+}
+
+.user-info-row {
+    display: flex;
+    align-items: center;
+    line-height: 1.4;
+}
+
+.user-name-row .username {
+    color: #ffffffb2;
+    font-size: 14px;
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.user-name-row .vip-badge img {
+    height: 18px;
+    vertical-align: middle;
+}
+
+.user-balance-row {
+    color: #fff;
+    font-size: 14px;
+}
+
+.user-balance-row .balance-symbol {
+    color: #fff;
+    margin-right: 2px;
+}
+
+.user-balance-row .balance-amount {
+    color: #fff;
+    font-weight: 500;
+}
+
+.user-balance-row .balance-toggle {
+    margin-left: 0.3vw;
+    cursor: pointer;
+    width: clamp(14px, 1vw, 18px);
+    height: clamp(14px, 1vw, 18px);
+    opacity: 0.7;
+    transition: all 0.3s;
+    vertical-align: middle;
+}
+
+.user-balance-row .balance-toggle:hover {
+    opacity: 1;
+}
+
+.user-url-row {
+    font-size: 12px;
+    color: #888;
+}
+
+.user-url-row .site-url {
+    color: #888;
+    margin-left: 4px;
+}
+
+.user-url-row .copy-icon {
+    margin-left: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.user-info-right {
+    display: flex;
+    align-items: center;
+}
+
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    border: 2px solid #3a3f4b;
+}
+
+.user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
 /* 调整导航菜单顺序 - 已禁用，现在使用动态导航，按API返回顺序显示 */
@@ -43250,9 +43397,19 @@ textarea.ant-pagination-options-quick-jumper input {
     display: none !important;
 }
 
-/* 导航菜单字体增大 */
+/* 导航菜单字体 */
 .nRE1dUST ._9eNaWz24 {
-    font-size: 20px !important;
+    font-size: 18px !important;
+    color: #ffffffb2 !important;
+    font-family: "PingFang SC", "DIN Pro", dinpro, PingFangSC-Regular, "SF Pro SC", "SF Pro Text", "Microsoft Yahei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+    font-feature-settings: "tnum" !important;
+}
+
+/* 导航栏滚动容器 */
+.nRE1dUST .X_9C3y3f.nav-scroll-container {
+    max-width: 30vw !important;
+    flex-shrink: 1 !important;
+    margin-left: 1.8vw !important;
 }
 
 /* 横线位置调整到底部 */
@@ -43289,8 +43446,8 @@ form.login-form-inline.ant-form._1_iN76zv {
     align-items: flex-start !important;
     justify-content: flex-end !important;
     flex-wrap: nowrap !important;
-    gap: 0 !important;
-    padding-top: 30px !important;
+    gap: clamp(3px, 0.25vw, 6px) !important;
+    padding-top: 22px !important;
 }
 
 /* 登录按钮包裹容器 - 包含按钮和永久网址 */
@@ -43298,6 +43455,7 @@ form.login-form-inline.ant-form._1_iN76zv {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin-left: 0 !important;
 }
 
 /* 登录按钮组容器 */
@@ -43305,17 +43463,17 @@ form.login-form-inline.ant-form._1_iN76zv {
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 0;
+    gap: 4px;
 }
 
 /* 永久网址样式 - 在登录按钮下方，和按钮等宽 */
 .permanent-url-text {
-    font-size: 9px;
+    font-size: 10px;
     color: #888;
     white-space: nowrap;
     text-align: center;
-    margin-top: 3px;
-    letter-spacing: -0.5px;
+    margin-top: 8px;
+    letter-spacing: 0;
 }
 
 /* 登录表单样式调整 */
@@ -43330,14 +43488,14 @@ form.login-form-inline.ant-form._1_iN76zv {
 /* 登录输入框样式 - 更小更圆，大小一致 */
 .ant-form._1_iN76zv ._10rTDi18,
 .ant-form._1_iN76zv ._2uN-VcWm {
-    height: 22px !important;
-    width: 68px !important;
-    min-width: 68px !important;
-    max-width: 68px !important;
-    padding: 0 6px !important;
+    height: clamp(22px, 1.5vw, 28px) !important;
+    width: clamp(80px, 5.5vw, 110px) !important;
+    min-width: 80px !important;
+    max-width: 110px !important;
+    padding: 0 clamp(6px, 0.4vw, 10px) !important;
     border-radius: 11px !important;
-    font-size: 11px !important;
-    margin-right: 0 !important;
+    font-size: clamp(11px, 0.7vw, 13px) !important;
+    margin-right: clamp(3px, 0.2vw, 5px) !important;
     background: rgba(255, 255, 255, 0.15) !important;
     border: 1px solid rgba(255, 255, 255, 0.3) !important;
     color: #fff !important;
@@ -43347,6 +43505,7 @@ form.login-form-inline.ant-form._1_iN76zv {
 .ant-form._1_iN76zv ._1xLtCzwl {
     display: inline-flex !important;
     align-items: center !important;
+    margin-right: clamp(3px, 0.25vw, 6px) !important;
 }
 
 /* 忘记密码链接隐藏或调整 */

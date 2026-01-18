@@ -1158,7 +1158,9 @@ class TelegramWebhookController extends Controller
             }
             $redpacketRow[] = [
                 'text' => '🎁 福利活动',
-                'callback_data' => 'welfare_activities'
+                'web_app' => [
+                    'url' => rtrim($gameUrl, '/') . '/#/activity'
+                ]
             ];
 
             // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮

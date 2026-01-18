@@ -10,7 +10,7 @@
           <div class="_3_qzGcRD"><span class="_1N8mCmac">-</span><span>B</span><span>O</span><span>B</span><span>.</span><span>C</span><span>O</span><span>M</span><span class="_1N8mCmac">-</span></div>
         </div>
       </div>
-      <div class="_21_IWk7T">
+      <div class="_21_IWk7T" v-show="pcCategoriesLoaded">
         <div class="nRE1dUST">
           <div class="_6XowEZMC" @click="goNav('/')">
             <a href="javascript:;">
@@ -26,7 +26,7 @@
               </a>
             </div>
             <!-- 动态导航菜单 - 从API获取分类数据 -->
-            <template v-if="pcCategories.length > 0">
+            <template v-if="pcCategoriesLoaded && pcCategories.length > 0">
               <div class="_9eNaWz24 nav" v-for="(category, catIndex) in mainCategoryList" :key="'cat-' + category.id" @mouseenter="showDropdown($event)" @mouseleave="hideDropdown($event)">
                 <a @click="goNav(getCategoryRoute(category.code))" :class="isCategoryActive(category.code) ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB'" href="javascript:;">
                   {{ category.name }}
@@ -57,7 +57,7 @@
               </div>
             </template>
             <!-- 静态导航菜单 - 当API数据未加载时显示 -->
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/sports')" :class="url == '/sports' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >体育
                 <div class="_17Hw2tUT"></div>
@@ -173,7 +173,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/electronic')" :class="url == '/electronic' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电竞
                 <div class="_17Hw2tUT"></div>
@@ -269,7 +269,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/people')" :class="url == '/people' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >真人
                 <div class="_17Hw2tUT"></div>
@@ -371,7 +371,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/lottery')" :class="url == '/lottery' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >彩票
                 <div class="_17Hw2tUT"></div>
@@ -467,7 +467,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/cards')" :class="url == '/cards' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >棋牌
                 <div class="_17Hw2tUT"></div>
@@ -574,7 +574,7 @@
                 </div>
               </div>
             </div>
-            <div class="_9eNaWz24 nav" v-if="pcCategories.length === 0">
+            <div class="_9eNaWz24 nav" v-if="pcCategoriesLoaded && pcCategories.length === 0">
               <a @click="goNav('/amusement')" :class="url == '/amusement' || url == '/amusementList' ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB '" href="javascript:;"
                 >电子
                 <div class="_17Hw2tUT"></div>
@@ -895,18 +895,15 @@
                 </div>
               </div>
             </div>
-            <!-- <div class="_9eNaWz24" @click="goNav('/agent')"> -->
-            <div class="_9eNaWz24" @click="getAgentLoginUrl">
-              <div to="undefined" class="_5v-zJhSB">
-                代理登录
-                <div class="P4bUdpZY"><span></span><span></span></div>
-              </div>
-            </div>
           </div>
           <div class="_1XwyY7sN"></div>
         </div>
         <!-- 右侧图标按钮区域 -->
         <div class="header-icon-btns">
+          <div class="header-icon-item" @click="getAgentLoginUrl">
+            <img src="/static/image/shujuhutong.png" alt="代理登录" />
+            <span>代理登录</span>
+          </div>
           <div class="header-icon-item" @click="openKefu">
             <img src="/static/image/kefu.png" alt="客服" />
             <span>客服</span>
@@ -938,59 +935,54 @@
             <img src="/static/image/app.png" alt="APP" />
             <span>APP</span>
           </div>
+          <!-- 登录后显示：存款、转账、取款、推广 -->
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" style="margin-left: 20px;" @click="goNav('/mine/deposit')">
+            <img src="/static/image/cunkuan.png" alt="存款" />
+            <span>存款</span>
+          </div>
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/transfer')">
+            <img src="/static/image/zhuanzhang.png" alt="转账" />
+            <span>转账</span>
+          </div>
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/withdrawal')">
+            <img src="/static/image/qukuan.png" alt="取款" />
+            <span>取款</span>
+          </div>
+          <div v-show="is_login == 1" class="header-icon-item header-icon-large" @click="goNav('/mine/agent')">
+            <img src="/static/image/tuiguang.png" alt="推广" />
+            <span>推广</span>
+          </div>
         </div>
         <!--已登录-->
-        <div v-show="is_login == 1" class="_3p4LHdBG">
-          <span class="ant-badge"
-            ><a class="_1wAlds7V" @click="goNav('/mine/mail')" href="javascript:;"
-              ><img
-                src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAMAAACfWMssAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAMAUExURUxpcdSqqtatpcmonf+qqt27qsijo////////+vFsMekmMumm8emmcaqqsyqnsyymcmlmMajl8qpms6uncekmMekmsyjmcakl8ikl+TPzMajl9CiosqnnsmkmMijl8akmMikmMelmsammsijlsejl8ekmMaBaePBtMWilsajlsijmMell8ehlMajl8ailsail8ailcajmcailsWklsuRfNGSffPZz/7v6vvo4ea4qMmhk9eikMailt2tnP3u59GXg/vn4c6Tft+xoc6Yg//t6PXc0vXd1/jg1/rk3Pvn4ffc1O7Rx+7PxOvIvu7MwPLTx/TWzO7LwNKdit21punBsenCs+jAsuW7q8Wil9Kgjsajltunlt6rmM6VfsidjNihjMyMdcyQef/w6vvn4ceEbMqdi8uXhv/u6OvXzfvs5v3v6vXa0fbb0c2Md/bZz/bb0vfd1Pni2tmYgtudh//t49yhi//ayP/38v/ezv/9+/zo4f/49f/Zxf3q49ueiee4p+7Ju/vm3+vCtOvAsei6qvTVy+/LvvLPw+Wzov/cy//g0frj3Nqch//Vv/LRxfjf1+zEtvPTyNmUd+3GufDNweGrmP/k19+nk9eUfdWFYP/m2v/j1OOvnf/69//q4N2hjP/+/uCpltychP/179mahP/Wwv/o3NyRa+m+r/vn4OWyoP7u6Pjf1ui7rP/v5v/y7NiWf/7s5tiNavrk3OW1pdyfitmRb+Ktm+Cji92jjuKoj//o3ezCrfjg1/rl3vXXzeSxn//079qbhdiXgN+lkeq+r+e2pem8re3GuOGtmv/w6OOrlP3s5v/WwcyKc/TYzfXXzP/6+P/SvNqgjf/q39iLZ9SCWsiHb9aIYuWwmf/w6dWdi9+lkduoltuaf9GVgNqTcf/dzPnMtdqYfe3MwdaYguy9qf/h0eKkhf318v/r4N6ehejCtdKZheK4qeW7rs2Nd8N+Zc2QeurGuu6zlfTUxumyl/LHsuKkhPbe1uzBseKefvbApOOdeunCtNeTeWHc500AAABudFJOUwAGDBcDBw4BAgQyIxsJFAomQhEPOiAZWE8SYwsdKmc1PC0oOHFR/isWe0VKbHWIgptL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"
-                alt=""
-                style="width: 28px; height: 28px; margin-right: 15px"
-            /></a>
-            <sup data-show="true" v-if="$store.state.messageNum" class="ant-scroll-number ant-badge-dot" title="7" style="right: 20px; margin-top: 2px"></sup>
-          </span>
-          <div class="_3MFtH4YW">
-            <div class="_2_lHG0qa">
-              <a href="javascript:;" @click="goNav('/mine/deposit')"
-                ><img
-                  src="data:image/png;base64,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"
-                />存款</a
-              ><a href="javascript:;" @click="goNav('/mine/withdrawal')"
-                ><img
-                  src="data:image/png;base64,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"
-                />取款</a
-              ><a href="javascript:;" @click="goNav('/mine/transfer')"
-                ><img
-                  src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADgAAAA4CAMAAACfWMssAAAABGdBTUEAALGPC/xhBQAAAAFzUkdCAK7OHOkAAAJwUExURcaqm9K1osejmMailv/X19fKocajl8Wilsyqmcemm8mmmsikmNOsnsWiltSqqsyqmcmnnMakmdq2ttizosikmMejm0xpccikmMunnMelmcqnnsail8ejlsijmsikmsynm8ejl8ejl8mGb8ajl8eil8iilcWjmcqjlsWjlsajl8ail/zq48ajl8aAZ8iDa/bc1u7Swvnh2cmWgcajl/3v5/nq5P/v6syVgNGOePni2vnh2v/v6v3r5P/v6f/r5fXc08eDbPvl3vzp5NeUffnc0/3s6fjf1/3y8PfZ0P/u6fzm4Pji2v7s5tiWf+iqlfbUyv3t6tmYgv3q5OeokuWii/zn4vnf1/fXzf/w6vjd1f3s5taSe/zq5+WgiOqwnMN+ZNudh/HHuffb0t6jjvDCs+mtmfvn4fzo4fDMv+u1o9KMfeqyntueieqzofbXzdmahOzCtOCnlN6lke28q+zKxPTVy+OdhP/v6vrh2uWyod2hjO/AsNygk/XRxv7x7uOagey3peKrmOelj+atnPrl3+aljue3qPHNwd6Rd/XZz+CpluOvnue9ttKThvXTyfTPw/7u6/708uismPLRxe7IvOvAsea1pfLKvuzEt+3GufPMwOSehfHEtu69rOq+r/zt6OKtm+26qei6qvPTyPLJvNWRevrk3fDPxvnh2e6+rvLPw/3z8um8rOGXff729dyfiuqvm+SkkP749//7+tGOdtqbhdmajuSmlOavoPDEttupmtWViuGUefjb0uy6q+3KwuCyo+S4rNejkdScidCUgMyNd8iGbs6Jcey5qPvo4ufBtN2ejumsmOm0pOOfh96jlI2B2l4AAABBdFJOUxIIcqYCBFhCHi4bKhCNDA8WLQcNOSMAQBg9HYtoIDATSFTkbk1fNSejhHaamv72nD/0oX6TMfOD+tra1sDWwPvx6bha7AAABmVJREFUeNqN1/lXklkYB/CXmRQDY1HIZXDfWmxfZz1HJ43U0XIrlHReFJURmLchmBxSMVGyJi1KUVNnSAShMbUcldzas03/pXnuBV6g6Jz58Bzv9nyPP3gO90ps375ly5awsKgjh78/+nuwc7+fgwrYOPrt4SNRYWEQ2L6dwLmo6N1Fp4LkncqDokda0e7oKJwkUI4R+UNVUVVVaVUpVlRaVITW8AOBJd4DaP+7SAZKEigXvbs0UG5pLgYTKDQG7e2ORkkC5fYbGyoaKioaKxobGxoboBpP1M+UbUxNbZTV1J9A+4Ea9qMkERbFIfbl5BhzjFA5mERz/mqA89bK4PN9BCcqjAhjcHlf2wNUWqeWl9sVLpk9L88ucynal5enNJWBHd/wuIwwIoqTFHFg0s+mm5pSidv8bopVU1M6W6G/5UBEEieKYHBjhfl+mvZ288pp5Obpmz4r5vZ2TUCTMJbLIBgEiy3xkTXrdLaqEGw6XbOMbmOzIMbhJSTKfFQb5SW5FblQFVD0HwKmJeUbKrotMYHHIaJ5wkxxT4+4RyzuGd2YlRV8zFhghCpYmS3X9HhlCnnRBDc2S6BWq7VqrXaovKvX/lmtXeWkp08tyIrlEpEsdpwWGy+eJScvXZq8NAl1CfjneCS7ise1WBybFYmCMePYaJmiMoD0pERSKfHMYQKlKBsdx2JwMJ4fcxsxmYtbV06sYDC0PWoTn0AT+OEdW4vNJtwaw4+PJAgIulwuk2vMvCqmSe4/eiR1qMXBVuVOFzBBkCCIiK3MJuTDzLD6rPoslFqd/+Dhw4fGO71qD9/+8MwH3MrcGuEJ3oHFULOi18f+ADEOtpZ49Zb0YormoeAg6Fc5Wz16cx94tJ30a8NHTlU/6qWDQ0BjGOnrc/W5XCU3b4H7t+5jMPGw9AHSoEG9dHAQaNbJYUQNvyeUfgsckusa1EsHKaDRkBaLzULaTGtrF/3WLsISNkz3SJvNRmo0FKCD/cDpJBFq+erELyFc7XaTwOlEvXRwDOj73SMj7pGx06FJVutH3O4RvR710sF/AOWuR1bzpNI8aR4UPSKy7lV8TFGolw7eA5Rb73TqnR+koaxtXl916vX6epJCvXSwG1CkfnR0dHXxz0D5FYjxydLm4roGjvUkhXrp4AAYs7itVuv64uWlG34OlJNdXrrc+WHdum61ui1jqJcOtgwMtHSbmgwGg2Lx2uZl2ryjIKdgbWl+s1NlQNabTAMtgA7C/HqLxWVVKBSqxU6/TYfd/vTG/IVOlQKzuiwtQcHrSP9tshmpaa6BwrMOh+QxysEKI8f7cSsd/Bu5Pt5rmKmZgaqBmkEWuueX3i2YfXuG3vEW3EoHOzBKbZIDs9wMJZe/l5sX3s2/Wyh+D5t436SmOjA6eA3r0IqdxUEWZmcX/CunWNvh6aSDFzy6ZTJFWaArs7P+hUEm6/Y20sHfvCiJTN6FXOm6AoVHnxmZhPL10cE6n6ZJiao8JJVssoluo4PTf3jVmeyFoxvnPzVaaDfV+bqUKIi/Hs8oaZTRqJXfRXR3dRhM5FqjkVIqp5XTUErlGfz1GAnB4z/7DRS+edMnb/fTzbjevCkcCGg5DkHPFbD313/hg8CgpBqk0pxhhblLp+t6rxg25kobKCV9Dp+9Md67Iy517kyg6cH8vwLkD04HHc+loksHX3PHaud+ClY35ugpLK0q7HGM1X10NFd7DF1z+GJNTq19/eP/9Lo2NRldrPgqZ2bsrd3zem6iurp6onoCgwkUHn1gNfd6T+3eDCa6yvHjQZAuSq1FXr188fzZ4ydP395x9OQXlNolWsfQ26dPHj97/uLlq1osVZQuQI8H/FxJZKaIDqbu+ShoLELBO4HBPakHRSnMRPRcwQ8ktiA5XLRr57bs7B07vvyMHTuys7ft3CUKTxaw0QMJP8kS+ILklIy0XYd2foVs+wTe3nloV1pGSrKAn4CeZPgRyBLyBcz08AyRKC3ti89ISxOJMsLTmQK+kIUegfjZmcRKYCcKmMnpKSnhn5WSkp7MFCSyE1hJ+NmJH7oEL0LITswUxMXFxMQwQ4DtuDhBZiJbGMEjvA9dlORwk2JZCcIsNpvP528NAbbZ7CxhAis2icvBT2vvYx6iBI8Xy2LFx0eEFB/PYsXyeATEPI95+t8HBoMTzY0EREjohBvNYTB8/z78BxXVOdWOb2frAAAAAElFTkSuQmCC"
-                />转账</a
-              >
+        <div v-if="is_login == 1" class="user-info-panel">
+          <div class="user-info-left">
+            <div class="user-info-row user-name-row">
+              <a href="javascript:;" @click="goNav('/mine/myVip')" class="username">{{ $store.state.userInfo.username ? $store.state.userInfo.username : '' }}</a>
+              <a href="javascript:;" @click="goNav('/vipInfo')" class="vip-badge"><img :src="baseURL + $store.state.userInfo.vipname" alt="" /></a>
             </div>
-            <div class="_2opkgkej">
-              <div class="_3M5Hn9yS">
-                <a href="javascript:;" @click="goNav('/mine/myVip')">{{ $store.state.userInfo.username ? $store.state.userInfo.username : '' }}</a
-                ><a class="vpSXaOJQ" href="javascript:;" @click="goNav('/vipInfo')" style="margin-left: 5px"><img :src="baseURL + $store.state.userInfo.vipname" alt="" /></a>
-              </div>
-              <a href="javascript:;" @click="goNav('/mine/deposit')"
-                ><span>钱包：</span><span class="GJ-6khIo">{{ $store.state.userInfo.balance }}</span
-                ><span>元</span></a
-              >
+            <div class="user-info-row user-balance-row">
+              <span class="balance-symbol">¥</span>
+              <span class="balance-amount">{{ balanceVisible ? ($store.state.userInfo.balance || '0.00') : '****' }}</span>
+              <img class="balance-toggle" @click="toggleBalanceVisible" :src="balanceVisible ? '/static/image/see.png' : '/static/image/no_see.png'" alt="" />
+            </div>
+            <div class="user-info-row user-url-row">
+              <span>永久网址:</span>
+              <span class="site-url">{{ ($store.state.appInfo.h5_url || 'jiuyou.com').replace(/^https?:\/\//, '') }}</span>
             </div>
           </div>
-          <div class="_1l9zXSS0">
-            <div class="_3UeK5NwV" style="background-image: url(image/my_vip0_box-b9b4.png)">
+          <div class="user-info-right">
+            <div class="user-avatar" @click="goNav('/mine')">
               <img :src="$store.state.userInfo.avatar ? $store.state.userInfo.avatar : '/static/image/CristianoRonaldo.jpg'" alt="" />
             </div>
-            <span @click="outLogin">退出登录</span>
           </div>
         </div>
         <!--已登录-->
         <!--未登录-->
-        <form v-show="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv login-form-inline">
+        <form v-if="is_login == 0" class="ant-form ant-form-horizontal _1_iN76zv login-form-inline">
           <input type="text" placeholder="用户名" maxlength="16" class="_10rTDi18 loginInput" autocomplete="none" id="name" v-model="username" />
           <div class="_1xLtCzwl">
             <input type="password" placeholder="密码" maxlength="16" class="_2uN-VcWm loginInput" id="password" v-model="psw" />
-            <a class="_1ZUvLsxY" @click="openKefu" href="javascript:;">忘记?</a>
+            <a v-show="!psw" class="_1ZUvLsxY" @click="openKefu" href="javascript:;">忘记?</a>
           </div>
           <div class="login-btn-wrapper">
             <div class="login-btn-group">
@@ -1058,6 +1050,7 @@ export default {
       username: null,
       jumpUrl: null,
       show: false,
+      balanceVisible: true,
       realbetList: [],
       jokerList: [],
       gamingList: [],
@@ -1066,6 +1059,7 @@ export default {
       conciseList: [],
       activityDropdownList: [],
       pcCategories: [], // PC端游戏分类数据
+      pcCategoriesLoaded: false, // PC端游戏分类是否加载完成
       sportImg: {
         sbtest: '/static/image/img_saba_title.png',
         oap: '/static/image/img_ss_title.png',
@@ -1215,6 +1209,9 @@ export default {
     // that.getGameList('concise');
   },
   methods: {
+    toggleBalanceVisible() {
+      this.balanceVisible = !this.balanceVisible;
+    },
     changIndex() {
       this.index = parseInt(20 * Math.random());
     },
@@ -1225,8 +1222,10 @@ export default {
         if (res.code == 200) {
           that.pcCategories = res.data || [];
         }
+        that.pcCategoriesLoaded = true;
       }).catch(err => {
         console.error('获取PC端游戏分类失败:', err);
+        that.pcCategoriesLoaded = true;
         // 请求失败时保持 pcCategories 为空数组，将显示静态导航
       });
     },
@@ -1526,6 +1525,22 @@ export default {
       let that = this;
       that.$parent.openKefu();
     },
+    copyUrl() {
+      let that = this;
+      let url = that.$store.state.appInfo.h5_url || 'jiuyou.com';
+      navigator.clipboard.writeText(url).then(() => {
+        that.showTost('网址已复制');
+      }).catch(() => {
+        // 降级方案
+        let input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        that.showTost('网址已复制');
+      });
+    },
     showTost(title) {
       $('body').append(`
             <div class='ant-message' style='top: 400px;'><span><div class='ant-message-notice'><div class='ant-message-notice-content'>
@@ -1631,16 +1646,32 @@ export default {
 };
 </script>
 <style lang="scss" scoped>
-.nRE1dUST ._9eNaWz24{ font-size: 1.2vw !important; }
+.nRE1dUST ._9eNaWz24{
+  font-size: 18px !important;
+  color: #ffffffb2 !important;
+  font-family: "PingFang SC", "DIN Pro", dinpro, PingFangSC-Regular, "SF Pro SC", "SF Pro Text", "Microsoft Yahei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+  font-feature-settings: "tnum" !important;
+}
+
+// 导航栏整体布局优化
+::v-deep .nRE1dUST {
+  align-items: center !important;
+}
+
+// 图标按钮文字缩小
+::v-deep .header-icon-item span {
+  font-size: 11px !important;
+}
 
 // 导航滚动容器样式
 .nav-scroll-container {
-  max-width: 55vw !important; // 限制最大宽度
+  max-width: 30vw !important; // 限制最大宽度
   overflow-x: auto !important;
   overflow-y: hidden !important;
   flex-wrap: nowrap !important;
   scrollbar-width: none !important; // Firefox 隐藏滚动条
   -ms-overflow-style: none !important; // IE 隐藏滚动条
+  flex-shrink: 1 !important;
   &::-webkit-scrollbar {
     display: none !important; // Chrome/Safari 隐藏滚动条
   }
