@@ -768,39 +768,6 @@ class TelegramWebhookController extends Controller
                 ];
                 return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
-            case 'welfare_activities':
-                // 福利活动 - 使用webapp形式打开活动页面
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                
-                // 获取游戏入口URL（与主菜单一致）
-                $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
-                $activityUrl = rtrim($gameUrl, '/') . '/#/activity';
-                
-                // 构建Inline Keyboard，使用web_app类型按钮
-                $inlineKeyboard = [[
-                    [
-                        'text' => '🎁 福利活动',
-                        'web_app' => [
-                            'url' => $activityUrl
-                        ]
-                    ]
-                ], [
-                    [
-                        'text' => '← 返回',
-                        'callback_data' => 'back_to_main_menu'
-                    ]
-                ]];
-                
-                // 编辑消息，显示福利活动按钮
-                $text = "🎁 点击下方按钮进入福利活动页面";
-                $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
-                if ($result['code'] != 200) {
-                    // 如果编辑失败，尝试发送新消息
-                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
-                }
-                
-                return response()->json(['ok' => true]);
-
             case 'language':
                 // 语言切换（待实现）
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
