@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Services\DbOneapiService;
+use App\Services\DboneapiService;
 use App\Models\User;
 use App\Models\User_Api;
 use App\Models\GameList;
@@ -111,7 +111,7 @@ class Dboneapi extends Command
     {
         $this->info("开始同步 {$minutes} 分钟内的游戏记录...");
 
-        $service = new DbOneapiService();
+        $service = new DboneapiService();
         
         // 计算时间范围（Unix时间戳，毫秒）
         // 注意：API要求时间戳为毫秒
@@ -379,7 +379,7 @@ class Dboneapi extends Command
     {
         $this->info('开始同步用户余额...');
 
-        $service = new DbOneapiService();
+        $service = new DboneapiService();
         
         // 先根据 game_lists.with_api 找到对应的 platform_name，再用 platform_name 匹配 user_api.api_code
         $platformNames = GameList::where('with_api', 'dboneapi')
@@ -421,10 +421,10 @@ class Dboneapi extends Command
                     continue;
                 }
 
-                // 注意：DbOneapiService 目前没有 balance 方法
+                // 注意：DboneapiService 目前没有 balance 方法
                 // 如果需要同步余额，需要先实现 balance 方法
                 // 这里暂时跳过，或者从其他地方获取余额
-                $this->warn("DbOneapiService 暂未实现 balance 方法，跳过用户 {$user->username}");
+                $this->warn("DboneapiService 暂未实现 balance 方法，跳过用户 {$user->username}");
                 $fail_count++;
                 continue;
 

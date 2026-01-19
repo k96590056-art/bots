@@ -228,61 +228,42 @@ export default {
         if (res.code == 200) {
           // 接口返回的数据结构是 { list: [...], app_list: [...] }
           let list = res.data.list || res.data || [];
-          let realbetList = [];
-          let jokerList = [];
-          let gamingList = [];
-          let sportList = [];
-          let lotteryList = [];
-          let conciseList = [];
+          // 使用 category_id 作为键的对象来存储游戏列表
+          let gameListByCategory = {};
 
           console.log('接口返回的原始数据:', res.data);
           console.log('解析后的list:', list, '长度:', list.length);
 
-          // 先遍历所有数据，分类存储
+          // 遍历所有数据，按 category_id 分类存储
           if (Array.isArray(list)) {
             list.forEach(el => {
-            if (el.category_id == 'realbet' && el.app_state == 1) {
-              realbetList.push(el);
-            }
-            if (el.category_id == 'joker' && el.app_state == 1) {
-              jokerList.push(el);
-            }
-            if (el.category_id == 'gaming' && el.app_state == 1) {
-              gamingList.push(el);
-            }
-            if (el.category_id == 'sport' && el.app_state == 1) {
-              sportList.push(el);
-            }
-            if (el.category_id == 'lottery' && el.app_state == 1) {
-              lotteryList.push(el);
-            }
-            if (el.category_id == 'concise' && el.app_state == 1) {
-              conciseList.push(el);
-            }
+              // 只处理 app_state == 1 的游戏
+              if (el.app_state == 1 && el.category_id) {
+                const categoryId = el.category_id;
+                // 如果该 category_id 还不存在，初始化为空数组
+                if (!gameListByCategory[categoryId]) {
+                  gameListByCategory[categoryId] = [];
+                }
+                // 将游戏添加到对应 category_id 的数组中
+                gameListByCategory[categoryId].push(el);
+              }
             });
           } else {
             console.warn('游戏列表数据格式错误，不是数组:', list);
           }
 
-          // 循环结束后，一次性保存到 localStorage
-          localStorage.setItem('realbetList', JSON.stringify(realbetList));
-          localStorage.setItem('jokerList', JSON.stringify(jokerList));
-          localStorage.setItem('gamingList', JSON.stringify(gamingList));
-          localStorage.setItem('sportList', JSON.stringify(sportList));
-          localStorage.setItem('lotteryList', JSON.stringify(lotteryList));
-          localStorage.setItem('conciseList', JSON.stringify(conciseList));
+          // 将按 category_id 组织的游戏数据保存到 localStorage
+          localStorage.setItem('gameListByCategory', JSON.stringify(gameListByCategory));
 
           // 更新 store
           that.$store.commit('changGameList');
 
-          console.log('游戏列表数据已加载:', {
-            realbetList: realbetList.length,
-            jokerList: jokerList.length,
-            gamingList: gamingList.length,
-            sportList: sportList.length,
-            lotteryList: lotteryList.length,
-            conciseList: conciseList.length
+          // 输出统计信息
+          let stats = {};
+          Object.keys(gameListByCategory).forEach(categoryId => {
+            stats[categoryId] = gameListByCategory[categoryId].length;
           });
+          console.log('游戏列表数据已加载（按 category_id 组织）:', stats);
         }
       });
     },

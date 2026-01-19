@@ -204,10 +204,6 @@ Route::prefix('xingyun')->group(function () {
     Route::any('/balance', 'Api\GmagController@balance');  // 获取玩家余额
     Route::any('/transaction', 'Api\GmagController@transaction');  // 交易（押注、赢取等）
     Route::any('/payUp', 'Api\GmagController@payUp');  // 发放玩家奖金
-});
-
-// OneAPI回调接口（Game Aggregator系统回调代理系统）
-Route::prefix('oneapi')->group(function () {
     // Wallet API
     Route::any('/wallet/balance', 'Api\OneapiController@balance');  // 获取玩家余额
     Route::any('/wallet/bet', 'Api\OneapiController@bet');  // 投注（扣款）

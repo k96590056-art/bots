@@ -933,111 +933,9 @@ class IndexController extends Controller
             $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
         } elseif ($withApi === 'dboneapi') {
             // Dboneapi接口登录（使用 getGameUrl 方法）
-            // 确保 User_Api 已获取
-            if (!isset($User_Api) || !$User_Api) {
-                $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
-            }
-            
-            // 获取当前使用的用户名（优先使用 user_api 表的 api_user）
-            $loginUsername = $User_Api && !empty($User_Api->api_user) ? $User_Api->api_user : $user->username;
-            
-            // 用户名长度验证和修改（必须大于11位小于39位）
-            $minLength = 11;
-            $maxLength = 39;
-            $usernameModified = false;
-            
-            if (strlen($loginUsername) < $minLength || strlen($loginUsername) > $maxLength) {
-                Log::info('Dboneapi接口 - 用户名长度不符合要求，开始修改', [
-                    'original_username' => $loginUsername,
-                    'original_length' => strlen($loginUsername),
-                    'required_min' => $minLength,
-                    'required_max' => $maxLength
-                ]);
-                
-                $newUsername = $loginUsername;
-                
-                // 如果长度小于11位，需要填充
-                if (strlen($newUsername) < $minLength) {
-                    $needLength = $minLength - strlen($newUsername);
-                    $prefix = '';
-                    
-                    // 优先使用游戏平台编码（api_code）填充到前面
-                    if (!empty($api_code) && strlen($api_code) > 0) {
-                        $prefix = $api_code;
-                    }
-                    
-                    // 如果还不够，再将游戏编码（gameType）填充到前面
-                    if (strlen($prefix . $newUsername) < $minLength && !empty($gameType)) {
-                        $prefix = $gameType . $prefix;
-                    }
-                    
-                    // 如果还是不够，重复前缀直到满足长度（优先重复api_code）
-                    while (strlen($prefix . $newUsername) < $minLength) {
-                        if (!empty($api_code) && strlen($api_code) > 0) {
-                            $prefix = $api_code . $prefix;
-                        } elseif (!empty($gameType)) {
-                            $prefix = $gameType . $prefix;
-                        } else {
-                            // 如果都没有，使用数字填充
-                            $prefix = str_repeat('0', $minLength - strlen($prefix . $newUsername)) . $prefix;
-                            break;
-                        }
-                    }
-                    
-                    $newUsername = substr($prefix . $newUsername, 0, $maxLength);
-                }
-                
-                // 如果长度大于39位，截断
-                if (strlen($newUsername) > $maxLength) {
-                    $newUsername = substr($newUsername, 0, $maxLength);
-                }
-                
-                // 确保最终长度在11-39位之间
-                if (strlen($newUsername) < $minLength) {
-                    // 如果还是不够，继续填充
-                    $newUsername = str_repeat('0', $minLength - strlen($newUsername)) . $newUsername;
-                }
-                
-                if ($newUsername !== $loginUsername) {
-                    $usernameModified = true;
-                    $loginUsername = strtolower($newUsername);
-                    
-                    Log::info('Dboneapi接口 - 用户名已修改', [
-                        'original_username' => $User_Api ? $User_Api->api_user : $user->username,
-                        'new_username' => $loginUsername,
-                        'new_length' => strlen($loginUsername)
-                    ]);
-                    
-                    // 同步更新 user_api 表的 api_user 字段
-                    if ($User_Api) {
-                        $User_Api->api_user = $loginUsername;
-                        $User_Api->save();
-                        Log::info('Dboneapi接口 - 已更新 user_api 表的 api_user', [
-                            'user_id' => $user->id,
-                            'api_code' => $api_code,
-                            'new_api_user' => $loginUsername
-                        ]);
-                    } else {
-                        // 如果 User_Api 不存在，创建一条记录
-                        $arr = [
-                            'user_id' => $user->id,
-                            'api_user' => $loginUsername,
-                            'api_pass' => 123456,
-                            'api_code' => $api_code,
-                        ];
-                        $User_Api = User_Api::create($arr);
-                        Log::info('Dboneapi接口 - 创建新的 user_api 记录', [
-                            'user_id' => $user->id,
-                            'api_code' => $api_code,
-                            'api_user' => $loginUsername
-                        ]);
-                    }
-                }
-            }
-            
+            // 直接使用 $user->username，移除用户名长度判断
             $platform = $is_mobile_url == 1 ? 'H5' : 'web';
-            // 使用 user_api 表的 api_user 作为登录用户名
-            $res = $service->getGameUrl($loginUsername, $gameType, '', $platform);
+            $res = $service->getGameUrl($user->username, $gameType, '', $platform);
             // 适配返回格式，确保与 login 方法返回格式一致
             // OneAPI 的 getGameUrl 返回的 data 可能包含 url 字段，需要提取出来
             if ($res['code'] == 200) {
@@ -1969,24 +1867,28 @@ class IndexController extends Controller
         ->orderBy('order_by','asc')->get()->toArray();
 		// 预取 apis 表的 app_icon，优先使用接口管理里的图标
 		$apiIcons = \DB::table('apis')->whereNotNull('app_icon')->pluck('app_icon','api_code')->toArray();
+		$apiUrl = env('APP_URL');
 		foreach($list as $key => $value){
 			$data = Api::where('api_code',$value['platform_name'])->where('state',1)->first();
 			if(!$data){
 				unset($list[$key]);
 				continue;
 			}
-			$list[$key]['check_yes_img'] = env('APP_URL').'/uploads/'.$value['check_yes_img'];
-			$list[$key]['check_no_img'] = env('APP_URL').'/uploads/'.$value['check_no_img'];
-			$list[$key]['api_logo_img'] = env('APP_URL').'/uploads/'.$value['api_logo_img'];
-			$list[$key]['mobile_img'] = env('APP_URL').'/uploads/'.$value['mobile_img'];
-			$list[$key]['header_logo'] = env('APP_URL').'/uploads/'.$value['header_logo'];
+			// 处理图片路径，支持新格式 /2025-01-01/file.png 和旧格式 file.png
+			$list[$key]['check_yes_img'] = $this->buildImageUrl($value['check_yes_img'] ?? '');
+			$list[$key]['check_no_img'] = $this->buildImageUrl($value['check_no_img'] ?? '');
+			$list[$key]['api_logo_img'] = $this->buildImageUrl($value['api_logo_img'] ?? '');
+			$list[$key]['mobile_img'] = $this->buildImageUrl($value['mobile_img'] ?? '');
+			$list[$key]['header_logo'] = $this->buildImageUrl($value['header_logo'] ?? '');
             if (!empty($value['app_img'])) {
-                $list[$key]['app_img'] = env('APP_URL').'/uploads/'.$value['app_img'];
+                $list[$key]['app_img'] = $this->buildImageUrl($value['app_img']);
+            } else {
+                $list[$key]['app_img'] = '';
             }
             // 优先用 apis.app_icon，其次落回 game_lists.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $list[$key]['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
+            $list[$key]['app_icon'] = $this->buildImageUrl($iconPath);
 		}
         $list = array_merge($list);
         
@@ -2016,14 +1918,14 @@ class IndexController extends Controller
                 'check_yes_img' => '',
                 'check_no_img' => '',
                 'api_logo_img' => '',
-                'mobile_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
+                'mobile_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
                 'header_logo' => '',
-                'app_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
+                'app_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
             ];
             // 优先用 apis.app_icon，其次落回 game_lists_app.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $appItem['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
+            $appItem['app_icon'] = $this->buildImageUrl($iconPath);
             
             $appListFormatted[] = $appItem;
         }
@@ -2034,6 +1936,35 @@ class IndexController extends Controller
             'app_list' => $appListFormatted // game_lists_app 中的游戏，仅在热门分类显示
         ]);
     }
+
+    /**
+     * 构建图片URL，支持新格式 /2025-01-01/file.png 和旧格式 file.png
+     * 
+     * @param string $imagePath 图片路径
+     * @return string 完整的图片URL
+     */
+    private function buildImageUrl($imagePath)
+    {
+        if (empty($imagePath)) {
+            return '';
+        }
+        
+        // 如果已经是完整的URL（以 http:// 或 https:// 开头），直接返回
+        if (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
+            return $imagePath;
+        }
+        
+        $apiUrl = rtrim(env('APP_URL'), '/');
+        
+        // 如果路径以 / 开头（新格式：/2025-01-01/file.png），直接拼接 uploads
+        if (strpos($imagePath, '/') === 0) {
+            return $apiUrl . '/uploads' . $imagePath;
+        }
+        
+        // 旧格式：file.png 或 uploads/file.png，正常拼接
+        return $apiUrl . '/uploads/' . ltrim($imagePath, '/');
+    }
+
     public function gamelistBycode(Request $request)
     {
         $list = GameList::where('site_state',1)->where('category_id','fishing')->orderBy('order_by','asc')->get()->toArray();

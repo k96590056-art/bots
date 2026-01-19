@@ -70,20 +70,65 @@ class OneapiController extends Controller
     {
         $signature = $request->header('X-Signature');
         if (empty($signature)) {
+            Log::warning('OneAPI签名验证失败：缺少X-Signature头');
             return false;
         }
 
-        $request_body = $request->getContent();
-        $expected_signature = hash_hmac('sha256', $request_body, $this->api_secret);
-
-        if ($signature !== $expected_signature) {
-            Log::warning('OneAPI签名验证失败', [
-                'request_signature' => $signature,
-                'expected_signature' => $expected_signature,
-                'request_body' => $request_body
+        // 优先从 php://input 获取原始请求体（这是最可靠的方式）
+        $request_body = file_get_contents('php://input');
+        
+        // 如果 php://input 为空，尝试使用 getContent()
+        if (empty($request_body)) {
+            $request_body = $request->getContent();
+        }
+        
+        // 如果还是为空，可能是请求体已经被读取过了
+        // 尝试从请求数据重新构建 JSON（作为最后的后备方案）
+        // 注意：这种方式可能因为 JSON 格式差异（字段顺序、空格等）导致签名不匹配
+        // 建议检查 Laravel 中间件配置，确保请求体未被提前读取
+        if (empty($request_body) && $request->isJson()) {
+            $data = $this->getAllRequestData($request);
+            // 移除 signature 相关字段，只保留业务数据
+            unset($data['signature']);
+            // 使用与 DbOneapiService 相同的 JSON 编码选项（JSON_UNESCAPED_SLASHES）
+            $request_body = json_encode($data, JSON_UNESCAPED_SLASHES);
+            Log::warning('OneAPI签名验证：使用重新构建的JSON（可能不准确）', [
+                'reconstructed_body' => $request_body
+            ]);
+        }
+        
+        if (empty($request_body)) {
+            Log::warning('OneAPI签名验证失败：无法获取请求体', [
+                'content_type' => $request->header('Content-Type'),
+                'method' => $request->method(),
+                'is_json' => $request->isJson(),
+                'has_content' => !empty($request->getContent()),
+                'php_input' => !empty(file_get_contents('php://input'))
             ]);
             return false;
         }
+
+        // 生成期望的签名
+        $expected_signature = hash_hmac('sha256', $request_body, $this->api_secret);
+
+        // 使用时间安全的字符串比较
+        if (!hash_equals($signature, $expected_signature)) {
+            Log::warning('OneAPI签名验证失败', [
+                'request_signature' => $signature,
+                'expected_signature' => $expected_signature,
+                'request_body_length' => strlen($request_body),
+                'request_body_preview' => substr($request_body, 0, 200) . (strlen($request_body) > 200 ? '...' : ''),
+                'request_body_full' => $request_body, // 完整请求体用于调试
+                'content_type' => $request->header('Content-Type'),
+                'api_secret_length' => strlen($this->api_secret)
+            ]);
+            return false;
+        }
+
+        Log::debug('OneAPI签名验证成功', [
+            'request_body_length' => strlen($request_body),
+            'signature_match' => true
+        ]);
 
         return true;
     }
@@ -157,7 +202,12 @@ class OneapiController extends Controller
 
             // 获取用户余额
             $user_balance = $user->balance ?? 0;
-
+            Log::error('OneAPI 返回信息', [
+                'username' => $username,
+                'currency' => $currency,
+                'balance' => (float) $user_balance,
+                'timestamp' => (int) (now()->timestamp * 1000)  // 毫秒时间戳
+            ]);
             // 返回余额信息
             return $this->response($trace_id, 'SC_OK', 'success', [
                 'username' => $username,
@@ -244,7 +294,7 @@ class OneapiController extends Controller
                         'username' => $username,
                         'currency' => $currency,
                         'balance' => (float) $user_balance,
-                        'timestamp' => now()->getTimestampMs()
+                        'timestamp' => (int) (now()->timestamp * 1000)
                     ]);
                 }
 
@@ -270,7 +320,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -410,7 +460,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -510,7 +560,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -611,7 +661,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -700,7 +750,7 @@ class OneapiController extends Controller
                         'username' => $username,
                         'currency' => $currency,
                         'balance' => (float) $user_balance,
-                        'timestamp' => now()->getTimestampMs()
+                        'timestamp' => (int) (now()->timestamp * 1000)
                     ]);
                 }
 
@@ -726,7 +776,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -844,7 +894,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1046,7 +1096,7 @@ class OneapiController extends Controller
                         'username' => $username,
                         'currency' => $currency,
                         'balance' => (float) $user_balance,
-                        'timestamp' => now()->getTimestampMs()
+                        'timestamp' => (int) (now()->timestamp * 1000)
                     ]);
                 }
 
@@ -1072,7 +1122,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1179,7 +1229,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1279,7 +1329,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1387,7 +1437,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1487,7 +1537,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1601,7 +1651,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
@@ -1701,7 +1751,7 @@ class OneapiController extends Controller
                     'username' => $username,
                     'currency' => $currency,
                     'balance' => (float) $user_balance,
-                    'timestamp' => now()->getTimestampMs()
+                    'timestamp' => (int) (now()->timestamp * 1000)
                 ]);
 
             } catch (\Exception $e) {
