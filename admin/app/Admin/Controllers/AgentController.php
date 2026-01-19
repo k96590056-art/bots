@@ -11,6 +11,7 @@ use Dcat\Admin\Show;
 use Dcat\Admin\Http\Controllers\AdminController;
 use Illuminate\Support\Facades\Hash;
 use App\Admin\Actions\Grid\User\Fanyong;
+use App\Admin\Actions\Grid\Agent\Recharge;
 
 class AgentController extends AdminController
 {
@@ -54,7 +55,8 @@ class AgentController extends AdminController
                 $filter->equal('region_id', '所属地区')->select(Region::pluck('name', 'id'));
             });
             $grid->actions(function (Grid\Displayers\Actions $actions) {
-                $actions->append(new Fanyong());
+                $actions->append(new Recharge());
+                // $actions->append(new Fanyong()); // 隐藏立即返佣按钮，功能保留
                 $actions->disableDelete();
                 $actions->disableView();
             });

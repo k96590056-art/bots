@@ -322,7 +322,7 @@ class IndexController extends Controller
         
         foreach ($list as $key => $value) {
             $list[$key]['image'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"]: '';
-            $list[$key]['banner'] = $value["banner"] ? env('APP_URL').'/uploads/'. $value["banner"] : '';
+            $list[$key]['banner'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"] : '';
             // 添加子分类数量
             $list[$key]['children_count'] = $childCounts[$value['id']] ?? 0;
             // 添加游戏数据列表（category_id = code 且 child_id = 0）
@@ -505,7 +505,7 @@ class IndexController extends Controller
             return $this->returnMsg(500, '', '该游戏接口已关闭');
         }
         $gameQuery = GameList::where('platform_name', $api_code);
-        if (!empty($gameCode)) {
+        if (!empty($gameType)) {
             $gameQuery->where('game_code', $gameType);
         }
         $gameItem = $gameQuery->first();
@@ -531,6 +531,8 @@ class IndexController extends Controller
                 $serviceClass = '\\App\\Services\\DbdianziService';
             } elseif ($withApi === 'dbgmag') {
                 $serviceClass = '\\App\\Services\\DbgmagService';
+            } elseif ($withApi === 'dboneapi') {
+                $serviceClass = '\\App\\Services\\DboneapiService';
             } elseif ($withApi === 'dbzhenren') {
                 $serviceClass = '\\App\\Services\\DbzhenrenService';
             } elseif ($withApi === 'dbevo') {
@@ -546,15 +548,6 @@ class IndexController extends Controller
         $token = $request->header('authorization');
         $token = str_replace('Bearer ', '', $token);
         $user = User::where('api_token', $token)->lockForUpdate()->first();
-
-        // 重要：转账/免转 开关以 game_lists 当前游戏的 transferstatus 为准（字段可能线上自定义，仓库迁移里未体现）
-        // 兜底：若 game_lists 未配置该字段，则回退到 users.transferstatus
-        $gameTransferstatus = null;
-        if ($gameItem) {
-            // 兼容可能的字段命名
-            $gameTransferstatus = $gameItem->transferstatus ?? ($gameItem->transfer_status ?? ($gameItem->transferStatus ?? null));
-        }
-        $effectiveTransferstatus = ($gameTransferstatus === null) ? (int)($user->transferstatus ?? 0) : (int)$gameTransferstatus;
         
         // 如果是 dp 接口，从 user_api 表获取登录信息，如果没有则根据 game_code 生成
         if ($withApi === 'dp') {
@@ -697,6 +690,20 @@ class IndexController extends Controller
                 ];
                 $User_Api = User_Api::create($arr);
             }
+        } elseif ($withApi === 'dboneapi') {
+            Log::info('Dboneapi接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            if (!$User_Api) {
+                Log::info('Dboneapi接口 - User_Api不存在，创建User_Api记录', ['username' => $user->username, 'api_code' => $api_code]);
+                // OneAPI 不需要单独注册，直接创建 User_Api 记录
+                $arr = [
+                    'user_id' => $user->id,
+                    'api_user' => $user->username,
+                    'api_pass' => 123456,
+                    'api_code' => $api_code,
+                ];
+                $User_Api = User_Api::create($arr);
+            }
         } elseif ($withApi === 'dbkaiyuan') {
             Log::info('Kaiyuan接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
             $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
@@ -770,29 +777,35 @@ class IndexController extends Controller
         /**
          * 自动上分 / 免转逻辑（在登录前执行）
          * - user_api 不存在：已在上面各分支完成注册/创建（或 dp 分支创建/更新 user_api）
-         * - transferstatus = 1：调用对应平台的上分逻辑（复用 allmz，会先回收上一场馆再上分到当前场馆）
-         * - transferstatus = 0：不走上分接口，直接同步 user_api.api_money（用于免转/展示）
+         * - transferstatus = 1：调用对应平台的上分逻辑（调用接口转入转出，将 users 表的金额转到 user_api）
+         * - transferstatus = 0：不走上分接口，不操作将 users 表的金额转到 user_api（免转模式）
          */
         // 注册判断完成后统一判断是否需要转账到游戏（与是否注册无关）
         // 注：dp 也支持 deposit，因此也需要纳入自动转账判断
-        if (in_array($withApi, ['dp', 'tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dbevo', 'dbkaiyuan'], true)) {
+        if (in_array($withApi, ['dp', 'tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dboneapi', 'dbevo', 'dbkaiyuan'], true)) {
             if (!isset($User_Api) || !$User_Api) {
                 $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
             }
-            Log::error('DP接口 - 充不充钱', [
-                'user_id' => $effectiveTransferstatus,
+            Log::info('转账判断', [
+                'user_id' => $user->id,
+                'effectiveTransferstatus' => $gameItem->transferstatus,
+                'with_api' => $withApi
             ]);
-            if ($effectiveTransferstatus === 1) {
+            // 只有当 effectiveTransferstatus === 1 时才进行转入转出操作
+            if ($gameItem->transferstatus === 1) {
                 // 转账模式：将余额通过对应游戏平台接口转入到当前场馆
+                // 会调用接口转入转出，并将 users 表的金额转到 user_api
                 $transRes = $this->transferToGame($api_code, $user);
                 if (isset($transRes['code']) && (int)$transRes['code'] !== 200) {
                     return $this->returnMsg(500, [], $transRes['message'] ?? '自动转账到游戏失败');
                 }
             } else {
-                if ($User_Api) {
-                    $User_Api->api_money = $user->balance;
-                    $User_Api->save();
-                }
+                // 免转模式：不调用接口转入转出，也不操作将 users 表的金额转到 user_api
+                Log::info('免转模式，跳过转账操作', [
+                    'user_id' => $user->id,
+                    'effectiveTransferstatus' => $gameItem->transferstatus,
+                    'with_api' => $withApi
+                ]);
             }
         }
 
@@ -918,6 +931,125 @@ class IndexController extends Controller
         } elseif ($withApi === 'dbgmag') {
             // Dbgmag接口登录（按 Dbdianzi 方式）
             $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
+        } elseif ($withApi === 'dboneapi') {
+            // Dboneapi接口登录（使用 getGameUrl 方法）
+            // 确保 User_Api 已获取
+            if (!isset($User_Api) || !$User_Api) {
+                $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            }
+            
+            // 获取当前使用的用户名（优先使用 user_api 表的 api_user）
+            $loginUsername = $User_Api && !empty($User_Api->api_user) ? $User_Api->api_user : $user->username;
+            
+            // 用户名长度验证和修改（必须大于11位小于39位）
+            $minLength = 11;
+            $maxLength = 39;
+            $usernameModified = false;
+            
+            if (strlen($loginUsername) < $minLength || strlen($loginUsername) > $maxLength) {
+                Log::info('Dboneapi接口 - 用户名长度不符合要求，开始修改', [
+                    'original_username' => $loginUsername,
+                    'original_length' => strlen($loginUsername),
+                    'required_min' => $minLength,
+                    'required_max' => $maxLength
+                ]);
+                
+                $newUsername = $loginUsername;
+                
+                // 如果长度小于11位，需要填充
+                if (strlen($newUsername) < $minLength) {
+                    $needLength = $minLength - strlen($newUsername);
+                    $prefix = '';
+                    
+                    // 优先使用游戏平台编码（api_code）填充到前面
+                    if (!empty($api_code) && strlen($api_code) > 0) {
+                        $prefix = $api_code;
+                    }
+                    
+                    // 如果还不够，再将游戏编码（gameType）填充到前面
+                    if (strlen($prefix . $newUsername) < $minLength && !empty($gameType)) {
+                        $prefix = $gameType . $prefix;
+                    }
+                    
+                    // 如果还是不够，重复前缀直到满足长度（优先重复api_code）
+                    while (strlen($prefix . $newUsername) < $minLength) {
+                        if (!empty($api_code) && strlen($api_code) > 0) {
+                            $prefix = $api_code . $prefix;
+                        } elseif (!empty($gameType)) {
+                            $prefix = $gameType . $prefix;
+                        } else {
+                            // 如果都没有，使用数字填充
+                            $prefix = str_repeat('0', $minLength - strlen($prefix . $newUsername)) . $prefix;
+                            break;
+                        }
+                    }
+                    
+                    $newUsername = substr($prefix . $newUsername, 0, $maxLength);
+                }
+                
+                // 如果长度大于39位，截断
+                if (strlen($newUsername) > $maxLength) {
+                    $newUsername = substr($newUsername, 0, $maxLength);
+                }
+                
+                // 确保最终长度在11-39位之间
+                if (strlen($newUsername) < $minLength) {
+                    // 如果还是不够，继续填充
+                    $newUsername = str_repeat('0', $minLength - strlen($newUsername)) . $newUsername;
+                }
+                
+                if ($newUsername !== $loginUsername) {
+                    $usernameModified = true;
+                    $loginUsername = strtolower($newUsername);
+                    
+                    Log::info('Dboneapi接口 - 用户名已修改', [
+                        'original_username' => $User_Api ? $User_Api->api_user : $user->username,
+                        'new_username' => $loginUsername,
+                        'new_length' => strlen($loginUsername)
+                    ]);
+                    
+                    // 同步更新 user_api 表的 api_user 字段
+                    if ($User_Api) {
+                        $User_Api->api_user = $loginUsername;
+                        $User_Api->save();
+                        Log::info('Dboneapi接口 - 已更新 user_api 表的 api_user', [
+                            'user_id' => $user->id,
+                            'api_code' => $api_code,
+                            'new_api_user' => $loginUsername
+                        ]);
+                    } else {
+                        // 如果 User_Api 不存在，创建一条记录
+                        $arr = [
+                            'user_id' => $user->id,
+                            'api_user' => $loginUsername,
+                            'api_pass' => 123456,
+                            'api_code' => $api_code,
+                        ];
+                        $User_Api = User_Api::create($arr);
+                        Log::info('Dboneapi接口 - 创建新的 user_api 记录', [
+                            'user_id' => $user->id,
+                            'api_code' => $api_code,
+                            'api_user' => $loginUsername
+                        ]);
+                    }
+                }
+            }
+            
+            $platform = $is_mobile_url == 1 ? 'H5' : 'web';
+            // 使用 user_api 表的 api_user 作为登录用户名
+            $res = $service->getGameUrl($loginUsername, $gameType, '', $platform);
+            // 适配返回格式，确保与 login 方法返回格式一致
+            // OneAPI 的 getGameUrl 返回的 data 可能包含 url 字段，需要提取出来
+            if ($res['code'] == 200) {
+                if (isset($res['data']['url'])) {
+                    $res['data'] = $res['data']['url'];
+                } elseif (is_string($res['data'])) {
+                    // 如果 data 直接是 URL 字符串，保持不变
+                } elseif (is_array($res['data']) && !empty($res['data'])) {
+                    // 如果 data 是数组但没有 url 字段，尝试其他可能的字段
+                    $res['data'] = $res['data']['gameUrl'] ?? $res['data']['game_url'] ?? json_encode($res['data']);
+                }
+            }
         } elseif ($withApi === 'dbkaiyuan') {
             // Kaiyuan接口登录（返回完整URL）
             $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameType);
@@ -1101,7 +1233,7 @@ class IndexController extends Controller
         ];
 
         $transferLog = TransferLog::create($arr);
-        Log::error('DP接口 - 获取游戏链接失败', $arr);
+        Log::error('DP接口 - 获取游戏链接失败1', $arr);
         // 根据 with_api 选择服务类（上分接口）
         $serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
         if (!class_exists($serviceClass)) {

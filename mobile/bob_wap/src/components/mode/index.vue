@@ -127,32 +127,7 @@
     <!-- 游戏列表 - 卡片横向滚动 -->
     <div class="game-list-scroll">
       <div class="game-list-container">
-        <!-- 电子游戏特殊处理：第一个是DB棋牌 -->
-        <div v-if="gameType == 4" class="game-list-item card-block" @click="$parent.goNav('/concise?type=obgdy')">
-          <div class="game-card-tag official-rec">官方推荐</div>
-          <div class="game-card-body">
-            <div class="game-card-title">DB棋牌</div>
-            <div class="game-card-desc">
-              <div class="backwater-wrapper">
-                <img src="/static/image/backwater.png" alt="无限返水" class="backwater-img" />
-                <div class="rebate-tag">
-                  <span class="rebate-label">高达</span>
-                  <span class="rebate-value">1.20<em>%</em></span>
-                </div>
-              </div>
-            </div>
-            <div class="game-card-count">
-              <span class="count-line"></span>
-              <span class="count-num">21<em>种</em></span>
-              <span class="count-line"></span>
-            </div>
-          </div>
-          <div class="game-card-image">
-            <img src="/static/image/concise/obgdy.png" alt="" />
-          </div>
-        </div>
-
-        <!-- 通用游戏列表 -->
+        <!-- 通用游戏列表 - 所有游戏都通过遍历显示 -->
         <template v-if="currentGameList && currentGameList.length > 0">
           <div
             class="game-list-item card-block"
@@ -185,7 +160,7 @@
             </div>
           </div>
         </template>
-        <div v-else-if="gameType !== 4" class="empty-game-list">暂无游戏数据</div>
+        <div v-else class="empty-game-list">暂无游戏数据</div>
       </div>
     </div>
 

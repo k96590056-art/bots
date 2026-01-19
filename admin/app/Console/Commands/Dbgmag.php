@@ -27,6 +27,13 @@ class Dbgmag extends Command
     protected $description = 'GMAG游戏数据同步命令';
 
     /**
+     * API代码，从类名自动获取（用于game_records表的platform_type字段）
+     * 
+     * @var string
+     */
+    protected $api_code;
+
+    /**
      * Create a new command instance.
      *
      * @return void
@@ -34,6 +41,20 @@ class Dbgmag extends Command
     public function __construct()
     {
         parent::__construct();
+        
+        // 从类名获取 api_code
+        $className = class_basename($this);
+        // 移除可能的命令后缀（如果有）
+        $apiCode = str_replace('Command', '', $className);
+        // 转换为大写
+        $apiCode = strtoupper($apiCode);
+        // 移除前缀 "DB"
+        $this->api_code = preg_replace('/^DB/', '', $apiCode);
+        
+        Log::info('Dbgmag命令初始化', [
+            'class_name' => $className,
+            'api_code' => $this->api_code
+        ]);
     }
 
     /**
@@ -81,6 +102,7 @@ class Dbgmag extends Command
 
     /**
      * 同步游戏记录
+     * 根据 cmag.md 文档：/history/game 接口返回的数据结构
      * 
      * @param int $minutes 同步时间范围（分钟）
      * @return void
@@ -91,112 +113,216 @@ class Dbgmag extends Command
 
         $service = new DbgmagService();
         
-        // 计算时间范围（系统时间/东八区）
-        $end_time = date('Y-m-d H:i:00');
-        $start_time = date('Y-m-d H:i:00', time() - ($minutes * 60));
-
-        $this->info("时间范围：{$start_time} 至 {$end_time}");
-
-        // 拉取游戏记录
-        $result = $service->getGameHistory($start_time, $end_time);
-
-        if ($result['code'] != 200) {
-            $this->error("拉取游戏记录失败：{$result['message']}");
-            return;
+        // 计算时间范围（GMT+0时间，因为API要求GMT+0）
+        // 注意：API要求时间格式为 YYYY-MM-DD HH:mm:00，秒数固定为00
+        // endTime - startTime 必须小于 30 分钟
+        $max_minutes = min($minutes, 30); // 限制最大30分钟
+        if ($minutes > 30) {
+            $this->warn("时间范围超过30分钟，已自动调整为30分钟");
         }
-
-        $records = $result['data'] ?? [];
         
-        if (empty($records)) {
+        // 转换为GMT+0时间
+        $end_time = gmdate('Y-m-d H:i:00');
+        $start_time = gmdate('Y-m-d H:i:00', time() - ($max_minutes * 60));
+
+        $this->info("时间范围（GMT+0）：{$start_time} 至 {$end_time}");
+
+        // 拉取游戏记录（支持分页）
+        $all_records = [];
+        $page = 1;
+        $size = 5000; // 每页最多5000条，最大10000条
+        $total = 0;
+        $pages = 0;
+        
+        do {
+            $result = $service->getGameHistory($start_time, $end_time, '', '', '', '', '', $page, $size);
+            
+            if ($result['code'] != 200) {
+                $this->error("拉取游戏记录失败（第{$page}页）：{$result['message']}");
+                break;
+            }
+            
+            $records = $result['data'] ?? [];
+            $total = $result['total'] ?? 0;
+            $pages = $result['pages'] ?? 0;
+            
+            if (!empty($records)) {
+                $all_records = array_merge($all_records, $records);
+                $this->info("已拉取第 {$page}/{$pages} 页，本页 " . count($records) . " 条记录");
+            }
+            
+            $page++;
+        } while ($page <= $pages && count($all_records) < $total);
+        
+        if (empty($all_records)) {
             $this->info('没有需要同步的游戏记录');
             return;
         }
 
-        $this->info("获取到 " . count($records) . " 条游戏记录");
+        $this->info("共获取到 " . count($all_records) . " 条游戏记录（总计：{$total} 条，共 {$pages} 页）");
+        
+        $records = $all_records;
 
         $success_count = 0;
         $fail_count = 0;
         $skip_count = 0;
+        $skip_reasons = [
+            'record_not_array' => 0,
+            'empty_player_id' => 0,
+            'user_not_found' => 0,
+            'empty_round_id' => 0,
+            'exists_status_not_2' => 0,
+            'exists_status_2_updated' => 0,
+        ];
 
         foreach ($records as $record) {
             try {
                 if (!is_array($record)) {
+                    $skip_reasons['record_not_array']++;
                     $skip_count++;
                     continue;
                 }
 
-                // 1) 找用户
-                $playerId = (string)($record['playerId'] ?? ($record['playerName'] ?? ''));
+                // 1) 找用户（根据 playerId）
+                $playerId = (string)($record['playerId'] ?? '');
                 if ($playerId === '') {
+                    $skip_reasons['empty_player_id']++;
                     $skip_count++;
                     continue;
                 }
+                
                 $user = User::where('username', $playerId)->first();
                 if (!$user) {
+                    $skip_reasons['user_not_found']++;
                     $fail_count++;
+                    Log::warning('Dbgmag同步游戏记录 - 用户不存在', [
+                        'playerId' => $playerId,
+                        'record' => $record
+                    ]);
                     continue;
                 }
 
-                // 2) bet_id 防重（优先 id）
-                $betId = (string)($record['id'] ?? ($record['betId'] ?? ($record['orderId'] ?? '')));
-                if ($betId === '') {
+                // 2) 使用 roundId 作为 bet_id（根据文档，roundId 是游戏回合的唯一标识）
+                // 如果 roundId 不存在，尝试使用其他字段
+                $roundId = (string)($record['roundId'] ?? '');
+                if ($roundId === '') {
+                    $skip_reasons['empty_round_id']++;
                     $skip_count++;
+                    Log::warning('Dbgmag同步游戏记录 - roundId为空', ['record' => $record]);
                     continue;
                 }
+                
+                // 使用 roundId 作为 bet_id（因为每个 roundId 只保留一条数据）
+                $betId = $roundId;
 
+                // 检查是否已存在（根据 roundId 和 platform_type）
                 $existing = GameRecord::where('bet_id', $betId)
-                    ->where('platform_type', 'GMAG')
+                    ->where('platform_type', $this->api_code)
                     ->first();
 
-                // 3) 组装写入（字段参考 Dbzhenren 的写法，尽量用通用字段）
-                $createdAt = $record['createdAt'] ?? ($record['betTime'] ?? null);
-                $betTime = is_numeric($createdAt) ? date('Y-m-d H:i:s', (int)floor(((int)$createdAt) / 1000)) : (string)($createdAt ?: now()->toDateTimeString());
-
-                $status = 1; // 默认已结算
-                if (isset($record['betStatus'])) {
-                    $status = ((int)$record['betStatus'] === 1) ? 1 : 0;
+                // 3) 组装写入数据（根据 cmag.md 文档的字段映射）
+                // 时间处理：endTime 是回合结束时间，使用它作为 bet_time
+                $endTime = $record['endTime'] ?? ($record['createdAt'] ?? null);
+                $betTime = null;
+                
+                if (!empty($endTime)) {
+                    // 如果是时间戳（毫秒），转换为日期时间
+                    if (is_numeric($endTime)) {
+                        $betTime = date('Y-m-d H:i:s', (int)floor(((int)$endTime) / 1000));
+                    } else {
+                        // 如果是字符串格式，直接使用
+                        $betTime = (string)$endTime;
+                        // 如果格式不正确，尝试解析
+                        if (strtotime($betTime) === false) {
+                            $betTime = now()->toDateTimeString();
+                        }
+                    }
+                } else {
+                    $betTime = now()->toDateTimeString();
                 }
+
+                // 状态处理：roundStatus = 'end' 表示已结算，'active' 表示未结算
+                // status: 1=已结算, 2=未结算, 0=无效注单
+                $roundStatus = (string)($record['roundStatus'] ?? 'end');
+                $status = 1; // 默认已结算
+                if ($roundStatus === 'active') {
+                    $status = 2; // 未结算
+                } elseif ($roundStatus === 'end') {
+                    $status = 1; // 已结算
+                }
+
+                // 金额处理
+                $bets = (float)($record['bets'] ?? 0);  // 押注金额
+                $wins = (float)($record['wins'] ?? 0);  // 赢取金额
+                $cancels = (float)($record['cancels'] ?? 0);  // 取消金额
+                
+                // 输赢金额 = 赢取金额 - 押注金额
+                $winLoss = $wins - $bets;
+                
+                // 有效投注金额：如果有 validBet 字段则使用，否则使用 bets
+                $validAmount = (float)($record['validBet'] ?? $bets);
+
+                // 游戏类型和代码
+                $gameType = (string)($record['gameType'] ?? '');
+                $gameCode = (string)($record['gameCode'] ?? '');
 
                 $recordData = [
                     'user_id' => $user->id,
                     'username' => $user->username,
                     'bet_id' => $betId,
-                    'round_no' => $record['roundNo'] ?? null,
-                    'platform_type' => 'GMAG',
-                    'game_type' => (string)($record['gameTypeName'] ?? ($record['gameType'] ?? '')),
-                    'game_code' => (string)($record['gameCode'] ?? ($record['gameTypeId'] ?? '')),
+                    'round_no' => $roundId,  // roundId 同时作为 round_no
+                    'platform_type' => $this->api_code, // 使用自动获取的 api_code
+                    'game_type' => $gameType,
+                    'game_code' => $gameCode,
                     'bet_time' => $betTime,
-                    'bet_amount' => (float)($record['betAmount'] ?? 0),
-                    'valid_amount' => (float)($record['validBetAmount'] ?? ($record['betAmount'] ?? 0)),
-                    'win_loss' => (float)($record['netAmount'] ?? ($record['winLoss'] ?? 0)),
+                    'bet_amount' => $bets,
+                    'valid_amount' => $validAmount,
+                    'win_loss' => $winLoss,
                     'status' => $status,
                     'is_back' => 0,
                 ];
 
-                // 4) 防重：存在且 status==2 才覆盖更新，否则跳过
+                // 4) 防重：根据文档要求，每个 roundId 只保留一条数据
+                // 如果已存在且 status==2（未结算），则覆盖更新；如果 status==1（已结算），则跳过
                 if ($existing) {
                     if ((int)$existing->status === 2) {
+                        // 未结算的记录可以更新为已结算
                         $existing->update($recordData);
+                        $skip_reasons['exists_status_2_updated']++;
                         $success_count++;
                         continue;
+                    } else {
+                        // 已结算的记录不再更新
+                        $skip_reasons['exists_status_not_2']++;
+                        $skip_count++;
+                        continue;
                     }
-                    $skip_count++;
-                    continue;
                 }
 
+                // 创建新记录
                 GameRecord::create($recordData);
                 $success_count++;
             } catch (\Exception $e) {
                 $this->error("处理游戏记录失败：" . $e->getMessage());
                 Log::error('Dbgmag同步游戏记录失败', [
                     'record' => $record,
-                    'error' => $e->getMessage()
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
                 ]);
                 $fail_count++;
             }
         }
 
         $this->info("同步完成：成功 {$success_count} 条，失败 {$fail_count} 条，跳过 {$skip_count} 条");
+        
+        if ($skip_count > 0) {
+            $this->info("跳过原因统计：");
+            foreach ($skip_reasons as $reason => $count) {
+                if ($count > 0) {
+                    $this->info("  - {$reason}: {$count} 条");
+                }
+            }
+        }
     }
 
     /**
