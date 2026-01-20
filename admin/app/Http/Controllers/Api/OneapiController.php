@@ -91,7 +91,7 @@ class OneapiController extends Controller
             // 移除 signature 相关字段，只保留业务数据
             unset($data['signature']);
             // 使用与 DbOneapiService 相同的 JSON 编码选项（JSON_UNESCAPED_SLASHES）
-            $request_body = json_encode($data, JSON_UNESCAPED_SLASHES);
+            $request_body = json_encode($data, 320);
             Log::warning('OneAPI签名验证：使用重新构建的JSON（可能不准确）', [
                 'reconstructed_body' => $request_body
             ]);
@@ -386,15 +386,25 @@ class OneapiController extends Controller
             if (!$this->verifySignature($request)) {
                 return $this->response($trace_id, 'SC_INVALID_SIGNATURE', 'Invalid signature');
             }
-
+            Log::info('OneAPI 输赢5', [
+                    '$trace_id' => $trace_id,
+                    '$username' => $username,
+                    '$transaction_id' => $transaction_id,
+                    '$bet_id' => $bet_id,
+                    '$external_transaction_id' => $external_transaction_id,
+                    '$bet_amount' => $bet_amount,
+                    '$result_type' => $result_type,
+                    '$currency' => $currency,
+                    '$token' => $token,
+                    '$bet_time' => $bet_time,
+                ]);
             // 验证必要参数
             if (empty($trace_id) || empty($username) || empty($transaction_id) || 
                 empty($bet_id) || empty($external_transaction_id) || empty($round_id) || 
-                empty($bet_amount) || empty($result_type) || empty($currency) || 
-                empty($token) || empty($game_code) || empty($bet_time)) {
+                !is_numeric($bet_amount) || empty($result_type) || empty($currency) || 
+                empty($token) || empty($bet_time)) {
                 return $this->response($trace_id, 'SC_INVALID_REQUEST', 'Invalid request. Required parameters are missing.');
             }
-
             // 查找用户
             $user = User::where('username', $username)->first();
             
@@ -404,12 +414,11 @@ class OneapiController extends Controller
 
             // 检查是否已处理过（幂等性）
             // TODO: 实现交易记录表，检查transactionId是否已处理
-
             // 开始数据库事务
             DB::beginTransaction();
             
             try {
-                $user_balance = $user->balance ?? 0;
+                $user_balance = $user->balance;
                 
                 // 根据resultType处理
                 switch ($result_type) {
@@ -443,11 +452,7 @@ class OneapiController extends Controller
                 // 更新余额
                 $user->balance = $user_balance;
                 $user->save();
-
-                // TODO: 保存交易记录到数据库
-
                 DB::commit();
-
                 Log::info('OneAPI bet_result处理成功', [
                     'traceId' => $trace_id,
                     'username' => $username,
