@@ -1992,7 +1992,7 @@ class IndexController extends Controller
             return $query->where('platform_name',$platform);
         })->when($category,function ($query) use ($category){
             return $query->where('category_id',$category);
-        })->where('is_top',1)->where('site_state',1)
+        })->where('is_top',1)->where('child_id', '>', 0)->where('site_state',1)
         // 返回字段补充 is_hot 与 app_img，供前端"热门分类"与图片优先级展示使用
         ->select('name','platform_name','category_id','game_code','app_state','is_hot','check_yes_img','check_no_img','api_logo_img','mobile_img','header_logo','app_img','app_icon')
         ->orderBy('order_by','asc')->get()->toArray();
