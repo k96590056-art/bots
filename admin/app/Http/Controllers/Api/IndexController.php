@@ -322,7 +322,7 @@ class IndexController extends Controller
         
         foreach ($list as $key => $value) {
             $list[$key]['image'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"]: '';
-            $list[$key]['banner'] = $value["banner"] ? env('APP_URL').'/uploads/'. $value["banner"] : '';
+            $list[$key]['banner'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"] : '';
             // 添加子分类数量
             $list[$key]['children_count'] = $childCounts[$value['id']] ?? 0;
             // 添加游戏数据列表（category_id = code 且 child_id = 0）
@@ -505,7 +505,7 @@ class IndexController extends Controller
             return $this->returnMsg(500, '', '该游戏接口已关闭');
         }
         $gameQuery = GameList::where('platform_name', $api_code);
-        if (!empty($gameCode)) {
+        if (!empty($gameType)) {
             $gameQuery->where('game_code', $gameType);
         }
         $gameItem = $gameQuery->first();
@@ -531,6 +531,8 @@ class IndexController extends Controller
                 $serviceClass = '\\App\\Services\\DbdianziService';
             } elseif ($withApi === 'dbgmag') {
                 $serviceClass = '\\App\\Services\\DbgmagService';
+            } elseif ($withApi === 'dboneapi') {
+                $serviceClass = '\\App\\Services\\DboneapiService';
             } elseif ($withApi === 'dbzhenren') {
                 $serviceClass = '\\App\\Services\\DbzhenrenService';
             } elseif ($withApi === 'dbevo') {
@@ -546,15 +548,6 @@ class IndexController extends Controller
         $token = $request->header('authorization');
         $token = str_replace('Bearer ', '', $token);
         $user = User::where('api_token', $token)->lockForUpdate()->first();
-
-        // 重要：转账/免转 开关以 game_lists 当前游戏的 transferstatus 为准（字段可能线上自定义，仓库迁移里未体现）
-        // 兜底：若 game_lists 未配置该字段，则回退到 users.transferstatus
-        $gameTransferstatus = null;
-        if ($gameItem) {
-            // 兼容可能的字段命名
-            $gameTransferstatus = $gameItem->transferstatus ?? ($gameItem->transfer_status ?? ($gameItem->transferStatus ?? null));
-        }
-        $effectiveTransferstatus = ($gameTransferstatus === null) ? (int)($user->transferstatus ?? 0) : (int)$gameTransferstatus;
         
         // 如果是 dp 接口，从 user_api 表获取登录信息，如果没有则根据 game_code 生成
         if ($withApi === 'dp') {
@@ -697,6 +690,20 @@ class IndexController extends Controller
                 ];
                 $User_Api = User_Api::create($arr);
             }
+        } elseif ($withApi === 'dboneapi') {
+            Log::info('Dboneapi接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            if (!$User_Api) {
+                Log::info('Dboneapi接口 - User_Api不存在，创建User_Api记录', ['username' => $user->username, 'api_code' => $api_code]);
+                // OneAPI 不需要单独注册，直接创建 User_Api 记录
+                $arr = [
+                    'user_id' => $user->id,
+                    'api_user' => $user->username,
+                    'api_pass' => 123456,
+                    'api_code' => $api_code,
+                ];
+                $User_Api = User_Api::create($arr);
+            }
         } elseif ($withApi === 'dbkaiyuan') {
             Log::info('Kaiyuan接口 - 检查User_Api并注册', ['user_id' => $user->id, 'api_code' => $api_code]);
             $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
@@ -770,29 +777,35 @@ class IndexController extends Controller
         /**
          * 自动上分 / 免转逻辑（在登录前执行）
          * - user_api 不存在：已在上面各分支完成注册/创建（或 dp 分支创建/更新 user_api）
-         * - transferstatus = 1：调用对应平台的上分逻辑（复用 allmz，会先回收上一场馆再上分到当前场馆）
-         * - transferstatus = 0：不走上分接口，直接同步 user_api.api_money（用于免转/展示）
+         * - transferstatus = 1：调用对应平台的上分逻辑（调用接口转入转出，将 users 表的金额转到 user_api）
+         * - transferstatus = 0：不走上分接口，不操作将 users 表的金额转到 user_api（免转模式）
          */
         // 注册判断完成后统一判断是否需要转账到游戏（与是否注册无关）
         // 注：dp 也支持 deposit，因此也需要纳入自动转账判断
-        if (in_array($withApi, ['dp', 'tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dbevo', 'dbkaiyuan'], true)) {
+        if (in_array($withApi, ['dp', 'tg', 'dbzhenren', 'dbdianzi', 'dbgmag', 'dboneapi', 'dbevo', 'dbkaiyuan'], true)) {
             if (!isset($User_Api) || !$User_Api) {
                 $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
             }
-            Log::error('DP接口 - 充不充钱', [
-                'user_id' => $effectiveTransferstatus,
+            Log::info('转账判断', [
+                'user_id' => $user->id,
+                'effectiveTransferstatus' => $gameItem->transferstatus,
+                'with_api' => $withApi
             ]);
-            if ($effectiveTransferstatus === 1) {
+            // 只有当 effectiveTransferstatus === 1 时才进行转入转出操作
+            if ($gameItem->transferstatus === 1) {
                 // 转账模式：将余额通过对应游戏平台接口转入到当前场馆
+                // 会调用接口转入转出，并将 users 表的金额转到 user_api
                 $transRes = $this->transferToGame($api_code, $user);
                 if (isset($transRes['code']) && (int)$transRes['code'] !== 200) {
                     return $this->returnMsg(500, [], $transRes['message'] ?? '自动转账到游戏失败');
                 }
             } else {
-                if ($User_Api) {
-                    $User_Api->api_money = $user->balance;
-                    $User_Api->save();
-                }
+                // 免转模式：不调用接口转入转出，也不操作将 users 表的金额转到 user_api
+                Log::info('免转模式，跳过转账操作', [
+                    'user_id' => $user->id,
+                    'effectiveTransferstatus' => $gameItem->transferstatus,
+                    'with_api' => $withApi
+                ]);
             }
         }
 
@@ -918,6 +931,23 @@ class IndexController extends Controller
         } elseif ($withApi === 'dbgmag') {
             // Dbgmag接口登录（按 Dbdianzi 方式）
             $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
+        } elseif ($withApi === 'dboneapi') {
+            // Dboneapi接口登录（使用 getGameUrl 方法）
+            // 直接使用 $user->username，移除用户名长度判断
+            $platform = $is_mobile_url == 1 ? 'H5' : 'web';
+            $res = $service->getGameUrl($user->username, $gameType, '', $platform);
+            // 适配返回格式，确保与 login 方法返回格式一致
+            // OneAPI 的 getGameUrl 返回的 data 可能包含 url 字段，需要提取出来
+            if ($res['code'] == 200) {
+                if (isset($res['data']['url'])) {
+                    $res['data'] = $res['data']['url'];
+                } elseif (is_string($res['data'])) {
+                    // 如果 data 直接是 URL 字符串，保持不变
+                } elseif (is_array($res['data']) && !empty($res['data'])) {
+                    // 如果 data 是数组但没有 url 字段，尝试其他可能的字段
+                    $res['data'] = $res['data']['gameUrl'] ?? $res['data']['game_url'] ?? json_encode($res['data']);
+                }
+            }
         } elseif ($withApi === 'dbkaiyuan') {
             // Kaiyuan接口登录（返回完整URL）
             $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameType);
@@ -1101,7 +1131,7 @@ class IndexController extends Controller
         ];
 
         $transferLog = TransferLog::create($arr);
-        Log::error('DP接口 - 获取游戏链接失败', $arr);
+        Log::error('DP接口 - 获取游戏链接失败1', $arr);
         // 根据 with_api 选择服务类（上分接口）
         $serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
         if (!class_exists($serviceClass)) {
@@ -1837,24 +1867,28 @@ class IndexController extends Controller
         ->orderBy('order_by','asc')->get()->toArray();
 		// 预取 apis 表的 app_icon，优先使用接口管理里的图标
 		$apiIcons = \DB::table('apis')->whereNotNull('app_icon')->pluck('app_icon','api_code')->toArray();
+		$apiUrl = env('APP_URL');
 		foreach($list as $key => $value){
 			$data = Api::where('api_code',$value['platform_name'])->where('state',1)->first();
 			if(!$data){
 				unset($list[$key]);
 				continue;
 			}
-			$list[$key]['check_yes_img'] = env('APP_URL').'/uploads/'.$value['check_yes_img'];
-			$list[$key]['check_no_img'] = env('APP_URL').'/uploads/'.$value['check_no_img'];
-			$list[$key]['api_logo_img'] = env('APP_URL').'/uploads/'.$value['api_logo_img'];
-			$list[$key]['mobile_img'] = env('APP_URL').'/uploads/'.$value['mobile_img'];
-			$list[$key]['header_logo'] = env('APP_URL').'/uploads/'.$value['header_logo'];
+			// 处理图片路径，支持新格式 /2025-01-01/file.png 和旧格式 file.png
+			$list[$key]['check_yes_img'] = $this->buildImageUrl($value['check_yes_img'] ?? '');
+			$list[$key]['check_no_img'] = $this->buildImageUrl($value['check_no_img'] ?? '');
+			$list[$key]['api_logo_img'] = $this->buildImageUrl($value['api_logo_img'] ?? '');
+			$list[$key]['mobile_img'] = $this->buildImageUrl($value['mobile_img'] ?? '');
+			$list[$key]['header_logo'] = $this->buildImageUrl($value['header_logo'] ?? '');
             if (!empty($value['app_img'])) {
-                $list[$key]['app_img'] = env('APP_URL').'/uploads/'.$value['app_img'];
+                $list[$key]['app_img'] = $this->buildImageUrl($value['app_img']);
+            } else {
+                $list[$key]['app_img'] = '';
             }
             // 优先用 apis.app_icon，其次落回 game_lists.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $list[$key]['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
+            $list[$key]['app_icon'] = $this->buildImageUrl($iconPath);
 		}
         $list = array_merge($list);
         
@@ -1884,14 +1918,14 @@ class IndexController extends Controller
                 'check_yes_img' => '',
                 'check_no_img' => '',
                 'api_logo_img' => '',
-                'mobile_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
+                'mobile_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
                 'header_logo' => '',
-                'app_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
+                'app_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
             ];
             // 优先用 apis.app_icon，其次落回 game_lists_app.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $appItem['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
+            $appItem['app_icon'] = $this->buildImageUrl($iconPath);
             
             $appListFormatted[] = $appItem;
         }
@@ -1902,6 +1936,35 @@ class IndexController extends Controller
             'app_list' => $appListFormatted // game_lists_app 中的游戏，仅在热门分类显示
         ]);
     }
+
+    /**
+     * 构建图片URL，支持新格式 /2025-01-01/file.png 和旧格式 file.png
+     * 
+     * @param string $imagePath 图片路径
+     * @return string 完整的图片URL
+     */
+    private function buildImageUrl($imagePath)
+    {
+        if (empty($imagePath)) {
+            return '';
+        }
+        
+        // 如果已经是完整的URL（以 http:// 或 https:// 开头），直接返回
+        if (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
+            return $imagePath;
+        }
+        
+        $apiUrl = rtrim(env('APP_URL'), '/');
+        
+        // 如果路径以 / 开头（新格式：/2025-01-01/file.png），直接拼接 uploads
+        if (strpos($imagePath, '/') === 0) {
+            return $apiUrl . '/uploads' . $imagePath;
+        }
+        
+        // 旧格式：file.png 或 uploads/file.png，正常拼接
+        return $apiUrl . '/uploads/' . ltrim($imagePath, '/');
+    }
+
     public function gamelistBycode(Request $request)
     {
         $list = GameList::where('site_state',1)->where('category_id','fishing')->orderBy('order_by','asc')->get()->toArray();

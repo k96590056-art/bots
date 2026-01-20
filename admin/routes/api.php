@@ -197,3 +197,31 @@ Route::any('/telegram/webhook', 'Api\TelegramWebhookController@webhook');  //Tel
 Route::any('/telegram/test', 'Api\TelegramWebhookController@test');  //测试DP游戏列表获取
 Route::any('/telegram/debug', 'Api\TelegramWebhookController@debug');  //调试Telegram Bot配置
 Route::post('/telegram/webapp-auth', 'Api\TelegramWebhookController@webappAuth');  //Telegram Web App 自动登录
+
+// CMAG回调接口（GM-Ag系统回调代理系统）
+Route::prefix('xingyun')->group(function () {
+    Route::any('/auth', 'Api\GmagController@auth');  // 验证玩家身份
+    Route::any('/balance', 'Api\GmagController@balance');  // 获取玩家余额
+    Route::any('/transaction', 'Api\GmagController@transaction');  // 交易（押注、赢取等）
+    Route::any('/payUp', 'Api\GmagController@payUp');  // 发放玩家奖金
+    // Wallet API
+    Route::any('/wallet/balance', 'Api\OneapiController@balance');  // 获取玩家余额
+    Route::any('/wallet/bet', 'Api\OneapiController@bet');  // 投注（扣款）
+    Route::any('/wallet/bet_result', 'Api\OneapiController@betResult');  // 投注结果（加款/扣款）
+    Route::any('/wallet/rollback', 'Api\OneapiController@rollback');  // 回滚交易
+    Route::any('/wallet/adjustment', 'Api\OneapiController@adjustment');  // 调整金额
+    Route::any('/wallet/bet_debit', 'Api\OneapiController@betDebit');  // 进入游戏房间扣款
+    Route::any('/wallet/bet_credit', 'Api\OneapiController@betCredit');  // 结算并更新余额
+    
+    // Sportsbook API
+    Route::any('/sports/bet', 'Api\OneapiController@sportsBet');  // 投注
+    Route::any('/sports/update-bet', 'Api\OneapiController@sportsUpdateBet');  // 更新投注
+    Route::any('/sports/refund', 'Api\OneapiController@sportsRefund');  // 退款
+    Route::any('/sports/settled', 'Api\OneapiController@sportsSettled');  // 结算
+    Route::any('/sports/unsettle', 'Api\OneapiController@sportsUnsettle');  // 取消结算
+    Route::any('/sports/resettle', 'Api\OneapiController@sportsResettle');  // 重新结算
+    Route::any('/sports/adjustment', 'Api\OneapiController@sportsAdjustment');  // 调整
+    
+    // Promo API
+    Route::any('/v1/promo/payout', 'Api\OneapiController@promoPayout');  // 发放奖金
+});

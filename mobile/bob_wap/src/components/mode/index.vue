@@ -115,10 +115,10 @@
         <div
           v-for="(item, index) in gameCategories"
           :key="index"
-          :class="['nav-item', gameType == item.gameType ? 'active' : '']"
-          @click="changGameType(item.gameType)"
+          :class="['nav-item', currentCategoryCode == item.code ? 'active' : '']"
+          @click.stop="changGameType(item.code)"
         >
-          <img v-if="gameType == item.gameType" :src="item.icon" class="nav-icon" />
+          <img v-if="currentCategoryCode == item.code" :src="item.icon" class="nav-icon" />
           <span>{{ item.name }}</span>
         </div>
       </div>
@@ -127,37 +127,12 @@
     <!-- 游戏列表 - 卡片横向滚动 -->
     <div class="game-list-scroll">
       <div class="game-list-container">
-        <!-- 电子游戏特殊处理：第一个是DB棋牌 -->
-        <div v-if="gameType == 4" class="game-list-item card-block" @click="$parent.goNav('/concise?type=obgdy')">
-          <div class="game-card-tag official-rec">官方推荐</div>
-          <div class="game-card-body">
-            <div class="game-card-title">DB棋牌</div>
-            <div class="game-card-desc">
-              <div class="backwater-wrapper">
-                <img src="/static/image/backwater.png" alt="无限返水" class="backwater-img" />
-                <div class="rebate-tag">
-                  <span class="rebate-label">高达</span>
-                  <span class="rebate-value">1.20<em>%</em></span>
-                </div>
-              </div>
-            </div>
-            <div class="game-card-count">
-              <span class="count-line"></span>
-              <span class="count-num">21<em>种</em></span>
-              <span class="count-line"></span>
-            </div>
-          </div>
-          <div class="game-card-image">
-            <img src="/static/image/concise/obgdy.png" alt="" />
-          </div>
-        </div>
-
-        <!-- 通用游戏列表 -->
+        <!-- 通用游戏列表 - 所有游戏都通过遍历显示 -->
         <template v-if="currentGameList && currentGameList.length > 0">
           <div
             class="game-list-item card-block"
             v-for="(item, index) in currentGameList"
-            :key="`${gameType}-${index}`"
+            :key="`${currentCategoryCode}-${index}`"
             @click="handleGameClick(item, index)"
           >
             <div class="game-card-tag" :class="getCardHeaderClass(index)">
@@ -185,7 +160,7 @@
             </div>
           </div>
         </template>
-        <div v-else-if="gameType !== 4" class="empty-game-list">暂无游戏数据</div>
+        <div v-else class="empty-game-list">暂无游戏数据</div>
       </div>
     </div>
 
@@ -240,7 +215,7 @@ export default {
       // 弹出层
       leftshow: false,
       activeKey: 0,
-      gameType: 0,
+      currentCategoryCode: '', // 当前选中的分类code
       tanshow: true,
       goInfo: null,
       // 余额显示控制
@@ -254,29 +229,18 @@ export default {
     };
   },
   computed: {
-    // 根据当前游戏类型返回对应的游戏列表
+    // 根据当前游戏分类code返回对应的游戏列表
     currentGameList() {
-      const gameTypeMap = {
-        0: this.$store.state.realbetList || [],
-        1: this.$store.state.sportList || [],
-        2: this.$store.state.gamingList || [],
-        3: this.$store.state.jokerList || [],
-        4: this.$store.state.conciseList || [],
-        5: this.$store.state.lotteryList || []
-      };
-      return gameTypeMap[this.gameType] || [];
+      // 直接从 gameListByCategory 对象中根据 code（category_id）获取对应的游戏列表
+      if (this.currentCategoryCode && this.$store.state.gameListByCategory) {
+        return this.$store.state.gameListByCategory[this.currentCategoryCode] || [];
+      }
+      return [];
     },
     // 游戏类型对应的图片路径前缀
     imagePathPrefix() {
-      const prefixMap = {
-        0: 'realbet',
-        1: 'sport',
-        2: 'gaming',
-        3: 'joker',
-        4: 'concise',
-        5: 'lottery'
-      };
-      return prefixMap[this.gameType] || '';
+      // 直接使用 code 作为图片路径前缀
+      return this.currentCategoryCode || '';
     }
   },
   created() {
@@ -285,19 +249,16 @@ export default {
     that.$store.commit('changGameList');
 
     // 调试信息：检查数据是否加载成功
-    console.log('首页组件创建，游戏列表数据:', {
-      realbetList: that.$store.state.realbetList.length,
-      jokerList: that.$store.state.jokerList.length,
-      gamingList: that.$store.state.gamingList.length,
-      sportList: that.$store.state.sportList.length,
-      lotteryList: that.$store.state.lotteryList.length,
-      conciseList: that.$store.state.conciseList.length,
-      currentGameType: that.gameType
+    console.log('首页组件创建，游戏列表数据（按 category_id 组织）:', {
+      gameListByCategory: that.$store.state.gameListByCategory,
+      currentCategoryCode: that.currentCategoryCode,
+      currentGameList: that.currentGameList.length
     });
 
     that.getBanList();
     that.homenotice(); //获取公告
     that.fetchGameCategories(); //获取游戏分类
+    that.fetchGameList(); //获取游戏列表数据
   },
   methods: {
     openGogao(val) {
@@ -309,12 +270,17 @@ export default {
     changtanshow() {
       this.tanshow = !this.tanshow;
     },
-    changGameType(type) {
-      this.gameType = type;
-      // 调试信息：切换游戏类型时检查数据
-      let listName = ['realbetList', 'sportList', 'gamingList', 'jokerList', 'conciseList', 'lotteryList'][type];
-      let list = this.$store.state[listName] || [];
-      console.log(`切换到游戏类型 ${type} (${['真人', '体育', '电竞', '棋牌', '电子', '彩票'][type]}), 数据量:`, list.length, list);
+    changGameType(code, event) {
+      // 阻止事件冒泡，防止点击事件传播到其他元素
+      if (event) {
+        event.stopPropagation();
+      }
+      // 直接使用 code 作为分类标识
+      this.currentCategoryCode = code;
+      
+      // 动态获取游戏列表（根据 code 从 gameListByCategory 中获取）
+      const list = code ? (this.$store.state.gameListByCategory[code] || []) : [];
+      console.log(`切换到游戏分类 ${code}, 数据量:`, list.length, list);
     },
     doCopy(msg) {
       let cInput = document.createElement('input');
@@ -375,40 +341,91 @@ export default {
       if (!that.$apiFun) {
         return;
       }
-      // 映射API返回的code到手机端的gameType和图标
-      const routeMap = {
-        sport: { gameType: 1, name: '体育', fallbackIcon: '/static/image/sports.png' },
-        realbet: { gameType: 0, name: '真人', fallbackIcon: '/static/image/real_person.png' },
-        joker: { gameType: 3, name: '棋牌', fallbackIcon: '/static/image/chess.png' },
-        gaming: { gameType: 2, name: '电竞', fallbackIcon: '/static/image/esports.png' },
-        lottery: { gameType: 5, name: '彩票', fallbackIcon: '/static/image/lottery.png' },
-        concise: { gameType: 4, name: '电子', fallbackIcon: '/static/image/electronic.png' },
-        fishing: { gameType: 4, name: '捕鱼', fallbackIcon: '/static/image/electronic.png' }
+      // 图标映射（如果API没有返回image，使用默认图标）
+      const iconMap = {
+        sport: '/static/image/sports.png',
+        realbet: '/static/image/real_person.png',
+        joker: '/static/image/chess.png',
+        gaming: '/static/image/esports.png',
+        lottery: '/static/image/lottery.png',
+        concise: '/static/image/electronic.png',
+        fishing: '/static/image/electronic.png'
       };
       that.$apiFun.get('/api/game/categories', {}).then(res => {
         if (res && res.code === 200 && Array.isArray(res.data)) {
           const list = res.data;
+          // 直接使用API返回的数据，只添加图标（如果API没有返回image）
           const mapped = list
             .map(el => {
               const code = el.code || '';
-              const map = routeMap[code];
-              if (!map) return null;
+              if (!code) return null;
               return {
-                name: el.name || map.name,
-                gameType: map.gameType,
-                icon: el.image || map.fallbackIcon,
-                code: code
+                id: el.id,
+                name: el.name || '',
+                code: code,
+                icon: el.image || iconMap[code] || '/static/image/electronic.png'
               };
             })
             .filter(Boolean);
           that.gameCategories = mapped;
-          // 如果有数据，默认选中第一个分类
+          // 如果有数据，默认选中第一个分类的code
           if (mapped.length > 0) {
-            that.gameType = mapped[0].gameType;
+            that.currentCategoryCode = mapped[0].code;
           }
         }
       }).catch(err => {
         console.error('获取游戏分类失败:', err);
+      });
+    },
+    // 获取游戏列表数据
+    fetchGameList() {
+      let that = this;
+      if (!that.$apiFun) {
+        return;
+      }
+      that.$apiFun.get('/api/game/list', { category: '' }).then(res => {
+        if (res.code == 200) {
+          // 接口返回的数据结构是 { list: [...], app_list: [...] }
+          let list = res.data.list || res.data || [];
+          // 使用 category_id 作为键的对象来存储游戏列表
+          let gameListByCategory = {};
+
+          console.log('首页组件 - 接口返回的原始数据:', res.data);
+          console.log('首页组件 - 解析后的list:', list, '长度:', list.length);
+
+          // 遍历所有数据，按 category_id 分类存储
+          if (Array.isArray(list)) {
+            list.forEach(el => {
+              // 只处理 app_state == 1 的游戏
+              if (el.app_state == 1 && el.category_id) {
+                const categoryId = el.category_id;
+                // 如果该 category_id 还不存在，初始化为空数组
+                if (!gameListByCategory[categoryId]) {
+                  gameListByCategory[categoryId] = [];
+                }
+                // 将游戏添加到对应 category_id 的数组中
+                gameListByCategory[categoryId].push(el);
+              }
+            });
+          } else {
+            console.warn('首页组件 - 游戏列表数据格式错误，不是数组:', list);
+          }
+
+          // 将按 category_id 组织的游戏数据保存到 localStorage
+          localStorage.setItem('gameListByCategory', JSON.stringify(gameListByCategory));
+
+          // 更新 store
+          that.$store.commit('changGameList');
+
+          // 输出统计信息
+          let stats = {};
+          Object.keys(gameListByCategory).forEach(categoryId => {
+            stats[categoryId] = gameListByCategory[categoryId].length;
+          });
+          console.log('首页组件 - 游戏列表数据已加载（按 category_id 组织）:', stats);
+        }
+      }).catch(err => {
+        console.error('首页组件 - 获取游戏列表失败:', err);
       });
     },
     onChange(index) {
@@ -437,10 +454,10 @@ export default {
     },
     // 获取卡片头部文本
     getCardHeaderText(index) {
-      if (this.gameType === 0) {
+      if (this.currentCategoryCode === 'realbet') {
         return '官方认证';
       }
-      if (this.gameType === 3 && index === 0) {
+      if (this.currentCategoryCode === 'joker' && index === 0) {
         return '官方认证';
       }
       return '官方推荐';
@@ -466,7 +483,7 @@ export default {
       
       // 后备方案：使用本地图片
       let platformName = item.platform_name;
-      if (this.gameType === 5 && item.platform_name === 'ig') {
+      if (this.currentCategoryCode === 'lottery' && item.platform_name === 'ig') {
         platformName = item.game_code;
       }
       return `/static/image/${this.imagePathPrefix}/${platformName}.png`;
@@ -770,7 +787,7 @@ export default {
   .game-nav {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     gap: 0;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -780,7 +797,7 @@ export default {
     }
 
     .nav-item {
-      flex: 1;
+      flex: 0 0 auto;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -793,6 +810,9 @@ export default {
       transition: all 0.3s ease;
       white-space: nowrap;
       font-weight: 600;
+      position: relative;
+      z-index: 1;
+      min-width: fit-content;
 
       .nav-icon {
         width: 4.5vw;

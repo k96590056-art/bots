@@ -1312,6 +1312,8 @@ class TelegramWebhookController extends Controller
         // 获取游戏信息
         $game = GameList::where('platform_name', $platformName)
             ->where('game_code', $gameCode)
+            ->whereNotNull('child_id')
+            ->where('child_id', '>', 0)
             ->first();
 
         if (!$game) {
@@ -1450,6 +1452,8 @@ class TelegramWebhookController extends Controller
             // 获取游戏信息
             $game = GameList::where('platform_name', $platformName)
                 ->where('game_code', $gameCode)
+                ->whereNotNull('child_id')
+                ->where('child_id', '>', 0)
                 ->first();
 
             if (!$game) {
@@ -1737,6 +1741,8 @@ class TelegramWebhookController extends Controller
                 if (!isset($game)) {
                     $game = GameList::where('platform_name', $platformName)
                         ->where('game_code', $gameCode)
+                        ->whereNotNull('child_id')
+                        ->where('child_id', '>', 0)
                         ->first();
                 }
 
@@ -1995,7 +2001,9 @@ class TelegramWebhookController extends Controller
             return '';
         }
         try {
-            $query = GameList::where('platform_name', $platformName);
+            $query = GameList::where('platform_name', $platformName)
+                ->whereNotNull('child_id')
+                ->where('child_id', '>', 0);
             if (!empty($gameCode)) {
                 $query->where('game_code', $gameCode);
             }
@@ -2071,8 +2079,12 @@ class TelegramWebhookController extends Controller
     {
         try {
             // 从数据库获取游戏分类，按排序字段排序
+            // 只获取 pid 为 0 或为空的分类
             Log::info('开始从数据库获取游戏类目');
-            $categories = GameCategory::orderBy('order')->orderBy('id')->get(['name', 'code']);
+            $categories = GameCategory::where(function($query) {
+                $query->where('pid', 0)->orWhereNull('pid');
+            })
+            ->orderBy('order')->orderBy('id')->get(['name', 'code']);
             Log::info('数据库查询完成', [
                 'count' => $categories->count(),
                 'categories' => $categories->toArray()
@@ -2111,6 +2123,8 @@ class TelegramWebhookController extends Controller
         // 从数据库获取游戏列表，通过category_id字段（存储的是类目编码）匹配
         $games = GameList::where('category_id', $categoryCode)
             ->where('app_state', 1) // 只获取APP状态为正常(1)的游戏
+            ->whereNotNull('child_id')
+            ->where('child_id', '>', 0)
             ->orderBy('order_by', 'asc')
             ->get(['name', 'game_code', 'platform_name'])
             ->toArray();
@@ -2170,7 +2184,10 @@ class TelegramWebhookController extends Controller
      */
     protected function getCategoryCodeByPlatform($platformName)
     {
-        $game = GameList::where('platform_name', $platformName)->first();
+        $game = GameList::where('platform_name', $platformName)
+            ->whereNotNull('child_id')
+            ->where('child_id', '>', 0)
+            ->first();
         return $game->category_id ?? 'concise';
     }
 
@@ -2278,7 +2295,10 @@ class TelegramWebhookController extends Controller
      */
     protected function getGameTypeCode($platformName)
     {
-        $game = GameList::where('platform_name', $platformName)->first();
+        $game = GameList::where('platform_name', $platformName)
+            ->whereNotNull('child_id')
+            ->where('child_id', '>', 0)
+            ->first();
         if (!$game) {
             return '1'; // 默认真人
         }
@@ -3036,6 +3056,8 @@ class TelegramWebhookController extends Controller
             // 获取该分类下的所有平台名称（通过 game_lists 表的 category_id 字段关联）
             $platformNames = GameList::where('category_id', $categoryCode)
                 ->where('app_state', 1)
+                ->whereNotNull('child_id')
+                ->where('child_id', '>', 0)
                 ->pluck('platform_name')
                 ->toArray();
 

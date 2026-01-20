@@ -53,6 +53,14 @@ class GameTagController extends AdminController
         });
     }
 
+
+
+    protected function getAutoDiyRoute($name)
+    {
+        $token = "动态生成";
+        $url = "{$this->h5->url}?token={$token}&route={$name}";
+        return $url;
+    }
     /**
      * Make a form builder.
      *

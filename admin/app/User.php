@@ -3,6 +3,7 @@
 namespace App;
 use App\Models\GameRecord;
 use App\Models\Recharge;
+use App\Models\Region;
 use App\Models\SystemConfig;
 use App\Models\TransferLog;
 use App\Models\Usersmoney;
@@ -24,7 +25,7 @@ class User extends Authenticatable
 
     public function region()
     {
-        return $this->belongsTo(Models\Region::class, 'region_id');
+        return $this->belongsTo(Region::class, 'region_id');
     }
 
     /**
