@@ -679,8 +679,12 @@ class TestController extends Controller
                 // 获取 resourceLink（图片URL）
                 $imageUrl = $gameArray['resourceLink'] ?? '';
                 
-                // 如果没有 resourceLink，跳过下载，但仍记录（mobile_img 为空）
+                // 如果没有 resourceLink，记录日志并跳过
                 if (empty($imageUrl) || !filter_var($imageUrl, FILTER_VALIDATE_URL)) {
+                    Log::warning('GMAG游戏缺少resourceLink', [
+                        'game_code' => $gameCode,
+                        'game_data' => $gameArray
+                    ]);
                     $imagePaths[$gameCode] = ''; // 没有图片
                     $skipCount++;
                     continue;
@@ -703,29 +707,42 @@ class TestController extends Controller
                 // 图片相对路径（用于数据库存储，格式：/2025-01-01/file.png）
                 $relativePath = '/' . $dateDir . '/' . $fileName;
                 
-                // 如果文件已存在，跳过下载，但仍记录路径
-                if (file_exists($targetPath)) {
-                    $imagePaths[$gameCode] = $relativePath;
-                    $skipCount++;
-                    
-                    // 调用进度回调
-                    if ($progressCallback && is_callable($progressCallback)) {
-                        $progressCallback($current, $total, $gameCode);
-                    }
-                    continue;
-                }
+                // 即使文件已存在，也重新下载以确保路径正确（用户要求：如果游戏存在就重新下载图片）
+                // 这样可以修复之前路径错误的问题（如 "uploadsuploadsuploads"）
                 
                 // 下载图片
                 try {
-                    $imageContent = @file_get_contents($imageUrl);
+                    // 使用 cURL 下载图片，设置超时和用户代理
+                    $ch = curl_init($imageUrl);
+                    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+                    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+                    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, false);
+                    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+                    curl_setopt($ch, CURLOPT_USERAGENT, 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36');
+                    $imageContent = curl_exec($ch);
+                    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+                    $curlError = curl_error($ch);
+                    curl_close($ch);
                     
-                    if ($imageContent === false) {
+                    if ($imageContent === false || $httpCode !== 200 || !empty($curlError)) {
                         Log::warning('GMAG图片下载失败', [
                             'url' => $imageUrl,
                             'game_code' => $gameCode,
+                            'http_code' => $httpCode,
+                            'curl_error' => $curlError,
                             'error' => '无法获取图片内容'
                         ]);
-                        $imagePaths[$gameCode] = ''; // 下载失败，设置为空
+                        // 即使下载失败，如果文件已存在，也使用现有文件的路径
+                        if (file_exists($targetPath)) {
+                            $imagePaths[$gameCode] = $relativePath;
+                            Log::info('GMAG图片下载失败但文件已存在，使用现有文件', [
+                                'game_code' => $gameCode,
+                                'path' => $relativePath
+                            ]);
+                        } else {
+                            $imagePaths[$gameCode] = ''; // 下载失败且文件不存在，设置为空
+                        }
                         $failCount++;
                         continue;
                     }
@@ -740,7 +757,16 @@ class TestController extends Controller
                             'target_path' => $targetPath,
                             'error' => '无法写入文件'
                         ]);
-                        $imagePaths[$gameCode] = ''; // 保存失败，设置为空
+                        // 即使保存失败，如果文件已存在，也使用现有文件的路径
+                        if (file_exists($targetPath)) {
+                            $imagePaths[$gameCode] = $relativePath;
+                            Log::info('GMAG图片保存失败但文件已存在，使用现有文件', [
+                                'game_code' => $gameCode,
+                                'path' => $relativePath
+                            ]);
+                        } else {
+                            $imagePaths[$gameCode] = ''; // 保存失败且文件不存在，设置为空
+                        }
                         $failCount++;
                     } else {
                         $successCount++;
@@ -762,9 +788,19 @@ class TestController extends Controller
                     Log::error('GMAG图片下载异常', [
                         'url' => $imageUrl,
                         'game_code' => $gameCode,
-                        'error' => $e->getMessage()
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
                     ]);
-                    $imagePaths[$gameCode] = ''; // 异常，设置为空
+                    // 即使异常，如果文件已存在，也使用现有文件的路径
+                    if (file_exists($targetPath)) {
+                        $imagePaths[$gameCode] = $relativePath;
+                        Log::info('GMAG图片下载异常但文件已存在，使用现有文件', [
+                            'game_code' => $gameCode,
+                            'path' => $relativePath
+                        ]);
+                    } else {
+                        $imagePaths[$gameCode] = ''; // 异常且文件不存在，设置为空
+                    }
                     $failCount++;
                 }
             }
@@ -819,6 +855,28 @@ class TestController extends Controller
                 
                 // 获取游戏数据
                 $gameCode = $gameArray['gameCode'] ?? '';
+                $providerCode = $gameArray['providerCode'] ?? '';
+                
+                // 如果 providerCode 是 bti，直接跳过
+                if (strtolower($providerCode) === 'bti') {
+                    $skipped[] = [
+                        'game_code' => $gameCode,
+                        'name' => $gameArray['cnName'] ?? '',
+                        'reason' => 'providerCode is bti'
+                    ];
+                    
+                    // 调用进度回调
+                    if ($progressCallback && is_callable($progressCallback)) {
+                        $progressCallback($current, $total, $gameCode, 'skipped');
+                    }
+                    
+                    Log::info('GMAG游戏跳过（providerCode is bti）', [
+                        'game_code' => $gameCode,
+                        'provider_code' => $providerCode
+                    ]);
+                    continue;
+                }
+                
                 $cnName = $gameArray['cnName'] ?? '';
                 $enName = $gameArray['enName'] ?? '';
                 $gameType = $gameArray['gameType'] ?? '';
@@ -837,24 +895,11 @@ class TestController extends Controller
                 }
                 
                 // 检查是否已存在（根据 platform_name 和 game_code）
-                $exists = GameList::where('platform_name', 'GMAG')
+                $existingGame = GameList::where('platform_name', 'GMAG')
                     ->where('game_code', $gameCode)
-                    ->exists();
+                    ->first();
                 
-                if ($exists) {
-                    $skipped[] = [
-                        'game_code' => $gameCode,
-                        'name' => $cnName
-                    ];
-                    
-                    // 调用进度回调
-                    if ($progressCallback && is_callable($progressCallback)) {
-                        $progressCallback($current, $total, $gameCode, 'skipped');
-                    }
-                    continue;
-                }
-                
-                // 准备插入数据
+                // 准备数据
                 $data = [
                     'platform_name' => 'GMAG',
                     'with_api' => 'dbgmag',
@@ -863,44 +908,103 @@ class TestController extends Controller
                     'name_en' => $enName,
                     'category_id' => $gameType,
                     'child_id' => 18,
-                    'mobile_img' => $imagePaths[$gameCode] ?? '',
+                    'mobile_img' => $imagePaths[$gameCode] ?? '', // 使用下载后的图片路径
                     'transferstatus' => 0
                 ];
                 
-                // 插入数据库
-                try {
-                    GameList::create($data);
-                    $inserted[] = [
-                        'game_code' => $gameCode,
-                        'name' => $cnName
-                    ];
-                    
-                    // 调用进度回调
-                    if ($progressCallback && is_callable($progressCallback)) {
-                        $progressCallback($current, $total, $gameCode, 'inserted');
+                // 如果游戏已存在，更新记录（特别是 mobile_img 字段）
+                if ($existingGame) {
+                    try {
+                        // 更新现有记录，特别是 mobile_img 字段
+                        $mobileImgPath = $imagePaths[$gameCode] ?? '';
+                        $existingGame->update([
+                            'name' => $cnName,
+                            'name_en' => $enName,
+                            'category_id' => $gameType,
+                            'mobile_img' => $mobileImgPath, // 更新图片路径
+                        ]);
+                        
+                        // 记录更新日志，便于调试
+                        Log::info('GMAG游戏更新mobile_img', [
+                            'game_code' => $gameCode,
+                            'mobile_img' => $mobileImgPath,
+                            'image_paths_key_exists' => isset($imagePaths[$gameCode])
+                        ]);
+                        
+                        $skipped[] = [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'action' => 'updated'
+                        ];
+                        
+                        // 调用进度回调
+                        if ($progressCallback && is_callable($progressCallback)) {
+                            $progressCallback($current, $total, $gameCode, 'updated');
+                        }
+                        
+                        Log::info('GMAG游戏更新成功', [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'mobile_img' => $imagePaths[$gameCode] ?? ''
+                        ]);
+                    } catch (\Exception $e) {
+                        $failed[] = [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'reason' => $e->getMessage()
+                        ];
+                        
+                        // 调用进度回调
+                        if ($progressCallback && is_callable($progressCallback)) {
+                            $progressCallback($current, $total, $gameCode, 'failed');
+                        }
+                        
+                        Log::error('GMAG游戏更新失败', [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'error' => $e->getMessage()
+                        ]);
                     }
-                    
-                    Log::info('GMAG游戏入库成功', [
-                        'game_code' => $gameCode,
-                        'name' => $cnName
-                    ]);
-                } catch (\Exception $e) {
-                    $failed[] = [
-                        'game_code' => $gameCode,
-                        'name' => $cnName,
-                        'reason' => $e->getMessage()
-                    ];
-                    
-                    // 调用进度回调
-                    if ($progressCallback && is_callable($progressCallback)) {
-                        $progressCallback($current, $total, $gameCode, 'failed');
+                } else {
+                    // 插入新记录
+                    try {
+                        $mobileImgPath = $imagePaths[$gameCode] ?? '';
+                        $data['mobile_img'] = $mobileImgPath; // 确保使用正确的路径
+                        GameList::create($data);
+                        $inserted[] = [
+                            'game_code' => $gameCode,
+                            'name' => $cnName
+                        ];
+                        
+                        // 调用进度回调
+                        if ($progressCallback && is_callable($progressCallback)) {
+                            $progressCallback($current, $total, $gameCode, 'inserted');
+                        }
+                        
+                        Log::info('GMAG游戏入库成功', [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'mobile_img' => $mobileImgPath,
+                            'image_paths_key_exists' => isset($imagePaths[$gameCode])
+                        ]);
+                    } catch (\Exception $e) {
+                        $failed[] = [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'reason' => $e->getMessage()
+                        ];
+                        
+                        // 调用进度回调
+                        if ($progressCallback && is_callable($progressCallback)) {
+                            $progressCallback($current, $total, $gameCode, 'failed');
+                        }
+                        
+                        Log::error('GMAG游戏入库失败', [
+                            'game_code' => $gameCode,
+                            'name' => $cnName,
+                            'error' => $e->getMessage()
+                        ]);
                     }
-                    
-                    Log::error('GMAG游戏入库失败', [
-                        'game_code' => $gameCode,
-                        'name' => $cnName,
-                        'error' => $e->getMessage()
-                    ]);
                 }
             }
             

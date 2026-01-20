@@ -50,11 +50,6 @@ class Dbgmag extends Command
         $apiCode = strtoupper($apiCode);
         // 移除前缀 "DB"
         $this->api_code = preg_replace('/^DB/', '', $apiCode);
-        
-        Log::info('Dbgmag命令初始化', [
-            'class_name' => $className,
-            'api_code' => $this->api_code
-        ]);
     }
 
     /**

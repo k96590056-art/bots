@@ -127,7 +127,8 @@ class OneapiController extends Controller
 
         Log::debug('OneAPI签名验证成功', [
             'request_body_length' => strlen($request_body),
-            'signature_match' => true
+            'signature_match' => true,
+            '来访参数' => $request
         ]);
 
         return true;

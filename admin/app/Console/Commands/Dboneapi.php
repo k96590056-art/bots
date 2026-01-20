@@ -50,11 +50,6 @@ class Dboneapi extends Command
         $apiCode = strtoupper($apiCode);
         // 移除前缀 "DB"
         $this->api_code = preg_replace('/^DB/', '', $apiCode);
-        
-        Log::info('Dboneapi命令初始化', [
-            'class_name' => $className,
-            'api_code' => $this->api_code
-        ]);
     }
 
     /**
@@ -129,7 +124,6 @@ class Dboneapi extends Command
         
         do {
             $result = $service->getTransactionList($from_time, $to_time, $page_no, $page_size);
-            
             if (isset($result['status']) && $result['status'] !== 'SC_OK') {
                 $this->error("拉取游戏记录失败（第{$page_no}页）：" . ($result['message'] ?? '未知错误'));
                 break;

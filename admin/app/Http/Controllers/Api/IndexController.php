@@ -1867,28 +1867,24 @@ class IndexController extends Controller
         ->orderBy('order_by','asc')->get()->toArray();
 		// 预取 apis 表的 app_icon，优先使用接口管理里的图标
 		$apiIcons = \DB::table('apis')->whereNotNull('app_icon')->pluck('app_icon','api_code')->toArray();
-		$apiUrl = env('APP_URL');
 		foreach($list as $key => $value){
 			$data = Api::where('api_code',$value['platform_name'])->where('state',1)->first();
 			if(!$data){
 				unset($list[$key]);
 				continue;
 			}
-			// 处理图片路径，支持新格式 /2025-01-01/file.png 和旧格式 file.png
-			$list[$key]['check_yes_img'] = $this->buildImageUrl($value['check_yes_img'] ?? '');
-			$list[$key]['check_no_img'] = $this->buildImageUrl($value['check_no_img'] ?? '');
-			$list[$key]['api_logo_img'] = $this->buildImageUrl($value['api_logo_img'] ?? '');
-			$list[$key]['mobile_img'] = $this->buildImageUrl($value['mobile_img'] ?? '');
-			$list[$key]['header_logo'] = $this->buildImageUrl($value['header_logo'] ?? '');
+			$list[$key]['check_yes_img'] = env('APP_URL').'/uploads/'.$value['check_yes_img'];
+			$list[$key]['check_no_img'] = env('APP_URL').'/uploads/'.$value['check_no_img'];
+			$list[$key]['api_logo_img'] = env('APP_URL').'/uploads/'.$value['api_logo_img'];
+			$list[$key]['mobile_img'] = env('APP_URL').'/uploads/'.$value['mobile_img'];
+			$list[$key]['header_logo'] = env('APP_URL').'/uploads/'.$value['header_logo'];
             if (!empty($value['app_img'])) {
-                $list[$key]['app_img'] = $this->buildImageUrl($value['app_img']);
-            } else {
-                $list[$key]['app_img'] = '';
+                $list[$key]['app_img'] = env('APP_URL').'/uploads/'.$value['app_img'];
             }
             // 优先用 apis.app_icon，其次落回 game_lists.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $list[$key]['app_icon'] = $this->buildImageUrl($iconPath);
+            $list[$key]['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
 		}
         $list = array_merge($list);
         
@@ -1918,14 +1914,14 @@ class IndexController extends Controller
                 'check_yes_img' => '',
                 'check_no_img' => '',
                 'api_logo_img' => '',
-                'mobile_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
+                'mobile_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
                 'header_logo' => '',
-                'app_img' => !empty($value['app_img']) ? $this->buildImageUrl($value['app_img']) : '',
+                'app_img' => !empty($value['app_img']) ? env('APP_URL').'/uploads/'.$value['app_img'] : '',
             ];
             // 优先用 apis.app_icon，其次落回 game_lists_app.app_icon
             $apiCode = $value['platform_name'] ?? '';
             $iconPath = $apiIcons[$apiCode] ?? ($value['app_icon'] ?? '');
-            $appItem['app_icon'] = $this->buildImageUrl($iconPath);
+            $appItem['app_icon'] = $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '';
             
             $appListFormatted[] = $appItem;
         }
@@ -1936,35 +1932,6 @@ class IndexController extends Controller
             'app_list' => $appListFormatted // game_lists_app 中的游戏，仅在热门分类显示
         ]);
     }
-
-    /**
-     * 构建图片URL，支持新格式 /2025-01-01/file.png 和旧格式 file.png
-     * 
-     * @param string $imagePath 图片路径
-     * @return string 完整的图片URL
-     */
-    private function buildImageUrl($imagePath)
-    {
-        if (empty($imagePath)) {
-            return '';
-        }
-        
-        // 如果已经是完整的URL（以 http:// 或 https:// 开头），直接返回
-        if (stripos($imagePath, 'http://') === 0 || stripos($imagePath, 'https://') === 0) {
-            return $imagePath;
-        }
-        
-        $apiUrl = rtrim(env('APP_URL'), '/');
-        
-        // 如果路径以 / 开头（新格式：/2025-01-01/file.png），直接拼接 uploads
-        if (strpos($imagePath, '/') === 0) {
-            return $apiUrl . '/uploads' . $imagePath;
-        }
-        
-        // 旧格式：file.png 或 uploads/file.png，正常拼接
-        return $apiUrl . '/uploads/' . ltrim($imagePath, '/');
-    }
-
     public function gamelistBycode(Request $request)
     {
         $list = GameList::where('site_state',1)->where('category_id','fishing')->orderBy('order_by','asc')->get()->toArray();
