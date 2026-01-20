@@ -33,25 +33,43 @@
                   <div class="_17Hw2tUT" v-if="category.game_nav && category.game_nav.length > 0"></div>
                   <div class="P4bUdpZY _3hNI-m60"><span></span><span></span></div>
                 </a>
-                <div class="PjlHS4wt" style="display: none; background: #1b1e2a;" v-if="category.game_nav && category.game_nav.length > 0">
-                  <div class="_1b6LLqfO">
-                    <ul class="_2q_0n3sH pc-category-games">
-                      <li class="_3xMhR1us" v-for="(game, gameIndex) in category.game_nav" :key="'game-nav-' + category.id + '-' + gameIndex" @click.stop="onGameClick(game)">
-                        <div class="d9QhCBa4 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.2s">
-                          <div class="_3Ii96E8G">
-                            <img class="_2ywsn6BQ" :src="game.app_icon" alt="" v-if="game.app_icon" />
+                <div class="PjlHS4wt category-dropdown-popup" style="display: none;">
+                  <div class="category-popup-wrapper">
+                    <div class="category-popup-container">
+                      <div 
+                        class="category-popup-content" 
+                        v-for="(gameNav, navIndex) in (category.game_nav || [])" 
+                        :key="'game-nav-' + category.id + '-' + navIndex"
+                        @click="onCategoryPopupClick(gameNav)" 
+                        style="cursor: pointer;"
+                      >
+                      <!-- 第一行：官方/推荐标签、高达X%、无限返水/上不封顶 -->
+                      <div class="category-popup-header">
+                        <span class="official-tag" v-if="gameNav.is_official || gameNav.tag === 'official'">官方</span>
+                        <span class="official-tag" v-else-if="gameNav.is_recommended || gameNav.tag === 'recommended'">推荐</span>
+                        <span class="rebate-text" v-if="gameNav.rebate || gameNav.rate">高达 {{ gameNav.rebate || gameNav.rate }}%</span>
+                        <span class="unlimited-rebate" v-if="gameNav.unlimited_rebate !== false">无限返水</span>
+                        <span class="unlimited-rebate" v-if="gameNav.no_limit">上不封顶</span>
                           </div>
-                          <div class="_2qIXCuoN">
-                            <img alt="" class="ls-is-cached lazyloaded" :src="game.app_img" v-if="game.app_img" />
+                      <!-- 第二行：图标和名称 -->
+                      <div class="category-popup-info">
+                        <div class="category-icon-wrapper">
+                          <img class="category-game-icon" :src="gameNav.game_icon || gameNav.app_icon" alt="" v-if="gameNav.game_icon || gameNav.app_icon" />
+                          <div class="category-icon-placeholder" v-else></div>
                           </div>
-                          <div class="game-name-overlay">{{ game.name }}</div>
-                          <div class="_349CzCYy xJQe3jRu _1IpIguRl">
-                            <span>进入场馆</span>
+                        <div class="category-name-wrapper">
+                          <div class="category-name-main">{{ gameNav.name }}</div>
+                          <div class="category-name-en">{{ gameNav.name_en || gameNav.name.toUpperCase() }}</div>
+                          <div class="category-game-count" v-if="gameNav.game_count">{{ gameNav.game_count }}种</div>
                           </div>
                         </div>
-                        <div class="_3qsc2gtG"></div>
-                      </li>
-                    </ul>
+                      <!-- 第三行：背景图片 -->
+                      <div class="category-popup-image">
+                        <img class="category-app-img" :src="gameNav.app_img || gameNav.banner" alt="" v-if="gameNav.app_img || gameNav.banner" />
+                        <div class="category-image-placeholder" v-else></div>
+                      </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -900,10 +918,6 @@
         </div>
         <!-- 右侧图标按钮区域 -->
         <div class="header-icon-btns">
-          <div class="header-icon-item" @click="getAgentLoginUrl">
-            <img src="/static/image/shujuhutong.png" alt="代理登录" />
-            <span>代理登录</span>
-          </div>
           <div class="header-icon-item" @click="openKefu">
             <img src="/static/image/kefu.png" alt="客服" />
             <span>客服</span>
@@ -1262,11 +1276,28 @@ export default {
         this.$root.$emit('switchGamesByChildId', game.child_id);
       }
     },
+    // 点击弹出层子元素（根据 changguan 值显示 games）
+    onCategoryPopupClick(gameNav) {
+      // 如果有 changguan 值，通过 changguan 显示对应的 games
+      if (gameNav.changguan) {
+        this.$root.$emit('switchGamesByChangguan', gameNav.changguan);
+      }
+      // 如果有 child_id，也可以通过 child_id 显示 games
+      else if (gameNav.child_id) {
+        this.$root.$emit('switchGamesByChildId', gameNav.child_id);
+      }
+    },
     // 显示下拉菜单
     showDropdown(event, category) {
       const dropdown = event.currentTarget.querySelector('.PjlHS4wt');
-      if (dropdown && category.game_nav && category.game_nav.length > 0) {
+      if (dropdown) {
+        // 先设置display，然后添加动画类
         dropdown.style.display = 'block';
+        // 使用requestAnimationFrame确保display生效后再添加动画
+        this.$nextTick(() => {
+          dropdown.classList.remove('popup-hide');
+          dropdown.classList.add('popup-show');
+        });
       }
       const overlay = document.querySelector('._1XwyY7sN');
       if (overlay) {
@@ -1277,7 +1308,16 @@ export default {
     hideDropdown(event) {
       const dropdown = event.currentTarget.querySelector('.PjlHS4wt');
       if (dropdown) {
-        dropdown.style.display = 'none';
+        // 先添加隐藏动画类
+        dropdown.classList.remove('popup-show');
+        dropdown.classList.add('popup-hide');
+        // 动画结束后隐藏
+        setTimeout(() => {
+          if (dropdown.classList.contains('popup-hide')) {
+            dropdown.style.display = 'none';
+            dropdown.classList.remove('popup-hide');
+          }
+        }, 500); // 与动画时间一致
       }
       const overlay = document.querySelector('._1XwyY7sN');
       if (overlay) {
@@ -1413,17 +1453,6 @@ export default {
         }
         if (res.code == 200) {
           that.$store.commit('changMessageNum', res.data.total);
-        }
-      });
-    },
-    getAgentLoginUrl() {
-      let that = this;
-      that.$apiFun.get('/api/getAgentLoginUrl', {}).then(res => {
-        if (res.code != 200) {
-          that.showTost(res.message);
-        }
-        if (res.code == 200) {
-          that.jumpUrl = res.data.url;
         }
       });
     },
@@ -1826,5 +1855,267 @@ export default {
 
 ::v-deep ._1Rce9DUC ._349CzCYy span {
   color: #fff !important;
+}
+
+// 新的弹出层样式 - 横向拉满
+.category-dropdown-popup {
+  background: #1b1e2a !important;
+  background-color: #1b1e2a !important;
+  padding: 0 !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  width: 100% !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+  // 初始状态：隐藏在上方
+  transform: translateY(-20px) !important;
+  opacity: 0 !important;
+  transition: transform 0.5s ease-out, opacity 0.5s ease-out !important;
+  
+  // 鼠标悬停不改变背景色
+  &:hover {
+    background: #1b1e2a !important;
+    background-color: #1b1e2a !important;
+  }
+  
+  // 显示动画：从上向下弹出
+  &.popup-show {
+    transform: translateY(0) !important;
+    opacity: 1 !important;
+  }
+  
+  // 隐藏动画：向上收起
+  &.popup-hide {
+    transform: translateY(-20px) !important;
+    opacity: 0 !important;
+  }
+}
+
+// 弹出层包装器：背景宽度100%
+.category-popup-wrapper {
+  width: 100% !important;
+  background: #1b1e2a !important;
+  padding: 15px 0 !important;
+}
+
+// 内容容器：最大宽度1200px，居中，支持横向滚动
+.category-popup-container {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+  gap: 15px !important;
+  max-width: 1200px !important;
+  width: 100% !important;
+  margin: 0 auto !important;
+  padding: 0 20px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch !important;
+  
+  // 隐藏滚动条但保持滚动功能
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent !important;
+  
+  &::-webkit-scrollbar {
+    height: 6px !important;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-radius: 3px !important;
+    
+    &:hover {
+      background: rgba(255, 255, 255, 0.5) !important;
+    }
+  }
+}
+
+// 单个元素：固定宽度200px，最多显示5个，超出可滚动
+.category-popup-content {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 0 0 200px !important; // 固定宽度200px，不缩放
+  width: 200px !important;
+  min-width: 200px !important;
+  max-width: 200px !important;
+  background: #1b1e2a !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+// 第一行：官方标签、高达X%、无限返水
+.category-popup-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 10px 16px !important;
+  background: rgba(0, 0, 0, 0.3) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  
+  // 鼠标悬停不改变背景色
+  &:hover {
+    background: rgba(0, 0, 0, 0.3) !important;
+  }
+  
+  .official-tag {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 2px 8px !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    border-radius: 4px !important;
+    font-size: 11px !important;
+    color: #fff !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+    
+    // 鼠标悬停不改变背景色
+    &:hover {
+      background: rgba(255, 255, 255, 0.12) !important;
+    }
+  }
+  
+  .rebate-text {
+    font-size: 13px !important;
+    color: #fff !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+  }
+  
+  .unlimited-rebate {
+    font-size: 13px !important;
+    color: #fff !important;
+    margin-left: auto !important;
+    font-weight: 400 !important;
+    white-space: nowrap !important;
+  }
+}
+
+// 第二行：图标和名称
+.category-popup-info {
+  display: flex !important;
+  align-items: flex-start !important;
+  gap: 16px !important;
+  padding: 18px 16px !important;
+  background: transparent !important;
+  min-height: 110px !important;
+  
+  // 鼠标悬停不改变背景色
+  &:hover {
+    background: transparent !important;
+  }
+  
+  .category-icon-wrapper {
+    flex-shrink: 0 !important;
+    width: 70px !important;
+    height: 70px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: transparent !important;
+    
+    // 鼠标悬停不改变背景色
+    &:hover {
+      background: transparent !important;
+    }
+    
+    .category-game-icon {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: contain !important;
+      border-radius: 4px !important;
+    }
+    
+    .category-icon-placeholder {
+      width: 100% !important;
+      height: 100% !important;
+      background: rgba(255, 255, 255, 0.1) !important;
+      border-radius: 4px !important;
+      border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }
+  }
+  
+  .category-name-wrapper {
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+    position: relative !important;
+    min-height: 70px !important;
+    
+    .category-name-main {
+      font-size: 22px !important;
+      font-weight: 700 !important;
+      color: #fff !important;
+      line-height: 1.3 !important;
+      margin: 0 !important;
+    }
+    
+    .category-name-en {
+      font-size: 11px !important;
+      color: rgba(255, 255, 255, 0.65) !important;
+      text-transform: uppercase !important;
+      letter-spacing: 0.5px !important;
+      margin: 0 !important;
+      font-weight: 400 !important;
+    }
+    
+    .category-game-count {
+      display: inline-block !important;
+      padding: 3px 10px !important;
+      background: rgba(0, 0, 0, 0.5) !important;
+      border-radius: 10px !important;
+      font-size: 11px !important;
+      color: #fff !important;
+      margin-top: auto !important;
+      width: fit-content !important;
+      align-self: flex-end !important;
+      font-weight: 400 !important;
+    }
+  }
+}
+
+// 第三行：背景图片 - 占据整个卡片宽度
+.category-popup-image {
+  width: 100% !important;
+  height: 130px !important;
+  overflow: hidden !important;
+  position: relative !important;
+  background: transparent !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  
+  // 鼠标悬停不改变背景色
+  &:hover {
+    background: transparent !important;
+  }
+  
+  .category-app-img {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    object-position: center !important;
+  }
+  
+  .category-image-placeholder {
+    width: 100% !important;
+    height: 100% !important;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.03) 100%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    
+    &::after {
+      content: '暂无图片' !important;
+      color: rgba(255, 255, 255, 0.3) !important;
+      font-size: 14px !important;
+    }
+  }
 }
 </style>

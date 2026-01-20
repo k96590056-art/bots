@@ -53,6 +53,7 @@ Route::group([
     $router->resource('game-tags','GameTagController');
     // 获取子分类路由必须在 resource 之前定义，避免被 {id} 匹配
     $router->get('game-lists/child-categories', 'GameListController@getChildCategories');
+    $router->get('game-lists/venues', 'GameListController@getVenues');
     $router->resource('game-lists','GameListController');
     // 获取子分类路由必须在 resource 之前定义
     $router->get('game-lists-app/child-categories', 'GameListAppController@getChildCategories');

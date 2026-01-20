@@ -304,7 +304,7 @@ class IndexController extends Controller
                     ->where('is_pc', 1)
                     ->where('site_state', 1)
                     ->whereIn('platform_name', $validApis)
-                    ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                    ->select('id','changguan', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
                     ->orderBy('order_by', 'asc')
                     ->get()
                     ->toArray();
@@ -352,7 +352,7 @@ class IndexController extends Controller
                 ->where('is_pc', 1)
                 ->where('site_state', 1)
                 ->whereIn('platform_name', $validApis)
-                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                ->select('id','changguan', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
                 ->orderBy('order_by', 'asc')
                 ->get()
                 ->toArray();
@@ -405,7 +405,7 @@ class IndexController extends Controller
             // 按 child_id 分组 games 数据
             $gamesGrouped = [];
             foreach ($gamesList as $game) {
-                $gameChildId = $game['child_id'] ?? 0;
+                $gameChildId = $game['changguan'] ?? 0;
                 if (!isset($gamesGrouped[$gameChildId])) {
                     $gamesGrouped[$gameChildId] = [];
                 }
@@ -441,6 +441,7 @@ class IndexController extends Controller
         return [
             'id' => $game['id'],
             'name' => $game['name'],
+            'changguan' => $game['changguan'],
             'platform_name' => $game['platform_name'],
             'category_id' => $game['category_id'],
             'child_id' => $game['child_id'] ?? 0,

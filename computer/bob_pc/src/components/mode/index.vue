@@ -225,6 +225,7 @@ export default {
       showCarousel: true, // 是否显示轮播图（首页显示，其他页面隐藏）
       categoryBanner: '', // 分类 banner 图片
       selectedChildId: null, // 当前选中的 child_id，用于过滤 games
+      selectedChangguan: null, // 当前选中的 changguan，用于过滤 games
       pcCategoriesData: [], // PC端游戏分类数据（包含 games）
       // 拖动相关
       isDragging: false,
@@ -511,7 +512,7 @@ export default {
         console.error('获取 PC 分类数据失败:', err);
       });
     },
-    // 获取当前显示的 games（根据 selectedChildId 过滤）
+    // 获取当前显示的 games（根据 selectedChildId 或 selectedChangguan 过滤）
     getDisplayGames() {
       if (!this.pcCategoriesData || this.pcCategoriesData.length === 0) {
         return [];
@@ -520,8 +521,15 @@ export default {
       // 遍历所有分类，找到包含 games 的分类
       for (let category of this.pcCategoriesData) {
         if (category.games && typeof category.games === 'object') {
+          // 如果指定了 changguan，返回对应的 games[changguan]
+          if (this.selectedChangguan !== null && this.selectedChangguan !== undefined) {
+            const changguanKey = String(this.selectedChangguan);
+            if (category.games[changguanKey]) {
+              return category.games[changguanKey];
+            }
+          }
           // 如果指定了 child_id，返回对应的 games 数组
-          if (this.selectedChildId !== null && this.selectedChildId !== undefined) {
+          else if (this.selectedChildId !== null && this.selectedChildId !== undefined) {
             const childIdKey = String(this.selectedChildId);
             if (category.games[childIdKey]) {
               return category.games[childIdKey];
@@ -582,6 +590,12 @@ export default {
     // 监听切换 games 显示事件（根据 child_id）
     that.$root.$on('switchGamesByChildId', (childId) => {
       that.selectedChildId = childId;
+      that.selectedChangguan = null; // 清除 changguan 选择
+    });
+    // 监听切换 games 显示事件（根据 changguan）
+    that.$root.$on('switchGamesByChangguan', (changguan) => {
+      that.selectedChangguan = changguan;
+      that.selectedChildId = null; // 清除 child_id 选择
     });
     // 监听 PC 分类数据更新事件
     that.$root.$on('updatePcCategoriesData', (data) => {
@@ -644,6 +658,7 @@ export default {
     that.$root.$off('showCategoryBanner');
     that.$root.$off('showCarousel');
     that.$root.$off('switchGamesByChildId');
+    that.$root.$off('switchGamesByChangguan');
     that.$root.$off('updatePcCategoriesData');
   },
   watch: {

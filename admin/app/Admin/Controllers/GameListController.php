@@ -25,9 +25,7 @@ class GameListController extends AdminController
             'pussy' => 'Pussy888',
             'dbdianzi' => '1369',
             'dbgmag' => 'GMAG',
-            'dbzhenren' => 'DB真人',
-            'dbevo' => 'EVO',
-            'dbkaiyuan' => '开元棋牌',
+            'dboneapi' => 'ONEAPI',
         ];
     }
     /**
@@ -91,6 +89,67 @@ class GameListController extends AdminController
             $result[] = [
                 'id' => $category->id,
                 'text' => $category->name
+            ];
+        }
+        
+        return response()->json($result);
+    }
+    
+    /**
+     * 获取场馆列表（用于 AJAX 加载）
+     * 场馆数据来源：已选择分类的game_lists表中child_id为空或为0的游戏
+     */
+    public function getVenues(Request $request)
+    {
+        // 获取child_id（二级分类ID）
+        $childId = $request->get('child_id', $request->get('depends', $request->get('q', '')));
+        
+        // 获取category_id（一级分类的code）
+        $categoryId = $request->get('category_id', '');
+        
+        // 如果child_id为空，说明没有选择二级分类，不需要加载场馆
+        if (empty($childId)) {
+            return response()->json([]);
+        }
+        
+        // 如果没有category_id，尝试从child_id获取
+        if (empty($categoryId)) {
+            $childCategory = GameCategory::find($childId);
+            if ($childCategory && $childCategory->pid > 0) {
+                $parentCategory = GameCategory::find($childCategory->pid);
+                if ($parentCategory) {
+                    $categoryId = $parentCategory->code;
+                }
+            }
+        }
+        
+        if (empty($categoryId)) {
+            return response()->json([]);
+        }
+        
+        // 通过code找到一级分类
+        $category = GameCategory::where('code', $categoryId)->where('pid', 0)->first();
+        if (!$category) {
+            return response()->json([]);
+        }
+        
+        // 使用一级分类的code来查找场馆
+        // 场馆数据来源：该分类下child_id为空或为0的游戏
+        $venues = \App\Models\GameList::where('category_id', $category->code)
+            ->where(function($query) {
+                $query->whereNull('child_id')
+                      ->orWhere('child_id', 0);
+            })
+            ->orderBy('order_by')
+            ->orderBy('id')
+            ->get();
+        
+        // Dcat Admin 的 loads() 方法期望的格式是: [{"id": 1, "text": "名称"}, ...]
+        $result = [];
+        foreach ($venues as $venue) {
+            $result[] = [
+                'id' => $venue->id,
+                'text' => $venue->name . ' (' . $venue->platform_name . ')'
             ];
         }
         
@@ -187,22 +246,24 @@ class GameListController extends AdminController
             $form->text('name')->required();
             // $form->text('name_en')->required();
             // $form->text('keywords');
-            $form->text('game_code')->required();
+            $form->text('game_code');
             $form->text('venue_code', '接口编码')->help('用于DP服务获取游戏链接的场馆编码，如果不填则使用平台名称');
             $form->select('with_api','所属接口')->options($this->getApiOptions())->required()->help('选择该游戏所属的接口来源');
 			
-			// 一级分类选择（联动二级分类）
+			// 一级分类选择（联动二级分类和场馆）
 			$apiUrl = admin_url('game-lists/child-categories');
+			$venueApiUrl = admin_url('game-lists/venues');
 			$form->select('category_id', '一级分类')
 				->options($this->getParentCategories())
 				->required()
 				->help('先选择一级分类')
 				->loads('child_id', $apiUrl);
 			
-			// 二级分类选择（联动一级分类）
+			// 二级分类选择（联动一级分类和场馆）
 			$currentId = $form->getKey();
 			$currentCategoryId = '';
 			$currentChildId = 0;
+			$currentChangguan = 0;
 			
 			// 编辑模式：获取当前游戏的一级分类和二级分类
 			if ($currentId) {
@@ -210,6 +271,7 @@ class GameListController extends AdminController
 				if ($currentGame) {
 					$currentCategoryId = $currentGame->category_id ?? '';
 					$currentChildId = $currentGame->child_id ?? 0;
+					$currentChangguan = $currentGame->changguan ?? 0;
 					
 					// 编辑模式下，获取当前一级分类下的子分类用于显示
 					$childOptions = [];
@@ -226,21 +288,54 @@ class GameListController extends AdminController
 						}
 					}
 					
+					// 编辑模式下，获取场馆选项
+					$venueOptions = [];
+					if ($currentCategoryId) {
+						$venues = \App\Models\GameList::where('category_id', $currentCategoryId)
+							->where(function($query) {
+								$query->whereNull('child_id')
+									  ->orWhere('child_id', 0);
+							})
+							->orderBy('order_by')
+							->orderBy('id')
+							->get();
+						foreach ($venues as $venue) {
+							$venueOptions[$venue->id] = $venue->name . ' (' . $venue->platform_name . ')';
+						}
+					}
+					
 					$form->select('child_id', '二级分类')
 						->options($childOptions)
 						->default($currentChildId)
-						->help('选择二级分类（可选，不选择则属于一级分类）');
+						->help('选择二级分类（可选，不选择则属于一级分类）')
+						->loads('changguan', $venueApiUrl);
+					
+					// 场馆选择（当选择了二级分类时显示）
+					$form->select('changguan', '所属场馆')
+						->options($venueOptions)
+						->default($currentChangguan)
+						->help('选择所属场馆（仅在选择二级分类时需要选择）');
 				} else {
 					// 新建模式，不设置 options，由 loads() 动态加载
 					$form->select('child_id', '二级分类')
 						->options([])
-						->help('选择二级分类（可选，不选择则属于一级分类）');
+						->help('选择二级分类（可选，不选择则属于一级分类）')
+						->loads('changguan', $venueApiUrl);
+					
+					$form->select('changguan', '所属场馆')
+						->options([])
+						->help('选择所属场馆（仅在选择二级分类时需要选择）');
 				}
 			} else {
 				// 新建模式，不设置 options，由 loads() 动态加载
 				$form->select('child_id', '二级分类')
 					->options([])
-					->help('选择二级分类（可选，不选择则属于一级分类）');
+					->help('选择二级分类（可选，不选择则属于一级分类）')
+					->loads('changguan', $venueApiUrl);
+				
+				$form->select('changguan', '所属场馆')
+					->options([])
+					->help('选择所属场馆（仅在选择二级分类时需要选择）');
 			}
 			
 			// 游戏标签选择
