@@ -27,16 +27,16 @@
             </div>
             <!-- 动态导航菜单 - 从API获取分类数据 -->
             <template v-if="pcCategoriesLoaded && pcCategories.length > 0">
-              <div class="_9eNaWz24 nav" v-for="(category, catIndex) in mainCategoryList" :key="'cat-' + category.id" @mouseenter="showDropdown($event)" @mouseleave="hideDropdown($event)">
-                <a @click="goNav(getCategoryRoute(category.code))" :class="isCategoryActive(category.code) ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB'" href="javascript:;">
+              <div class="_9eNaWz24 nav" v-for="(category, catIndex) in mainCategoryList" :key="'cat-' + category.id" @mouseenter="showDropdown($event, category)" @mouseleave="hideDropdown($event)">
+                <a @click="onCategoryClick(category.code, category.banner)" :class="isCategoryActive(category.code) ? '_5v-zJhSB _--jQI_nz' : '_5v-zJhSB'" href="javascript:;">
                   {{ category.name }}
-                  <div class="_17Hw2tUT" v-if="category.games && category.games.length > 0"></div>
+                  <div class="_17Hw2tUT" v-if="category.game_nav && category.game_nav.length > 0"></div>
                   <div class="P4bUdpZY _3hNI-m60"><span></span><span></span></div>
                 </a>
-                <div class="PjlHS4wt" style="display: none; background: #1b1e2a;" v-if="category.games && category.games.length > 0">
+                <div class="PjlHS4wt" style="display: none; background: #1b1e2a;" v-if="category.game_nav && category.game_nav.length > 0">
                   <div class="_1b6LLqfO">
                     <ul class="_2q_0n3sH pc-category-games">
-                      <li class="_3xMhR1us" v-for="(game, gameIndex) in category.games" :key="'game-' + category.id + '-' + gameIndex" @click.stop="onGameClick(game)">
+                      <li class="_3xMhR1us" v-for="(game, gameIndex) in category.game_nav" :key="'game-nav-' + category.id + '-' + gameIndex" @click.stop="onGameClick(game)">
                         <div class="d9QhCBa4 _1vBjoqAI _1Rce9DUC" style="animation-delay: 0.2s">
                           <div class="_3Ii96E8G">
                             <img class="_2ywsn6BQ" :src="game.app_icon" alt="" v-if="game.app_icon" />
@@ -1255,14 +1255,17 @@ export default {
       const routes = routeMap[code] || [];
       return routes.includes(this.url);
     },
-    // 点击游戏进入
+    // 点击弹出层游戏（不需要登录判断，只切换 games 显示）
     onGameClick(game) {
-      this.goGamePage(game.platform_name, game.game_code, '');
+      // 根据 child_id 切换 games 显示
+      if (game.child_id) {
+        this.$root.$emit('switchGamesByChildId', game.child_id);
+      }
     },
     // 显示下拉菜单
-    showDropdown(event) {
+    showDropdown(event, category) {
       const dropdown = event.currentTarget.querySelector('.PjlHS4wt');
-      if (dropdown) {
+      if (dropdown && category.game_nav && category.game_nav.length > 0) {
         dropdown.style.display = 'block';
       }
       const overlay = document.querySelector('._1XwyY7sN');
@@ -1280,6 +1283,15 @@ export default {
       if (overlay) {
         overlay.classList.remove('_2fDy0Bg6');
       }
+    },
+    // 点击分类导航
+    onCategoryClick(code, banner) {
+      // 隐藏轮播图，显示当前分类的 banner
+      if (banner) {
+        this.$root.$emit('showCategoryBanner', banner);
+      }
+      // 导航到对应页面
+      this.goNav(this.getCategoryRoute(code));
     },
     getGameList() {
       let that = this;
@@ -1430,6 +1442,10 @@ export default {
         });
         that.jumpUrl = routeData.href;
         return;
+      }
+      // 如果点击首页，显示轮播图
+      if (url === '/' || url === '/index') {
+        that.$root.$emit('showCarousel');
       }
       this.url = url;
       this.$router.push({ path: url });

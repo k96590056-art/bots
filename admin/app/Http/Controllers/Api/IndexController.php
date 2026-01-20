@@ -229,31 +229,17 @@ class IndexController extends Controller
      */
     public function getGamePcCategories(Request $request)
     {
-        $list = GameCategory::select('id', 'name', 'image', 'banner', 'code', 'pid')
+        // 获取筛选参数
+        $childId = $request->input('child_id');
+        $tagId = $request->input('tag_id');
+        
+        // 第一层：获取 GameCategory 表中 pid=0 的数据
+        $mainCategories = GameCategory::where('pid', 0)
+            ->select('id', 'name', 'image', 'banner', 'code', 'pid')
             ->orderBy('order')
             ->orderBy('id')
             ->get()
             ->toArray();
-        $apiUrl = env('APP_URL');
-        
-        // 统计每个分类下的子分类数量（通过 game_lists 表中 child_id > 0 的不同 child_id 数量）
-        $categoryIds = array_column($list, 'id');
-        $categoryCodes = array_column($list, 'code');
-        $childCounts = [];
-        if (!empty($categoryIds)) {
-            $childCounts = GameList::whereIn('category_id', $categoryIds)
-                ->where('child_id', '>', 0)
-                ->where('is_pc', 1)
-                ->where('site_state', 1)
-                ->select('category_id', 'child_id')
-                ->distinct()
-                ->get()
-                ->groupBy('category_id')
-                ->map(function ($items) {
-                    return $items->pluck('child_id')->unique()->count();
-                })
-                ->toArray();
-        }
         
         // 获取所有有效的接口
         $validApis = Api::where('state', 1)->pluck('api_code')->toArray();
@@ -261,74 +247,218 @@ class IndexController extends Controller
         // 预取 apis 表的 app_icon
         $apiIcons = \DB::table('apis')->whereNotNull('app_icon')->pluck('app_icon', 'api_code')->toArray();
         
-        // 获取每个分类下的游戏列表（根据游戏分类数据遍历，判断 code 等于 game_lists.category_id 且 pid = 0）
-        $categoryGamesMap = [];
+        $result = [];
         
-        // 遍历游戏分类数据，只处理 pid = 0 的主分类
-        foreach ($list as $category) {
-            $categoryCode = $category['code'];
-            $categoryPid = $category['pid'] ?? 0;
+        foreach ($mainCategories as $mainCategory) {
+            $categoryId = $mainCategory['id'];
+            $categoryCode = $mainCategory['code'];
             
-            // 只处理主分类（pid = 0）
-            if ($categoryPid != 0) {
-                continue;
+            // 第二层第一组：child_category - 基于第一层数据，获取 GameCategory 表中 pid=当前分类 id 的数据
+            $childCategories = GameCategory::where('pid', $categoryId)
+                ->select('id', 'name', 'image', 'banner', 'code', 'pid')
+                ->orderBy('order')
+                ->orderBy('id')
+                ->get()
+                ->toArray();
+            
+            // 获取所有子分类的 ID
+            $childCategoryIds = array_column($childCategories, 'id');
+            
+            // 统计每个子分类下的游戏数量（game_lists 表中 child_id=子分类 id 的数量）
+            $childCategoryCounts = [];
+            if (!empty($childCategoryIds)) {
+                $counts = GameList::whereIn('child_id', $childCategoryIds)
+                ->where('is_pc', 1)
+                ->where('site_state', 1)
+                    ->whereIn('platform_name', $validApis)
+                    ->selectRaw('child_id, COUNT(*) as count')
+                    ->groupBy('child_id')
+                    ->pluck('count', 'child_id')
+                ->toArray();
+                
+                foreach ($childCategoryIds as $childCatId) {
+                    $childCategoryCounts[$childCatId] = $counts[$childCatId] ?? 0;
+                }
             }
             
-            // 查询 category_id 等于该分类 code 且 child_id 为空或等于 0 的游戏
-            $games = GameList::where('category_id', $categoryCode)
+            // 处理 child_category 数据
+            $childCategoryList = [];
+            foreach ($childCategories as $childCategory) {
+                $childCategoryList[] = [
+                    'id' => $childCategory['id'],
+                    'name' => $childCategory['name'],
+                    'image' => $childCategory['image'] ? env('APP_URL').'/uploads/'.$childCategory['image'] : '',
+                    'banner' => $childCategory['banner'] ? env('APP_URL').'/uploads/'.$childCategory['banner'] : '',
+                    'code' => $childCategory['code'],
+                    'pid' => $childCategory['pid'],
+                    'count' => $childCategoryCounts[$childCategory['id']] ?? 0,
+                ];
+            }
+            
+            // 获取 child_category 对应的所有游戏数据（用于后续处理）
+            // 需要查询 category_id = 当前分类 code 且 child_id 在子分类 ID 列表中的游戏
+            $allChildGames = [];
+            if (!empty($childCategoryIds)) {
+                $allChildGames = GameList::where('category_id', $categoryCode)
+                    ->whereIn('child_id', $childCategoryIds)
+                    ->where('is_pc', 1)
+                    ->where('site_state', 1)
+                    ->whereIn('platform_name', $validApis)
+                    ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                    ->orderBy('order_by', 'asc')
+                    ->get()
+                    ->toArray();
+            }
+            
+            // 第二层第二组：child_tags - 基于第一组数据（allChildGames），从 game_lists 表按 tag_id 分组，获取 game_tags 表的数据
+            $tagIds = array_filter(array_unique(array_column($allChildGames, 'tag_id')));
+            $childTagsList = [];
+            if (!empty($tagIds)) {
+                // 获取标签信息
+                $gameTags = \DB::table('game_tags')
+                    ->whereIn('id', $tagIds)
+                    ->get()
+                    ->keyBy('id')
+                    ->toArray();
+                
+                // 统计每个标签下的游戏数量（基于 allChildGames 中 tag_id=标签 id 的数量）
+                $tagCounts = [];
+                foreach ($allChildGames as $game) {
+                    $tid = $game['tag_id'] ?? 0;
+                    if ($tid > 0) {
+                        $tagCounts[$tid] = ($tagCounts[$tid] ?? 0) + 1;
+                    }
+                }
+                
+                foreach ($tagIds as $tid) {
+                    $tag = $gameTags[$tid] ?? null;
+                    if ($tag) {
+                        $childTagsList[] = [
+                            'id' => $tid,
+                            'name' => $tag->name ?? '',
+                            'count' => $tagCounts[$tid] ?? 0,
+                        ];
+                    }
+                }
+            }
+            
+            // 添加 game_nav：category_id 满足第一层的 code 同时 child_id 为空或为 0 的 game_lists 数据
+            $gameNavList = [];
+            $gameNavGames = GameList::where('category_id', $categoryCode)
                 ->where(function($query) {
                     $query->where('child_id', 0)
                           ->orWhereNull('child_id');
                 })
                 ->where('is_pc', 1)
                 ->where('site_state', 1)
-                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id','game_icon','game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
+                ->whereIn('platform_name', $validApis)
+                ->select('id', 'name', 'platform_name', 'category_id', 'child_id', 'tag_id', 'game_icon', 'game_title_img', 'game_code', 'is_hot', 'is_new', 'is_recommend', 'order_by', 'check_yes_img', 'check_no_img', 'api_logo_img', 'mobile_img', 'header_logo', 'app_img', 'app_icon')
                 ->orderBy('order_by', 'asc')
-                ->get();
+                ->get()
+                ->toArray();
             
-            $categoryGamesMap[$categoryCode] = [];
-            
-            foreach ($games as $game) {
-                if (!in_array($game->platform_name, $validApis)) {
-                    continue;
-                }
-                
-                $apiCode = $game->platform_name ?? '';
-                $iconPath = $apiIcons[$apiCode] ?? ($game->app_icon ?? '');
-                
-                $categoryGamesMap[$categoryCode][] = [
-                    'id' => $game->id,
-                    'name' => $game->name,
-                    'platform_name' => $game->platform_name,
-                    'category_id' => $game->category_id,
-                    'child_id' => $game->child_id,
-                    'tag_id' => $game->tag_id,
-                    'game_code' => $game->game_code,
-                    'is_hot' => $game->is_hot,
-                    'is_new' => $game->is_new,
-                    'is_recommend' => $game->is_recommend,
-                    'check_yes_img' => $game->check_yes_img ? env('APP_URL').'/uploads/'.$game->check_yes_img : '',
-                    'check_no_img' => $game->check_no_img ? env('APP_URL').'/uploads/'.$game->check_no_img : '',
-                    'api_logo_img' => $game->api_logo_img ? env('APP_URL').'/uploads/'.$game->api_logo_img : '',
-                    'game_icon' => $game->game_icon ? env('APP_URL').'/uploads/'.$game->game_icon : '',
-                    'game_title_img' => $game->game_title_img ? env('APP_URL').'/uploads/'.$game->game_title_img : '',
-                    'mobile_img' => $game->mobile_img ? env('APP_URL').'/uploads/'.$game->mobile_img : '',
-                    'header_logo' => $game->header_logo ? env('APP_URL').'/uploads/'.$game->header_logo : '',
-                    'app_img' => $game->app_img ? env('APP_URL').'/uploads/'.$game->app_img : '',
-                    'app_icon' => $iconPath ? env('APP_URL').'/uploads/'.$iconPath : '',
-                ];
+            foreach ($gameNavGames as $game) {
+                $gameNavList[] = $this->formatGameData($game, $apiIcons);
             }
+            
+            // 第二层第三组：games - 只包含 child_id > 0 的数据
+            // games 应该包含：category_id = 当前分类 code 且 child_id 在子分类 ID 列表中的游戏（child_id > 0）
+            // child_id = 0 的数据只出现在 game_nav 中，不出现在 games 中
+            $gamesList = [];
+            
+            // games 只包含 child_id > 0 的数据（来自 allChildGames）
+            foreach ($allChildGames as $game) {
+                $gameChildId = $game['child_id'] ?? 0;
+                if (!empty($gameChildId) && $gameChildId > 0) {
+                    $gamesList[] = $this->formatGameData($game, $apiIcons);
+                }
+            }
+            
+            // 应用筛选条件：只针对 games 中 child_id > 0 的数据
+            // 因为 games 已经只包含 child_id > 0 的数据，所以直接应用筛选条件即可
+            if (!empty($childId) || !empty($tagId)) {
+                $filteredGamesList = [];
+                foreach ($gamesList as $game) {
+                    $match = true;
+                    
+                    // 如果传入了 child_id，筛选 child_id 匹配的游戏
+                    if (!empty($childId)) {
+                        if (($game['child_id'] ?? 0) != $childId) {
+                            $match = false;
+                        }
+                    }
+                    
+                    // 如果传入了 tag_id，筛选 tag_id 匹配的游戏
+                    if (!empty($tagId)) {
+                        if (($game['tag_id'] ?? 0) != $tagId) {
+                            $match = false;
+                        }
+                    }
+                    
+                    if ($match) {
+                        $filteredGamesList[] = $game;
+                    }
+                }
+                $gamesList = $filteredGamesList;
+            }
+            
+            // 按 child_id 分组 games 数据
+            $gamesGrouped = [];
+            foreach ($gamesList as $game) {
+                $gameChildId = $game['child_id'] ?? 0;
+                if (!isset($gamesGrouped[$gameChildId])) {
+                    $gamesGrouped[$gameChildId] = [];
+                }
+                $gamesGrouped[$gameChildId][] = $game;
+            }
+            
+            // 组装最终数据
+            $result[] = [
+                'id' => $mainCategory['id'],
+                'name' => $mainCategory['name'],
+                'image' => $mainCategory['image'] ? env('APP_URL').'/uploads/'.$mainCategory['image'] : '',
+                'banner' => $mainCategory['banner'] ? env('APP_URL').'/uploads/'.$mainCategory['banner'] : '',
+                'code' => $mainCategory['code'],
+                'pid' => $mainCategory['pid'],
+                'child_category' => $childCategoryList,
+                'child_tags' => $childTagsList,
+                'game_nav' => $gameNavList,
+                'games' => $gamesGrouped,
+            ];
         }
         
-        foreach ($list as $key => $value) {
-            $list[$key]['image'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"]: '';
-            $list[$key]['banner'] = $value["image"] ? env('APP_URL').'/uploads/'. $value["image"] : '';
-            // 添加子分类数量
-            $list[$key]['children_count'] = $childCounts[$value['id']] ?? 0;
-            // 添加游戏数据列表（category_id = code 且 child_id = 0）
-            $list[$key]['games'] = $categoryGamesMap[$value['code']] ?? [];
-        }
-        return $this->returnMsg(200, $list);
+        return $this->returnMsg(200, $result);
+    }
+    
+    /**
+     * 格式化游戏数据
+     */
+    private function formatGameData($game, $apiIcons)
+    {
+        $apiCode = $game['platform_name'] ?? '';
+        $iconPath = $apiIcons[$apiCode] ?? ($game['app_icon'] ?? '');
+        
+        return [
+            'id' => $game['id'],
+            'name' => $game['name'],
+            'platform_name' => $game['platform_name'],
+            'category_id' => $game['category_id'],
+            'child_id' => $game['child_id'] ?? 0,
+            'tag_id' => $game['tag_id'] ?? 0,
+            'game_code' => $game['game_code'],
+            'is_hot' => $game['is_hot'] ?? 0,
+            'is_new' => $game['is_new'] ?? 0,
+            'is_recommend' => $game['is_recommend'] ?? 0,
+            'check_yes_img' => !empty($game['check_yes_img']) ? env('APP_URL').'/uploads/'.$game['check_yes_img'] : '',
+            'check_no_img' => !empty($game['check_no_img']) ? env('APP_URL').'/uploads/'.$game['check_no_img'] : '',
+            'api_logo_img' => !empty($game['api_logo_img']) ? env('APP_URL').'/uploads/'.$game['api_logo_img'] : '',
+            'game_icon' => !empty($game['game_icon']) ? env('APP_URL').'/uploads/'.$game['game_icon'] : '',
+            'game_title_img' => !empty($game['game_title_img']) ? env('APP_URL').'/uploads/'.$game['game_title_img'] : '',
+            'mobile_img' => !empty($game['mobile_img']) ? env('APP_URL').'/uploads/'.$game['mobile_img'] : '',
+            'header_logo' => !empty($game['header_logo']) ? env('APP_URL').'/uploads/'.$game['header_logo'] : '',
+            'app_img' => !empty($game['app_img']) ? env('APP_URL').'/uploads/'.$game['app_img'] : '',
+            'app_icon' => !empty($iconPath) ? env('APP_URL').'/uploads/'.$iconPath : '',
+        ];
     }
     /**
      * 个人消息

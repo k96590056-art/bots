@@ -23,7 +23,8 @@
     <div class="_1PthxidG" style="position: relative;">
       <!-- 轮播图区域 -->
       <div class="_2gKtEzzo" style="height: 580px; position: relative; overflow: visible; width: 100%">
-        <div class="ant-carousel">
+        <!-- 轮播图 - 只在首页显示 -->
+        <div class="ant-carousel" v-show="showCarousel">
           <div class="slick-slider swiper-container">
             <div class="swiper-wrapper">
               <div class="swiper-slide" v-for="(item, index) in bannerList" :key="index">
@@ -33,27 +34,32 @@
               </div>
             </div>
           </div>
+          <!-- 左右切换箭头 -->
+          <div class="swiper-nav-btn swiper-nav-prev" @click="prevSlide">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="swiper-nav-btn swiper-nav-next" @click="nextSlide">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <!-- 底部圆点指示器 -->
+          <div class="swiper-pagination-dots">
+            <span 
+              v-for="(item, index) in bannerList" 
+              :key="index"
+              class="swiper-pagination-dot"
+              :class="{ 'swiper-pagination-dot-active': currentSlideIndex === index }"
+              @click="goToSlide(index)"
+            ></span>
+          </div>
         </div>
-        <!-- 左右切换箭头 -->
-        <div class="swiper-nav-btn swiper-nav-prev" @click="prevSlide">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <div class="swiper-nav-btn swiper-nav-next" @click="nextSlide">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>
-        <!-- 底部圆点指示器 -->
-        <div class="swiper-pagination-dots">
-          <span 
-            v-for="(item, index) in bannerList" 
-            :key="index"
-            class="swiper-pagination-dot"
-            :class="{ 'swiper-pagination-dot-active': currentSlideIndex === index }"
-            @click="goToSlide(index)"
-          ></span>
+        
+        <!-- 分类 Banner - 点击分类时显示 -->
+        <div class="category-banner" v-show="!showCarousel && categoryBanner" style="height: 580px; width: 100%; position: relative;">
+          <img :src="categoryBanner" alt="" style="width: 100%; height: 100%; object-fit: cover;" />
         </div>
         
         <!-- 公告滚动 - 浮动在轮播图上 -->
@@ -216,6 +222,10 @@ export default {
       currentSlideIndex: 0,
       swiperInstance: null,
       bannerLoading: false, // 防止重复请求的标志
+      showCarousel: true, // 是否显示轮播图（首页显示，其他页面隐藏）
+      categoryBanner: '', // 分类 banner 图片
+      selectedChildId: null, // 当前选中的 child_id，用于过滤 games
+      pcCategoriesData: [], // PC端游戏分类数据（包含 games）
       // 拖动相关
       isDragging: false,
       startX: 0,
@@ -471,6 +481,56 @@ export default {
           this.swiperInstance.slideTo(index);
         }
       }
+      this.currentSlideIndex = index;
+    },
+    // 显示分类 banner（隐藏轮播图）
+    showCategoryBanner(bannerUrl) {
+      if (bannerUrl) {
+        this.categoryBanner = bannerUrl;
+        this.showCarousel = false;
+      }
+    },
+    // 检查路由，判断显示轮播图还是 banner
+    checkRouteForBanner() {
+      const currentPath = this.$route.path;
+      // 如果是首页，显示轮播图
+      if (currentPath === '/' || currentPath === '/index') {
+        this.showCarousel = true;
+        this.categoryBanner = '';
+      }
+      // 其他页面保持当前状态（可能已经通过事件设置了 banner）
+    },
+    // 获取 PC 分类数据
+    fetchPcCategories() {
+      let that = this;
+      that.$apiFun.get('/api/getGamePcCategories', {}).then(res => {
+        if (res.code === 200 && res.data) {
+          that.pcCategoriesData = res.data;
+        }
+      }).catch(err => {
+        console.error('获取 PC 分类数据失败:', err);
+      });
+    },
+    // 获取当前显示的 games（根据 selectedChildId 过滤）
+    getDisplayGames() {
+      if (!this.pcCategoriesData || this.pcCategoriesData.length === 0) {
+        return [];
+      }
+      
+      // 遍历所有分类，找到包含 games 的分类
+      for (let category of this.pcCategoriesData) {
+        if (category.games && typeof category.games === 'object') {
+          // 如果指定了 child_id，返回对应的 games 数组
+          if (this.selectedChildId !== null && this.selectedChildId !== undefined) {
+            const childIdKey = String(this.selectedChildId);
+            if (category.games[childIdKey]) {
+              return category.games[childIdKey];
+            }
+          }
+        }
+      }
+      
+      return [];
     },
     prevSlide() {
       if (this.swiperInstance) {
@@ -510,6 +570,27 @@ export default {
     if (that.homenoticelis.length > 0) {
       that.initNoticeScroll();
     }
+    // 监听分类 banner 显示事件
+    that.$root.$on('showCategoryBanner', (bannerUrl) => {
+      that.showCategoryBanner(bannerUrl);
+    });
+    // 监听显示轮播图事件（点击首页时）
+    that.$root.$on('showCarousel', () => {
+      that.showCarousel = true;
+      that.categoryBanner = '';
+    });
+    // 监听切换 games 显示事件（根据 child_id）
+    that.$root.$on('switchGamesByChildId', (childId) => {
+      that.selectedChildId = childId;
+    });
+    // 监听 PC 分类数据更新事件
+    that.$root.$on('updatePcCategoriesData', (data) => {
+      that.pcCategoriesData = data;
+    });
+    // 根据当前路由判断显示轮播图还是 banner
+    that.checkRouteForBanner();
+    // 获取 PC 分类数据
+    that.fetchPcCategories();
   },
   updated() {
     let that = this;
@@ -559,8 +640,17 @@ export default {
       that.swiperInstance.destroy(true, true);
       that.swiperInstance = null;
     }
+    // 移除事件监听
+    that.$root.$off('showCategoryBanner');
+    that.$root.$off('showCarousel');
+    that.$root.$off('switchGamesByChildId');
+    that.$root.$off('updatePcCategoriesData');
   },
   watch: {
+    '$route'(to, from) {
+      // 路由变化时检查是否需要显示轮播图
+      this.checkRouteForBanner();
+    },
     jumpUrl() {
       if (this.jumpUrl) {
         window.open(this.jumpUrl, '_blank');

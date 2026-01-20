@@ -243,10 +243,10 @@ export default {
                 // 如果该 category_id 还不存在，初始化为空数组
                 if (!gameListByCategory[categoryId]) {
                   gameListByCategory[categoryId] = [];
-                }
+            }
                 // 将游戏添加到对应 category_id 的数组中
                 gameListByCategory[categoryId].push(el);
-              }
+            }
             });
           } else {
             console.warn('游戏列表数据格式错误，不是数组:', list);
