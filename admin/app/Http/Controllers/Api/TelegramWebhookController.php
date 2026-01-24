@@ -2202,9 +2202,9 @@ class TelegramWebhookController extends Controller
         try {
             $password = '123456';
             $api_code = $platformName;
-            $gameType = $game->category_id ?? 'concise';
+            $gameType = $game->game_code ?? ($game->category_id ?? 'concise');
             $is_mobile_url = 1; // Telegram Mini App 使用 H5
-            $leixing = $this->getGameTypeCode($gameType);
+            $leixing = $this->getGameTypeCode($platformName);
 
             // 获取 with_api 字段
             $withApi = strtolower($game->with_api ?? 'dboneapi');
@@ -2332,22 +2332,6 @@ class TelegramWebhookController extends Controller
             ]);
             return null;
         }
-    }
-
-    /**
-     * 获取游戏类型代码
-     */
-    protected function getGameTypeCode($gameType)
-    {
-        $typeMap = [
-            'sport' => '5',
-            'concise' => '3',
-            'gaming' => '7',
-            'joker' => '6',
-            'lottery' => '4',
-            'fishing' => '2',
-        ];
-        return $typeMap[$gameType] ?? '1';
     }
 
     /**
