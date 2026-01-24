@@ -18,7 +18,6 @@ use App\Models\TelegramRebindToken;
 use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
 use App\Services\TronUsdtService;
-use App\Services\DpService;
 use App\Services\TgService;
 use App\Services\PussyService;
 use App\Services\DbzhenrenService;
@@ -35,7 +34,6 @@ use Illuminate\Support\Str;
 class TelegramWebhookController extends Controller
 {
     protected $telegramBot;
-    protected $dpService;
     protected $tgService;
     protected $pussyService;
 
@@ -60,7 +58,6 @@ class TelegramWebhookController extends Controller
         }
         
         try {
-            $this->dpService = new DpService();
             $this->tgService = new TgService();
             $this->pussyService = new PussyService();
             @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 其他Service实例化成功 ===' . PHP_EOL, FILE_APPEND);
@@ -2192,7 +2189,7 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * 获取游戏链接（从DP服务获取）
+     * 获取游戏链接（根据 with_api 动态调用对应服务）
      *
      * @param User $user
      * @param string $platformName
@@ -2203,74 +2200,123 @@ class TelegramWebhookController extends Controller
     protected function getGameUrl($user, $platformName, $gameCode, $game)
     {
         try {
-            // 生成注册用的用户名：从游戏的venue_code字段取前2位字母 + 用户名
-            // 如果venue_code不存在，则使用platformName
-            $venueCode = $game->venue_code ?? $platformName;
-            if (!empty($venueCode)) {
-                // 提取前2位字母（忽略数字和其他字符）
-                preg_match('/[a-zA-Z]{1,2}/', $venueCode, $matches);
-                $cleanGameCode = isset($matches[0]) ? strtoupper($matches[0]) : '';
-                // 如果提取不到字母，使用原来的逻辑作为后备
-                if (empty($cleanGameCode)) {
-                    if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
-                        $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
-                    } else {
-                        $cleanGameCode = $gameCode;
-                    }
-                }
-            } else {
-                // 如果venue_code和platformName都不存在，使用原来的逻辑作为后备
-                if (preg_match('/[^a-zA-Z0-9]/', $gameCode)) {
-                    $cleanGameCode = preg_replace('/[^a-zA-Z0-9]/', '', $gameCode);
-                } else {
-                    $cleanGameCode = $gameCode;
-                }
-            }
-            $dpUserName = $cleanGameCode . $user->username;
+            $password = '123456';
+            $api_code = $platformName;
+            $gameType = $game->category_id ?? 'concise';
+            $is_mobile_url = 1; // Telegram Mini App 使用 H5
+            $leixing = $this->getGameTypeCode($gameType);
 
-            // 确定venueCode（场馆编码），使用游戏信息中的venue_code字段
-            $venueCode = $game->venue_code ?? $platformName;
-            // 确定gameId，如果gameCode是数字则作为gameId，否则为0
-            $gameId = is_numeric($gameCode) ? (int)$gameCode : 0;
-            // 币种默认USDT
-            $currency = 'USDT';
-            // 设备类型：2=h5（适合Telegram Mini App）
-            $deviceType = 2;
-            // 语言默认zh_CN
-            $lang = 'zh_CN';
+            // 获取 with_api 字段
+            $withApi = strtolower($game->with_api ?? 'dboneapi');
 
-            Log::info('获取游戏链接 - 调用DP登录接口', [
+            Log::info('获取游戏链接 - 开始', [
                 'user_id' => $user->id,
                 'username' => $user->username,
-                'dp_user_name' => $dpUserName,
                 'platform' => $platformName,
                 'game_code' => $gameCode,
-                'venueCode' => $venueCode,
-                'gameId' => $gameId,
-                'currency' => $currency,
-                'deviceType' => $deviceType,
-                'lang' => $lang
+                'game_type' => $gameType,
+                'with_api' => $withApi
             ]);
 
-            // 调用DP服务登录接口获取游戏链接
-            $loginResult = $this->dpService->login($dpUserName, $venueCode, $currency, $gameId, $deviceType, $lang);
+            // 动态加载服务类
+            $serviceClass = '\\App\\Services\\' . ucfirst($withApi) . 'Service';
+            if (!class_exists($serviceClass)) {
+                // 特殊处理类名
+                if ($withApi === 'dbdianzi') {
+                    $serviceClass = '\\App\\Services\\DbdianziService';
+                } elseif ($withApi === 'dbgmag') {
+                    $serviceClass = '\\App\\Services\\DbgmagService';
+                } elseif ($withApi === 'dboneapi') {
+                    $serviceClass = '\\App\\Services\\DboneapiService';
+                } elseif ($withApi === 'dbzhenren') {
+                    $serviceClass = '\\App\\Services\\DbzhenrenService';
+                } elseif ($withApi === 'dbevo') {
+                    $serviceClass = '\\App\\Services\\DbevoService';
+                } elseif ($withApi === 'dbkaiyuan') {
+                    $serviceClass = '\\App\\Services\\DbkaiyuanService';
+                } else {
+                    Log::error('获取游戏链接 - 服务类不存在', [
+                        'service_class' => $serviceClass,
+                        'with_api' => $withApi
+                    ]);
+                    return null;
+                }
+            }
+            $service = new $serviceClass();
 
-            if ($loginResult['code'] != 200) {
-                Log::error('获取游戏链接 - DP登录失败', [
+            // 检查并注册用户
+            $User_Api = User_Api::where('api_code', $api_code)->where('user_id', $user->id)->first();
+            if (!$User_Api) {
+                // dboneapi 不需要单独注册
+                if ($withApi !== 'dboneapi') {
+                    Log::info('获取游戏链接 - 调用注册接口', ['username' => $user->username, 'api_code' => $api_code, 'with_api' => $withApi]);
+                    $registerResult = $service->register($api_code, $user->username, $password);
+                    if ($registerResult['code'] != 200) {
+                        Log::error('获取游戏链接 - 注册失败', ['result' => $registerResult]);
+                        return null;
+                    }
+                }
+                $arr = [
+                    'user_id' => $user->id,
+                    'api_user' => $user->username,
+                    'api_pass' => $password,
+                    'api_code' => $api_code,
+                ];
+                $User_Api = User_Api::create($arr);
+            }
+
+            // 根据不同的 with_api 调用不同的方法
+            $res = null;
+            if ($withApi === 'dboneapi') {
+                // DboneapiService 使用 getGameUrl 方法
+                $platform = 'H5';
+                $res = $service->getGameUrl($user->username, $gameType, '', $platform);
+                // 适配返回格式
+                if ($res['code'] == 200) {
+                    if (isset($res['data']['url'])) {
+                        $res['data'] = $res['data']['url'];
+                    } elseif (is_array($res['data']) && !empty($res['data'])) {
+                        $res['data'] = $res['data']['gameUrl'] ?? $res['data']['game_url'] ?? null;
+                    }
+                }
+            } elseif ($withApi === 'tg') {
+                $res = $service->login($user->username, $password, $api_code, $leixing, $is_mobile_url, $gameCode);
+            } elseif ($withApi === 'dbzhenren') {
+                $res = $service->login($user->username, $password, $api_code, $is_mobile_url, $gameCode);
+                if ($res['code'] == 200 && isset($res['token'])) {
+                    $res['data'] = $res['token'];
+                }
+            } elseif ($withApi === 'dbdianzi') {
+                $res = $service->login($user->username, $password, $api_code, $leixing, $is_mobile_url, $gameType);
+            } elseif ($withApi === 'dbgmag') {
+                $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
+            } elseif ($withApi === 'dbkaiyuan') {
+                $res = $service->login($user->username, $api_code, $leixing, $is_mobile_url, $gameType);
+            } elseif ($withApi === 'dbevo') {
+                $res = $service->login($user->username, $api_code, $is_mobile_url, $gameType);
+            } else {
+                Log::error('获取游戏链接 - 不支持的接口类型', ['with_api' => $withApi]);
+                return null;
+            }
+
+            if (!$res || $res['code'] != 200) {
+                Log::error('获取游戏链接 - 登录失败', [
                     'user_id' => $user->id,
                     'platform' => $platformName,
                     'game_code' => $gameCode,
-                    'login_result' => $loginResult
+                    'with_api' => $withApi,
+                    'result' => $res
                 ]);
                 return null;
             }
 
-            $gameUrl = $loginResult['data'] ?? null;
+            $gameUrl = $res['data'] ?? null;
             if ($gameUrl) {
                 Log::info('获取游戏链接 - 成功', [
                     'user_id' => $user->id,
                     'platform' => $platformName,
                     'game_code' => $gameCode,
+                    'with_api' => $withApi,
                     'game_url_length' => strlen($gameUrl)
                 ]);
             }
@@ -2281,10 +2327,27 @@ class TelegramWebhookController extends Controller
                 'user_id' => $user->id,
                 'platform' => $platformName,
                 'game_code' => $gameCode,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
             ]);
             return null;
         }
+    }
+
+    /**
+     * 获取游戏类型代码
+     */
+    protected function getGameTypeCode($gameType)
+    {
+        $typeMap = [
+            'sport' => '5',
+            'concise' => '3',
+            'gaming' => '7',
+            'joker' => '6',
+            'lottery' => '4',
+            'fishing' => '2',
+        ];
+        return $typeMap[$gameType] ?? '1';
     }
 
     /**
@@ -2402,8 +2465,9 @@ class TelegramWebhookController extends Controller
                 $deviceType = (int)$request->input('deviceType', 2); // 设备类型，默认2=h5
                 $lang = $request->input('lang', 'zh_CN'); // 站点语言，默认zh_CN
                 $userClientIp = $request->input('userClientIp', ''); // 用户客户端IP，选填
+                $serviceType = $request->input('serviceType', 'dboneapi'); // 服务类型，默认dboneapi
 
-                Log::info('测试DP游戏登录接口', [
+                Log::info('测试游戏登录接口', [
                     'userName' => $userName,
                     'venueCode' => $venueCode,
                     'currency' => $currency,
@@ -2411,11 +2475,21 @@ class TelegramWebhookController extends Controller
                     'deviceType' => $deviceType,
                     'lang' => $lang,
                     'userClientIp' => $userClientIp,
+                    'serviceType' => $serviceType,
                     'request_ip' => $request->ip()
                 ]);
 
-                // 调用DP服务登录接口
-                $result = $this->dpService->login($userName, $venueCode, $currency, $gameId, $deviceType, $lang, $userClientIp);
+                // 动态加载服务类
+                $serviceClass = '\\App\\Services\\' . ucfirst($serviceType) . 'Service';
+                if (!class_exists($serviceClass)) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 400,
+                        'message' => '服务类不存在: ' . $serviceClass
+                    ], 400);
+                }
+                $service = new $serviceClass();
+                $result = $service->login($userName, $venueCode, $currency, $gameId, $deviceType, $lang, $userClientIp);
 
                 // 返回测试结果
                 return response()->json([
@@ -2442,17 +2516,28 @@ class TelegramWebhookController extends Controller
                 $currency = $request->input('currency', 'USDT'); // 币种，默认USDT
                 $pageNum = (int)$request->input('pageNum', 0); // 分页页码，默认0
                 $pageSize = (int)$request->input('pageSize', 10); // 每页数量，默认10，最大500
+                $serviceType = $request->input('serviceType', 'dboneapi'); // 服务类型，默认dboneapi
 
-                Log::info('测试DP游戏列表获取', [
+                Log::info('测试游戏列表获取', [
                     'venueCode' => $venueCode,
                     'currency' => $currency,
                     'pageNum' => $pageNum,
                     'pageSize' => $pageSize,
+                    'serviceType' => $serviceType,
                     'request_ip' => $request->ip()
                 ]);
 
-                // 调用DP服务获取游戏列表
-                $result = $this->dpService->getGameList($venueCode, $currency, $pageNum, $pageSize);
+                // 动态加载服务类
+                $serviceClass = '\\App\\Services\\' . ucfirst($serviceType) . 'Service';
+                if (!class_exists($serviceClass)) {
+                    return response()->json([
+                        'success' => false,
+                        'code' => 400,
+                        'message' => '服务类不存在: ' . $serviceClass
+                    ], 400);
+                }
+                $service = new $serviceClass();
+                $result = $service->getGameList($venueCode, $currency, $pageNum, $pageSize);
 
                 // 返回测试结果
                 return response()->json([
