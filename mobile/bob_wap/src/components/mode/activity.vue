@@ -16,14 +16,7 @@
     <!-- 活动列表 -->
     <div class="activity-list">
       <div class="activity-card" v-for="(item, index) in activitylistList" :key="index" @click="$parent.goNav(`/activityInfo?id=${item.id}`)">
-        <div class="card-left">
-          <div class="card-title">
-            <span class="title-text">{{ item.title }}</span>
-          </div>
-        </div>
-        <div class="card-right">
-          <img :src="item.banner" alt="" />
-        </div>
+          <img style="width: 100%;" :src="item.banner" alt="" />
       </div>
 
       <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '20px 16px' }">END</van-divider>

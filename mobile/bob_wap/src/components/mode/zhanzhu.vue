@@ -7,35 +7,23 @@
 
     <!-- 赞助卡片列表 -->
     <div class="sponsor-list">
-      <!-- 佛罗伦萨 -->
-      <div class="sponsor-card" @click="toDetail(1)">
+      <div
+        v-for="item in sponsorList"
+        :key="item.id"
+        class="sponsor-card"
+      >
         <div class="card-left">
           <div class="team-logo">
-            <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="佛罗伦萨" />
+            <img :src="item.logo" :alt="item.name" />
           </div>
-          <div class="partner-label">官方区域合作伙伴</div>
-          <div class="team-name">佛罗伦萨</div>
-          <div class="view-btn">查看详情</div>
+          <div class="partner-label">{{ item.title }}</div>
+          <div class="team-name">{{ item.name }}</div>
         </div>
         <div class="card-right">
-          <img src="/static/image/01.png" alt="球队图片" />
+          <img :src="item.banner" :alt="item.name" />
         </div>
       </div>
-
-      <!-- 赫塔菲 -->
-      <div class="sponsor-card" @click="toDetail(2)">
-        <div class="card-left">
-          <div class="team-logo">
-            <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="赫塔菲" />
-          </div>
-          <div class="partner-label">官方独家区域合作伙伴</div>
-          <div class="team-name">赫塔菲</div>
-          <div class="view-btn">查看详情</div>
-        </div>
-        <div class="card-right">
-          <img src="/static/image/02.png" alt="球队图片" />
-        </div>
-      </div>
+      <div v-if="sponsorList.length === 0 && !loading" class="empty-tip">暂无赞助数据</div>
     </div>
 
     <!-- 底部占位 -->
@@ -47,14 +35,54 @@
 export default {
   name: 'zhanzhu',
   data() {
-    return {};
+    return {
+      sponsorList: [],
+      loading: false,
+    };
   },
   methods: {
-    toDetail(/*type*/) {
+    getList() {
+      const that = this;
+      that.loading = true;
+      that.$parent && that.$parent.showLoading && that.$parent.showLoading();
+      that.$apiFun.get('/api/sponsorList', {}).then(res => {
+        that.loading = false;
+        that.$parent && that.$parent.hideLoading && that.$parent.hideLoading();
+        if (res.code === 200 && Array.isArray(res.data)) {
+          that.sponsorList = res.data;
+        } else {
+          that.$toast && that.$toast(res.message || '获取失败');
+        }
+      }).catch(() => {
+        that.loading = false;
+        that.$parent && that.$parent.hideLoading && that.$parent.hideLoading();
+      });
+    },
+    toDetail(item) {
+      const url = item && item.link_url;
+      if (url && typeof url === 'string' && url.trim()) {
+        const trimmed = url.trim();
+        if (/^https?:\/\//i.test(trimmed)) {
+          this.$router.push({
+            path: '/webview',
+            query: {
+              url: encodeURIComponent(trimmed),
+              title: (item && item.name) || '打开链接',
+            },
+          });
+          return;
+        }
+        if (trimmed.startsWith('/')) {
+          this.$router.push({ path: trimmed });
+          return;
+        }
+      }
       this.$router.push({ path: '/applyagent' });
     },
   },
-  created() {},
+  created() {
+    this.getList();
+  },
   mounted() {},
   updated() {},
   beforeDestroy() {},
@@ -92,10 +120,18 @@ export default {
 .sponsor-list {
   padding: 60px 15px 0;
 }
+.empty-tip {
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 14px;
+  color: #999;
+}
 
-// 赞助卡片
+// 赞助卡片：左右高度与图片一致，上下 10px 内边距
 .sponsor-card {
   display: flex;
+  align-items: center;
+  padding: 10px;
   background: #fff;
   border-radius: 12px;
   overflow: hidden;
@@ -104,16 +140,17 @@ export default {
 
   .card-left {
     width: 40%;
-    padding: 5px;
+    padding: 0 8px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
 
     .team-logo {
-      width: 50px;
-      height: 50px;
-      margin-bottom: 8px;
+      width: 40px;
+      height: 40px;
+      margin-bottom: 4px;
+      flex-shrink: 0;
 
       img {
         width: 100%;
@@ -123,24 +160,26 @@ export default {
     }
 
     .partner-label {
-      font-size: 11px;
+      font-size: 10px;
       color: #999;
-      margin-bottom: 5px;
+      margin: 5px 0 2px 0;
       text-align: center;
+      line-height: 1.2;
     }
 
     .team-name {
-      font-size: 20px;
+      font-size: 16px;
       font-weight: 700;
       color: #333;
-      margin-bottom: 12px;
+      margin: 6px 0;
+      line-height: 1.2;
     }
 
     .view-btn {
-      padding: 6px 16px;
+      padding: 4px 12px;
       border: 1px solid #4a8cca;
-      border-radius: 15px;
-      font-size: 12px;
+      border-radius: 12px;
+      font-size: 11px;
       color: #4a8cca;
       cursor: pointer;
     }
@@ -148,14 +187,16 @@ export default {
 
   .card-right {
     width: 60%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    height: 90px;
+    border-radius: 5px;
+    flex-shrink: 0;
     overflow: hidden;
 
     img {
       width: 100%;
+      height: 100%;
       object-fit: cover;
+      display: block;
     }
   }
 }

@@ -1,0 +1,111 @@
+/* 全局夜晚模式（手机站）
+ * 通过给 body 添加 .dark 类启用
+ */
+
+body.dark {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+body.dark #app {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+/* 核心：提高覆盖力度，压过 scoped 样式（属性选择器）
+ * - 文字统一白色
+ * - 常见块级元素背景统一深色
+ * 说明：使用 !important 是为了覆盖大量组件内 scoped 的 #fff 背景/深色文字
+ */
+body.dark,
+body.dark * {
+  color: #fff !important;
+}
+
+/* 默认背景：排除媒体/矢量元素，避免图片/图标被涂黑 */
+body.dark :where(div, section, header, footer, main, article, nav, aside, ul, ol, li, p, span, label, a, table, thead, tbody, tr, td, th, form, input, textarea, button) {
+  background-color: #1a1a1a !important;
+}
+
+body.dark img,
+body.dark svg,
+body.dark svg *,
+body.dark canvas,
+body.dark video {
+  background-color: transparent !important;
+}
+
+/* 常用容器/卡片 */
+body.dark .app,
+body.dark .sdg,
+body.dark .usrse,
+body.dark .tipsh,
+body.dark .hgs,
+body.dark .domainModal_contentTop__2C4jc,
+body.dark .domainModal_content__1nBgc {
+  background: #111 !important;
+  color: #fff !important;
+}
+
+/* 边框统一偏暗 */
+body.dark * {
+  border-color: #2a2a2a !important;
+}
+
+/* Vant 组件：背景/文字 */
+body.dark .van-nav-bar,
+body.dark .van-nav-bar__content,
+body.dark .van-tabbar,
+body.dark .van-cell,
+body.dark .van-cell-group,
+body.dark .van-popup,
+body.dark .van-action-sheet,
+body.dark .van-action-sheet__content,
+body.dark .van-dialog,
+body.dark .van-picker,
+body.dark .van-picker__toolbar,
+body.dark .van-picker-column,
+body.dark .van-field__control,
+body.dark .van-field__control::placeholder {
+  background: #1a1a1a !important;
+  color: #fff !important;
+}
+
+body.dark .van-cell__title,
+body.dark .van-cell__value,
+body.dark .van-nav-bar__title,
+body.dark .van-nav-bar__text,
+body.dark .van-action-sheet__name,
+body.dark .van-action-sheet__description,
+body.dark .van-dialog__header,
+body.dark .van-dialog__message,
+body.dark .van-picker__cancel,
+body.dark .van-picker__confirm,
+body.dark .van-field__label {
+  color: #fff !important;
+}
+
+body.dark .van-hairline--top-bottom::after,
+body.dark .van-hairline--bottom::after,
+body.dark .van-hairline--top::after,
+body.dark .van-hairline--left::after,
+body.dark .van-hairline--right::after {
+  border-color: #2a2a2a !important;
+}
+
+/* 输入框 placeholder */
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+  color: #aaa !important;
+}
+
+/* -------- kefu 路由特殊处理 --------
+ * 全局夜晚模式会给 div 强制 background-color，导致 kefu 页的渐变客服卡片被子元素盖住。
+ * 这里把卡片内部背景恢复为透明，让渐变正常显示。
+ */
+body.dark .kefu-page .service-card,
+body.dark .kefu-page .service-card .service-info,
+body.dark .kefu-page .service-card .service-icon,
+body.dark .kefu-page .service-card .bubble-icon {
+  background-color: transparent !important;
+}

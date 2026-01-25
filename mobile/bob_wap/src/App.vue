@@ -117,7 +117,7 @@ export default {
           }
 
           // 后端 API 地址
-          const apiBaseUrl = 'https://jiuapi.82826.live';
+          const apiBaseUrl = 'https://botapi.leyu666.lol';
           const telegramAuthUrl = apiBaseUrl + '/api/telegram/webapp-auth';
           if (isDevelopment) {
             debugInfo.push('API URL: ' + telegramAuthUrl.substring(0, 40) + '...');

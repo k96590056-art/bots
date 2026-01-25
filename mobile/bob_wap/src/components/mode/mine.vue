@@ -14,7 +14,7 @@
         </div>
         <div class="user-details" @click="!$store.state.token && $parent.goNav('/login')">
           <div class="user-name">{{ $store.state.token ? $store.state.userInfo.username : '点击登录/注册' }}</div>
-          <div class="user-days" v-if="$store.state.token">加入星乐第{{ joinDays }}天</div>
+          <div class="user-days" v-if="$store.state.token">加入我们第{{ joinDays }}天</div>
           <div class="user-days not-login" v-else>您还未登录</div>
         </div>
         <div class="header-actions">
@@ -133,9 +133,9 @@
         <div class="wallet-actions">
           <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/money') : $parent.goNav('/login')">
             <div class="btn-icon">
-              <img src="/static/image/blance.png" alt="余额宝" class="wallet-icon" />
+              <img src="/static/image/blance.png" alt="中心钱包" class="wallet-icon" />
             </div>
-            <span>余额宝</span>
+            <span>中心钱包</span>
           </div>
           <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/recharge') : $parent.goNav('/login')">
             <div class="btn-icon">
@@ -230,8 +230,8 @@
       <div class="bottom-list">
         <div class="list-item" @click="$parent.goNav('/abouts')">
           <div class="item-left">
-            <img src="/static/image/icon_about.png" alt="关于星乐" class="list-icon" />
-            <span>关于星乐</span>
+            <img src="/static/image/icon_about.png" alt="关于我们" class="list-icon" />
+            <span>关于我们</span>
           </div>
           <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
             <polyline points="9 18 15 12 9 6"/>
@@ -248,15 +248,6 @@
               <polyline points="9 18 15 12 9 6"/>
             </svg>
           </div>
-        </div>
-        <div class="list-item" @click="$parent.goNav('/app')">
-          <div class="item-left">
-            <img src="/static/image/icon_app.png" alt="打开星乐APP" class="list-icon" />
-            <span>打开星乐APP</span>
-          </div>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
         </div>
       </div>
 
