@@ -43,6 +43,7 @@ import feedback from '@/components/feedback'
 import myFeedback from '@/components/myFeedback'
 import feedbackDetail from '@/components/feedbackDetail'
 import helpTutorial from '@/components/helpTutorial'
+import Webview from '@/components/Webview'
 
 
 
@@ -330,6 +331,10 @@ export default new Router({
       path: '/helpTutorial',
       name: 'helpTutorial',
       component: helpTutorial
+    }, {
+      path: '/webview',
+      name: 'webview',
+      component: Webview
     }
     , {
       path: '*', // 重定向页面地址

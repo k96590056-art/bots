@@ -28,17 +28,6 @@
         <div class="bubble-icon"></div>
       </div>
     </div>
-
-    <!-- 主播推荐区域 -->
-    <div class="anchor-section">
-      <div class="section-header">
-        <img class="section-icon" src="/static/image/icon_app.png" alt="主播" />
-        <span class="section-title">主播推荐</span>
-      </div>
-      <div class="anchor-list">
-        <div class="empty-tip">暂无主播推荐</div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -69,13 +58,17 @@ export default {
         }
       });
     },
-    // 打开在线客服
+    // 打开在线客服（通过公共 webview 路由打开）
     openOnlineService() {
-      if (this.url) {
-        window.open(this.url, '_blank');
-      } else {
+      if (!this.url) {
         this.$toast('客服链接获取中，请稍后再试');
+        return;
       }
+      const fullUrl = `${this.url}${this.url.indexOf('?') >= 0 ? '&' : '?'}visiter_id=0&visiter_name=${encodeURIComponent(this.$store.state.realname || '')}&avatar=${encodeURIComponent(this.$store.state.user_photo || '')}`;
+      this.$router.push({
+        path: '/webview',
+        query: { url: encodeURIComponent(fullUrl), title: '在线客服' },
+      });
     },
     // 跳转意见反馈
     goFeedback() {

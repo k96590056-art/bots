@@ -4,7 +4,7 @@ import router from './../router'
 
 // 临时修改为本地后端进行测试
 // let baseURL = 'http://127.0.0.1:8000'
-let baseURL = 'https://jiuapi.82826.live'
+let baseURL = 'https://botapi.leyu666.lol'
 
 sessionStorage.setItem("baseURL",baseURL)
 

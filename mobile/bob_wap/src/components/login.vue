@@ -9,10 +9,6 @@
           class="logo-img"
           @error="handleLogoError"
         />
-        <div class="logo-text">
-          <div class="logo-title">{{ $store.state.appInfo.site_name || '星乐娱乐' }}</div>
-          <div class="logo-domain">jiuyou.com</div>
-        </div>
       </div>
     </div>
 
@@ -69,6 +65,21 @@
           </div>
         </div>
 
+        <!-- 图片数字验证码（在记住密码上方） -->
+        <div class="input-group captcha-group">
+          <input
+            v-model="captchaCode"
+            type="text"
+            placeholder="请输入图片中的数字"
+            class="login-input captcha-input"
+            maxlength="6"
+            autocomplete="off"
+          />
+          <div class="captcha-image-wrap" @click="getCaptcha">
+            <canvas ref="captchaCanvas" class="captcha-canvas" width="120" height="50"></canvas>
+          </div>
+        </div>
+
         <!-- 记住密码和忘记密码（仅登录模式显示） -->
         <div class="login-options" v-if="isLogin">
           <label class="remember-password">
@@ -120,30 +131,16 @@
       </button>
     </div>
     
-    <!-- 验证码组件 -->
-    <ClickCaptcha
-      :visible="showCaptcha"
-      title="请在下图依次点击"
-      brand=""
-      :pointCount="3"
-      :generateUrl="generateUrl"
-      :verifyUrl="verifyUrl"
-      @success="onCaptchaSuccess"
-      @close="showCaptcha = false"
-    />
   </div>
 </template>
 
 <script>
-import ClickCaptcha from '@/components/libs/ClickCaptcha.vue'
 export default {
   name: 'login',
-  components: { ClickCaptcha },
   data() {
     return {
-      showCaptcha: false,
-      generateUrl: '/api/captcha/generate',
-      verifyUrl: '/api/captcha/verify',
+      captchaCode: '',
+      captchaAnswer: '', // 前端生成的正确答案，提交时本地校验
       formData: {
         name: '',
         password: '',
@@ -169,8 +166,70 @@ export default {
     if (query.pid) {
       that.pid = query.pid;
     }
+    // 回填记住的账号密码
+    try {
+      const saved = localStorage.getItem('login_remember');
+      if (saved) {
+        const obj = JSON.parse(saved);
+        if (obj && obj.name) {
+          that.formData.name = obj.name;
+          that.formData.password = obj.password || '';
+          that.rememberPassword = true;
+        }
+      }
+    } catch (e) {}
+  },
+  mounted() {
+    this.$nextTick(() => this.getCaptcha());
   },
   methods: {
+    // 在 captcha-image-wrap 内的 canvas 上直接绘制数字验证码
+    getCaptcha() {
+      const canvas = this.$refs.captchaCanvas;
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
+      const len = 4;
+      const chars = '0123456789';
+      let text = '';
+      for (let i = 0; i < len; i++) {
+        text += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      this.captchaAnswer = text;
+      this.captchaCode = '';
+      const w = 120;
+      const h = 50;
+      // 白底，与紫色区域对比明显
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      // 噪线
+      for (let i = 0; i < 4; i++) {
+        ctx.strokeStyle = 'rgba(150,150,150,0.4)';
+        ctx.beginPath();
+        ctx.moveTo(Math.random() * w, Math.random() * h);
+        ctx.lineTo(Math.random() * w, Math.random() * h);
+        ctx.stroke();
+      }
+      // 噪点
+      for (let i = 0; i < 30; i++) {
+        ctx.fillStyle = 'rgba(120,120,120,0.4)';
+        ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+      }
+      // 数字：深色加粗，清晰可见
+      const fontGap = w / (len + 1);
+      ctx.textBaseline = 'middle';
+      for (let i = 0; i < len; i++) {
+        ctx.save();
+        ctx.font = `bold ${24 + Math.random() * 4}px Arial`;
+        ctx.fillStyle = '#222222';
+        const x = fontGap * (i + 1) - 8;
+        const y = h / 2 + (Math.random() - 0.5) * 6;
+        ctx.translate(x, y);
+        ctx.rotate((Math.random() - 0.5) * 0.3);
+        ctx.fillText(text[i], 0, 0);
+        ctx.restore();
+      }
+    },
     changPsw(name) {
       this[name] = !this[name];
     },
@@ -200,22 +259,25 @@ export default {
       // 可以设置一个默认logo或者隐藏图片
       e.target.style.display = 'none';
     },
-    onCaptchaSuccess(sessionId) {
-      if (this.isLogin) {
-        this.doLogin(sessionId);
-      } else {
-        this.doRegister(sessionId);
-      }
-    },
     submitForm() {
       let that = this;
       let info = that.formData;
-      
+
       if (!info.name || !info.password) {
         that.$parent.showTost(0, '请输入您的账号和密码！');
         return;
       }
-      
+
+      if (!that.captchaCode || !String(that.captchaCode).trim()) {
+        that.$parent.showTost(0, '请输入验证码！');
+        return;
+      }
+      if (String(that.captchaCode).trim() !== that.captchaAnswer) {
+        that.$parent.showTost(0, '验证码错误');
+        that.getCaptcha();
+        return;
+      }
+
       // 注册模式需要验证确认密码和同意条款
       if (!that.isLogin) {
         if (!info.confirmPass) {
@@ -231,17 +293,17 @@ export default {
           return;
         }
       }
-      
-      // 验证通过，显示验证码
-      this.showCaptcha = true;
-    },
-    doRegister(sessionId) {
-      let that = this;
-      let info = that.formData;
-      
-      if (sessionId) {
-        info.captcha_id = sessionId;
+
+      if (that.isLogin) {
+        that.doLogin();
+      } else {
+        that.doRegister();
       }
+    },
+    doRegister() {
+      let that = this;
+      let info = { ...that.formData };
+      info.captcha_code = that.captchaCode;
 
       that.$parent.showLoading();
       if (that.pid) {
@@ -249,48 +311,62 @@ export default {
       }
       
       that.$apiFun.register(info).then(res => {
-        that.$parent.showTost(1, res.message);
+        that.$parent.hideLoading();
         if (res.code == 200) {
+          that.$parent.showTost(1, res.message);
           sessionStorage.setItem('token', res.data.api_token);
           that.$store.commit('changToken');
           that.$parent.getUserInfo();
           that.$parent.openDaoTime();
           that.$parent.goNav('/');
+        } else {
+          that.$parent.showTost(0, res.message || '注册失败');
+          that.getCaptcha();
         }
+      }).catch(() => {
         that.$parent.hideLoading();
+        that.getCaptcha();
       });
     },
-    doLogin(sessionId) {
+    doLogin() {
       let that = this;
       let info = {
         name: that.formData.name,
-        password: that.formData.password
+        password: that.formData.password,
+        captcha_code: that.captchaCode,
       };
-      
-      if (sessionId) {
-        info.captcha_id = sessionId;
-      }
 
       that.$parent.showLoading();
       that.$apiFun.login(info).then(res => {
-        if (res.code !== 200) {
-          that.$parent.showTost(0, res.message);
-          that.$parent.hideLoading();
-        }
+        that.$parent.hideLoading();
         if (res.code === 200) {
+          if (that.rememberPassword) {
+            try {
+              localStorage.setItem('login_remember', JSON.stringify({
+                name: that.formData.name,
+                password: that.formData.password,
+              }));
+            } catch (e) {}
+          } else {
+            try {
+              localStorage.removeItem('login_remember');
+            } catch (e) {}
+          }
           sessionStorage.setItem('token', res.data.api_token);
           that.$store.commit('changToken');
           that.$parent.getUserInfo();
           that.$parent.openDaoTime();
           that.$parent.goNav('/');
+        } else {
+          that.$parent.showTost(0, res.message || '登录失败');
+          that.getCaptcha();
         }
+      }).catch(() => {
         that.$parent.hideLoading();
+        that.getCaptcha();
       });
     },
   },
-  mounted() {
-    // this.refresh();
-  }
 };
 </script>
 
@@ -310,7 +386,7 @@ export default {
 // 顶部Logo
 .login-header {
   text-align: center;
-  padding: 30px 0 40px;
+  padding: 20px 0;
   
   .login-logo {
     display: flex;
@@ -319,30 +395,10 @@ export default {
     gap: 12px;
     
     .logo-img {
-      width: 50px;
-      height: 50px;
+      width: 35%;
       display: block;
+      margin-top: 20px;
       object-fit: contain;
-    }
-    
-    .logo-text {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      
-      .logo-title {
-        font-size: 20px;
-        font-weight: 600;
-        color: #ffffff;
-        line-height: 1.2;
-      }
-      
-      .logo-domain {
-        font-size: 12px;
-        color: rgba(255, 255, 255, 0.7);
-        line-height: 1.2;
-        margin-top: 2px;
-      }
     }
   }
 }
@@ -365,7 +421,7 @@ export default {
       border: 1px solid rgba(255, 255, 255, 0.3);
       border-radius: 12px;
       font-size: 16px;
-      color: #333;
+      color: white;
       box-sizing: border-box;
       
       &::placeholder {
@@ -397,6 +453,37 @@ export default {
           display: block;
           object-fit: contain;
         }
+      }
+    }
+
+    &.captcha-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .captcha-input {
+        flex: 1;
+        margin-bottom: 0;
+      }
+
+      .captcha-image-wrap {
+        width: 120px;
+        height: 50px;
+        flex-shrink: 0;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.3);
+        background: #764ba2;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+      }
+
+      .captcha-canvas {
+        width: 100%;
+        height: 100%;
+        display: block;
       }
     }
   }

@@ -51,10 +51,6 @@ export default {
       let that = this;
       let info = that.info;
       let regExp = /^(0|86|17951)?(13[0-9]|15[012356789]|17[678]|18[0-9]|14[57])[0-9]{8}$/;
-      if (!regExp.test(info.mobile)) {
-        that.$parent.showTost(0, '请输入正确手机号');
-        return;
-      }
 
       if (!info.apply_info) {
         that.$parent.showTost(0, '请输入申请理由');

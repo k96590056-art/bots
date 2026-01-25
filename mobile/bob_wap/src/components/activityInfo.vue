@@ -3,7 +3,7 @@
     <van-nav-bar style="position: fixed; top: 0; left: 0; width: 100%; background-color: #ede9e7" title="活动详情" left-arrow @click-left="$router.back()" />
     <div style="height:46px"></div>
     <div v-if="dataInfo.title">
-      <img :src="dataInfo.banner" alt="" style="width: 100%; display: block" />
+      <img :src="dataInfo.banner" @click="jumpTo(dataInfo)" alt="" style="width: 100%; display: block" />
       <div style="text-align: center; font-size: 16px; padding-top: 15px">{{ dataInfo.title }}</div>
       <van-divider dashed :style="{ color: '#000', borderColor: '#ccc', padding: '10px', width: '50%', margin: '0 auto' }">活动详情</van-divider>
       <div class="tables" v-html="dataInfo.content"></div>
@@ -31,6 +31,24 @@ export default {
     }
   },
   methods: {
+    jumpTo(data) {
+      const url = data && data.jump_url;
+      if (!url || typeof url !== 'string' || !url.trim()) return;
+
+      const trimmed = url.trim();
+      if (/^https?:\/\//i.test(trimmed)) {
+        this.$router.push({
+          path: '/webview',
+          query: {
+            url: encodeURIComponent(trimmed),
+            title: (data && data.title) || '打开链接',
+          },
+        });
+      } else {
+        const path = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+        this.$router.push({ path });
+      }
+    },
     getInfo(id) {
       let that = this;
       that.$parent.showLoading();
@@ -73,17 +91,13 @@ export default {
 }
 .bonsf {
   position: fixed;
-  left: 5%;
   bottom: 10px;
   z-index: 95;
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 90%;
-  height: 50px;
-  background: hsla(0, 0%, 100%, 0.9);
-  box-shadow: 0 0 10px 0 rgb(0 0 0 / 50%);
   border-radius: 8px;
+  width: 100%;
   .btsdn {
     display: flex;
     height: 38px;
