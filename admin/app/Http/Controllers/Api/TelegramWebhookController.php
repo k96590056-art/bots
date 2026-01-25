@@ -271,13 +271,31 @@ class TelegramWebhookController extends Controller
                 return $this->handleTelegramRebind($chatId, $telegramId, $token, $firstName, $username);
             }
 
+            // 提取邀请码（上级用户ID）
+            // 邀请链接格式：/start {user_id}
+            $inviteUserId = null;
+            if (preg_match('/^\/start\s+(\d+)$/', $text, $matches)) {
+                $inviteUserId = intval($matches[1]);
+                // 验证邀请者是否存在
+                $inviter = User::find($inviteUserId);
+                if (!$inviter) {
+                    Log::info('邀请码无效，邀请用户不存在', ['invite_user_id' => $inviteUserId]);
+                    $inviteUserId = null;
+                } else {
+                    Log::info('检测到邀请码', [
+                        'invite_user_id' => $inviteUserId,
+                        'inviter_username' => $inviter->username
+                    ]);
+                }
+            }
+
             // 检查用户是否存在，如果不存在则自动注册
             $user = User::where('telegram_id', $telegramId)->first();
             $isNewUser = false;
 
             if (!$user) {
-                // 自动注册用户
-                $user = $this->registerUserFromTelegram($telegramId, $username, $firstName);
+                // 自动注册用户（传入邀请者ID）
+                $user = $this->registerUserFromTelegram($telegramId, $username, $firstName, $inviteUserId);
                 if (!$user) {
                     Log::error('用户注册失败', [
                         'telegram_id' => $telegramId,
@@ -738,13 +756,9 @@ class TelegramWebhookController extends Controller
                 return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
 
             case 'invite_friends':
-                // 邀请好友（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                // 邀请好友
+                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                return $this->showInviteInfo($chatId, $user, $messageId);
 
             case 'transaction_details':
                 // 流水明细
@@ -825,7 +839,7 @@ class TelegramWebhookController extends Controller
      * @param string $firstName
      * @return User|null
      */
-    protected function registerUserFromTelegram($telegramId, $username = '', $firstName = '')
+    protected function registerUserFromTelegram($telegramId, $username = '', $firstName = '', $inviteUserId = null)
     {
         try {
             // 生成用户名：游戏编码的前2位 + telegram的用户id
@@ -858,8 +872,8 @@ class TelegramWebhookController extends Controller
             // 生成随机密码明文
             $plainPassword = Str::random(32);
 
-            // 创建用户
-            $user = User::create([
+            // 创建用户数据
+            $userData = [
                 'username' => $systemUsername,
                 'password' => Hash::make($plainPassword), // 哈希后的密码
                 'first_password' => $plainPassword, // 保存明文密码
@@ -869,12 +883,22 @@ class TelegramWebhookController extends Controller
                 'vip' => 1,
                 'balance' => 0,
                 'api_token' => Str::random(60),
-            ]);
+            ];
+
+            // 如果有邀请者ID，设置上级关系
+            if ($inviteUserId) {
+                $userData['fid'] = $inviteUserId;
+                $userData['pid'] = $inviteUserId;
+            }
+
+            // 创建用户
+            $user = User::create($userData);
 
             Log::info('Telegram用户自动注册成功', [
                 'telegram_id' => $telegramId,
                 'username' => $systemUsername,
-                'user_id' => $user->id
+                'user_id' => $user->id,
+                'invite_user_id' => $inviteUserId
             ]);
 
             return $user;
@@ -3263,6 +3287,77 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
             Log::error('显示帮助信息失败', [
+                'chat_id' => $chatId,
+                'user_id' => $user->id,
+                'error' => $e->getMessage()
+            ]);
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示邀请信息（邀请链接和邀请人数）
+     *
+     * @param int $chatId
+     * @param User $user
+     * @param int|null $messageId
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function showInviteInfo($chatId, $user, $messageId = null)
+    {
+        try {
+            // 获取机器人用户名
+            $botUsername = SystemConfig::getValue('telegram_bot_username');
+
+            // 生成邀请链接
+            $inviteLink = '';
+            if (!empty($botUsername)) {
+                $inviteLink = "https://t.me/{$botUsername}?start={$user->id}";
+            }
+
+            // 统计邀请人数（pid 或 fid 等于当前用户ID的用户数量）
+            $inviteCount = User::where(function($query) use ($user) {
+                $query->where('pid', $user->id)
+                      ->orWhere('fid', $user->id);
+            })->count();
+
+            // 构建消息文本
+            $text = "👋 <b>邀请好友</b>\n\n";
+            $text .= "━━━━━━━━━━━━━━━\n\n";
+
+            if (!empty($inviteLink)) {
+                $text .= "🔗 <b>您的专属邀请链接：</b>\n";
+                $text .= "<code>{$inviteLink}</code>\n\n";
+                $text .= "💡 <i>点击链接可复制</i>\n\n";
+            } else {
+                $text .= "⚠️ 邀请链接暂未配置，请联系客服\n\n";
+            }
+
+            $text .= "━━━━━━━━━━━━━━━\n\n";
+            $text .= "👥 <b>已邀请人数：</b> {$inviteCount} 人\n\n";
+            $text .= "━━━━━━━━━━━━━━━\n\n";
+            $text .= "📢 分享链接给好友，好友通过链接注册即可成为您的下级！";
+
+            // 构建内联键盘按钮
+            $inlineKeyboard = [
+                [
+                    [
+                        'text' => '🏠 返回主菜单',
+                        'callback_data' => 'back_main'
+                    ]
+                ]
+            ];
+
+            // 发送或编辑消息
+            if ($messageId) {
+                $result = $this->telegramBot->editMessageText($chatId, $messageId, $text, 'HTML', $inlineKeyboard);
+            } else {
+                $result = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard, 'HTML');
+            }
+
+            return response()->json(['ok' => true]);
+        } catch (\Exception $e) {
+            Log::error('显示邀请信息失败', [
                 'chat_id' => $chatId,
                 'user_id' => $user->id,
                 'error' => $e->getMessage()
