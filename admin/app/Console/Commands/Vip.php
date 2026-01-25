@@ -9,6 +9,8 @@ use App\Models\UserVipLog;
 use App\Services\DiscountService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use ReflectionClass;
+use ReflectionMethod;
 
 class Vip extends Command
 {
@@ -17,16 +19,29 @@ class Vip extends Command
      *
      * @var string
      */
-    protected $signature = 'vip:check {user_id? : 用户ID，不传则处理所有用户}';
+    protected $signature = 'vip {method? : 子方法名，不传则执行判断升降级} {--user_id= : 用户ID，不传则处理所有用户}';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = '检查并处理用户VIP等级升降级';
+    protected $description = 'VIP等级管理命令';
 
     protected $discountService;
+
+    /**
+     * 方法描述映射
+     *
+     * @var array
+     */
+    protected $methodDescriptions = [
+        'checkLevel' => '判断并处理用户VIP等级升降级',
+        'processUser' => '处理单个用户的VIP等级升降级',
+        'calculateTargetVip' => '计算目标VIP等级',
+        'handleUpgrade' => '处理VIP升级',
+        'handleDowngrade' => '处理VIP降级',
+    ];
 
     /**
      * Create a new command instance.
@@ -46,7 +61,83 @@ class Vip extends Command
      */
     public function handle()
     {
-        $userId = $this->argument('user_id');
+        $methodName = $this->argument('method');
+
+        if (empty($methodName)) {
+            // 如果没有指定方法，默认执行判断升降级
+            return $this->checkLevel();
+        }
+
+        // 检查方法是否存在
+        if (!method_exists($this, $methodName)) {
+            $this->error("方法不存在：{$methodName}");
+            $this->showAvailableMethods();
+            return 1;
+        }
+
+        // 显示方法描述
+        $description = $this->getMethodDescription($methodName);
+        $this->info("方法：{$methodName}");
+        $this->info("功能：{$description}");
+
+        // 获取方法参数信息
+        $reflection = new ReflectionClass($this);
+        $method = $reflection->getMethod($methodName);
+        $parameters = $method->getParameters();
+
+        if (empty($parameters)) {
+            // 如果没有参数，直接调用
+            $this->info("\n正在调用方法...");
+            $result = call_user_func([$this, $methodName]);
+            $this->displayResult($result);
+        } else {
+            // 如果有参数，提示用户输入
+            $this->info("\n该方法需要以下参数：");
+            $args = [];
+            foreach ($parameters as $param) {
+                $paramName = $param->getName();
+                $paramType = $param->getType() ? $param->getType()->getName() : 'mixed';
+                $defaultValue = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
+                
+                $prompt = "请输入 {$paramName}";
+                if ($paramType !== 'mixed') {
+                    $prompt .= " ({$paramType})";
+                }
+                if ($defaultValue !== null) {
+                    $prompt .= " [默认: {$defaultValue}]";
+                }
+                $prompt .= ": ";
+
+                $value = $this->ask($prompt, $defaultValue);
+                
+                // 类型转换
+                if ($paramType === 'int' || $paramType === 'integer') {
+                    $value = (int)$value;
+                } elseif ($paramType === 'float' || $paramType === 'double') {
+                    $value = (float)$value;
+                } elseif ($paramType === 'bool' || $paramType === 'boolean') {
+                    $value = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+                }
+                
+                $args[] = $value;
+            }
+
+            $this->info("\n正在调用方法...");
+            $result = call_user_func_array([$this, $methodName], $args);
+            $this->displayResult($result);
+        }
+
+        return 0;
+    }
+
+    /**
+     * 判断并处理用户VIP等级升降级（默认执行的方法）
+     * 
+     * @return int
+     */
+    protected function checkLevel()
+    {
+        $userId = $this->option('user_id');
         
         if ($userId) {
             // 处理单个用户
@@ -100,6 +191,102 @@ class Vip extends Command
         }
         
         return 0;
+    }
+
+    /**
+     * 显示所有可用方法
+     */
+    protected function showAvailableMethods()
+    {
+        $this->info('可用方法：');
+        $reflection = new ReflectionClass($this);
+        $methods = $reflection->getMethods(ReflectionMethod::IS_PROTECTED | ReflectionMethod::IS_PUBLIC);
+        
+        foreach ($methods as $method) {
+            $methodName = $method->getName();
+            if (in_array($methodName, ['__construct', 'handle', 'getMethodDescription', 'displayResult', 'formatData', 'showAvailableMethods'])) {
+                continue;
+            }
+            $description = $this->getMethodDescription($methodName);
+            $this->line("  - {$methodName}: {$description}");
+        }
+    }
+
+    /**
+     * 获取方法描述
+     *
+     * @param string $methodName
+     * @return string
+     */
+    protected function getMethodDescription($methodName)
+    {
+        if (isset($this->methodDescriptions[$methodName])) {
+            return $this->methodDescriptions[$methodName];
+        }
+
+        // 尝试从方法的注释中获取描述
+        $reflection = new ReflectionClass($this);
+        $method = $reflection->getMethod($methodName);
+        $docComment = $method->getDocComment();
+        
+        if ($docComment) {
+            // 提取第一行注释作为描述
+            $lines = explode("\n", $docComment);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (strpos($line, '*') === 0) {
+                    $line = trim(substr($line, 1));
+                    if (!empty($line) && strpos($line, '@') !== 0 && strpos($line, '/') !== 0) {
+                        return $line;
+                    }
+                }
+            }
+        }
+
+        return '无描述';
+    }
+
+    /**
+     * 显示方法执行结果
+     *
+     * @param mixed $result
+     */
+    protected function displayResult($result)
+    {
+        if (is_array($result)) {
+            if (isset($result['code'])) {
+                if ($result['code'] == 200) {
+                    $this->info("执行成功：{$result['message']}");
+                    if (isset($result['data'])) {
+                        $this->table(['字段', '值'], $this->formatData($result['data']));
+                    }
+                } else {
+                    $this->error("执行失败：{$result['message']}");
+                }
+            } else {
+                $this->info('执行结果：');
+                $this->line(json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+            }
+        } elseif (is_string($result)) {
+            $this->info("执行结果：{$result}");
+        } else {
+            $this->info('执行结果：' . var_export($result, true));
+        }
+    }
+
+    /**
+     * 格式化数据为表格格式
+     *
+     * @param array $data
+     * @return array
+     */
+    protected function formatData($data)
+    {
+        $rows = [];
+        foreach ($data as $key => $value) {
+            $rows[] = [$key, is_array($value) ? json_encode($value, JSON_UNESCAPED_UNICODE) : $value];
+        }
+        return $rows;
     }
 
     /**
