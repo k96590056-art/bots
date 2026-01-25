@@ -1,4 +1,4 @@
-在z<?php
+<?php
 
 namespace App\Console\Commands;
 
