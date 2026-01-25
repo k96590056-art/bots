@@ -7,6 +7,7 @@ use App\Models\GameList;
 use App\Models\Users;
 use App\Models\User_Api;
 use App\Services\DbgmagService;
+use App\Services\DbService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -88,7 +89,43 @@ class TestController extends Controller
             $page = (int) $request->input('page', 1);
             $size = (int) $request->input('size', 100);
             $display_language = $request->input('displayLanguage', '');
-            $currency = $request->input('currency', '');
+            $currency = $request->input('currency', 'USDT');
+
+            // 特殊处理：当 type 是 'db' 时，使用 DbService 的 getGameList 方法
+            if ($type === 'db') {
+                $dbService = new DbService();
+                
+                // DbService 的 getGameList 方法参数：venueCode, currency, pageNum, pageSize
+                // venueCode 对应 providerCode
+                // pageNum 从 1 开始转换为从 0 开始（DbService 使用 0 作为第一页）
+                $venueCode = $provider_code;
+                $pageNum = max(0, $page - 1); // 将页码从1开始转换为0开始
+                $pageSize = $size;
+                
+                $result = $dbService->getGameList($venueCode, $currency, $pageNum, $pageSize);
+                
+                // 处理返回结果
+                if ($result['code'] == 200) {
+                    $games = $result['data'] ?? [];
+                    
+                    // 将游戏数据入库
+                    if (!empty($games)) {
+                        $saveResult = $this->saveDbGamesToDatabase($games, $venueCode);
+                    }
+                    
+                    return $this->returnMsg(200, [
+                        'total' => count($games),
+                        'pages' => 1,
+                        'size' => $pageSize,
+                        'current' => $page,
+                        'games' => $games,
+                        'traceId' => $result['traceId'] ?? '',
+                        'database' => $saveResult ?? []
+                    ], '获取游戏列表成功');
+                } else {
+                    return $this->returnMsg(201, [], $result['message'] ?? '获取游戏列表失败');
+                }
+            }
 
             // 检查是否有 getGameList 方法
             if (!method_exists($service, 'getGameList')) {
@@ -1019,6 +1056,158 @@ class TestController extends Controller
             Log::error('GMAG游戏数据入库处理异常', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
+            ]);
+        }
+        
+        return [
+            'inserted_count' => count($inserted),
+            'skipped_count' => count($skipped),
+            'failed_count' => count($failed),
+            'inserted' => $inserted,
+            'skipped' => $skipped,
+            'failed' => $failed
+        ];
+    }
+
+    /**
+     * 将DB游戏数据保存到 game_lists 表
+     * 
+     * @param array $games 游戏列表数组
+     * @param string $venueCode 场馆编码
+     * @return array 返回入库统计信息
+     */
+    private function saveDbGamesToDatabase($games, $venueCode)
+    {
+        $inserted = []; // 成功入库的游戏
+        $skipped = [];  // 跳过的游戏（已存在）
+        $failed = [];   // 失败的游戏
+        
+        try {
+            // 查询数据库中child_id为空或0且venue_code=venueCode的数据，获取platform_name和category_id
+            $baseGame = GameList::where(function($query) {
+                    $query->whereNull('child_id')
+                          ->orWhere('child_id', 0);
+                })
+                ->where('venue_code', $venueCode)
+                ->first();
+            
+            $basePlatformName = $baseGame->platform_name ?? '';
+            $baseCategoryId = $baseGame->category_id ?? '';
+            
+            // 如果没有找到基础数据，记录错误并返回
+            if (empty($basePlatformName)) {
+                Log::warning('DB游戏入库失败：未找到基础平台数据', [
+                    'venue_code' => $venueCode
+                ]);
+                return [
+                    'inserted_count' => 0,
+                    'skipped_count' => 0,
+                    'failed_count' => count($games),
+                    'inserted' => [],
+                    'skipped' => [],
+                    'failed' => ['reason' => '未找到基础平台数据（venue_code=' . $venueCode . '）']
+                ];
+            }
+            
+            $total = count($games);
+            $current = 0;
+            
+            foreach ($games as $game) {
+                $current++;
+                
+                // 检查游戏项是否为数组或对象
+                if (!is_array($game) && !is_object($game)) {
+                    $failed[] = [
+                        'game_code' => 'unknown',
+                        'reason' => '游戏数据格式错误'
+                    ];
+                    continue;
+                }
+                
+                // 转换为数组（如果是对象）
+                $gameArray = is_array($game) ? $game : (array)$game;
+                
+                // 获取游戏数据（根据DB接口返回的字段名）
+                $gameId = $gameArray['gameId'] ?? $gameArray['game_id'] ?? '';
+                $gameName = $gameArray['gameName'] ?? $gameArray['game_name'] ?? '';
+                
+                if (empty($gameId) || empty($gameName)) {
+                    $failed[] = [
+                        'game_code' => $gameId ?: 'unknown',
+                        'reason' => '缺少必要字段（gameId或gameName）'
+                    ];
+                    continue;
+                }
+                
+                // 检查是否已存在（根据 venue_code 和 game_code）
+                $exists = GameList::where('venue_code', $venueCode)
+                    ->where('game_code', $gameId)
+                    ->exists();
+                
+                if ($exists) {
+                    $skipped[] = [
+                        'game_code' => $gameId,
+                        'name' => $gameName
+                    ];
+                    continue;
+                }
+                
+                // 准备插入数据
+                $data = [
+                    'venue_code' => $venueCode,
+                    'name' => $gameName,
+                    'game_code' => $gameId,
+                    'platform_name' => $basePlatformName,
+                    'category_id' => $baseCategoryId,
+                    'child_id' => 18,
+                    'with_api' => 'db',
+                    'transferstatus' => 1,
+                    'site_state' => 1,
+                    'app_state' => 1
+                ];
+                
+                // 插入数据库
+                try {
+                    GameList::create($data);
+                    $inserted[] = [
+                        'game_code' => $gameId,
+                        'name' => $gameName
+                    ];
+                    
+                    Log::info('DB游戏入库成功', [
+                        'game_code' => $gameId,
+                        'name' => $gameName,
+                        'venue_code' => $venueCode
+                    ]);
+                } catch (\Exception $e) {
+                    $failed[] = [
+                        'game_code' => $gameId,
+                        'name' => $gameName,
+                        'reason' => $e->getMessage()
+                    ];
+                    
+                    Log::error('DB游戏入库失败', [
+                        'game_code' => $gameId,
+                        'name' => $gameName,
+                        'venue_code' => $venueCode,
+                        'error' => $e->getMessage()
+                    ]);
+                }
+            }
+            
+            Log::info('DB游戏数据入库完成', [
+                'total' => count($games),
+                'inserted' => count($inserted),
+                'skipped' => count($skipped),
+                'failed' => count($failed),
+                'venue_code' => $venueCode
+            ]);
+            
+        } catch (\Exception $e) {
+            Log::error('DB游戏数据入库处理异常', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'venue_code' => $venueCode
             ]);
         }
         

@@ -56,6 +56,7 @@ Route::post('/uservip','Api\IndexController@uservip');
 Route::post('/article','Api\IndexController@article');
 Route::any('/pay/jc_notify','Api\PayController@jcNotify');
 Route::any('/pay/cgpay_notify','Api\PayController@cgpay_notify');
+Route::any('/pay/rxpay_notify','Api\PayController@rxpay_notify');
 Route::any('/credit','Api\IndexController@credit');
 Route::post('/gamelistBycode','Api\IndexController@gamelistBycode');
 Route::get('/sponsorList','Api\IndexController@getSponsorList'); // 获取赞助商列表

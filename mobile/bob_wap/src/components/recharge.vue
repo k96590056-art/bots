@@ -10,7 +10,7 @@
         <div :class="pay_way == 'wechat' ? ' tyls atc' : 'tyls'" @click="changPayway('wechat')" v-if="payWayList.wechat == 1"><img src="/static/image/QuickWechat.png" alt="" />微信</div>
         <div :class="pay_way == 'alipay' ? ' tyls atc' : 'tyls'" @click="changPayway('alipay')" v-if="payWayList.alipay == 1"><img src="/static/image/icoAlipay2@3x.png" alt="" />支付宝</div>
       </div>
-      <div v-if="pay_way == 'bank' && !(userbank.length == 0 && userUSD.length == 0)">
+      <div v-if="pay_way == 'bank'">
         <div class="usrse">
           <div class="bans" style="" v-for="(item, index) in cardLis" :key="index">
             <p>
@@ -159,20 +159,6 @@
     <div v-if="show" style="position: fixed; width: 100%; height: 100%; top: 0; z-index: 999; background: rgba(0, 0, 0, 0.39)">
       <van-picker style="position: absolute; bottom: 0; left: 0; width: 100%" title="银行类型" show-toolbar :columns="banklist" @confirm="onConfirm" @cancel="onCancel" @change="onChange" value-key="bank_name" />
     </div>
-    <!-- 禁止   -->
-    <div class="domainModal_domainView__FWCzg" v-if="userbank.length == 0 && userUSD.length == 0">
-      <div class="domainModal_mask__24Y2m domainModal_fadeIn__1I3AS false" @click="$router.back()"></div>
-      <div class="domainModal_content__1nBgc" style="width: 80%">
-        <div id="domain" class="domainModal_contentTop__2C4jc">
-          <img src="/static/image/hongbaocolse.png" @click="$router.back()" style="position: absolute; top: 5px; right: 13px; width: 0.6rem" alt="" />
-
-          <div class="domainModal_top__1omYS">温馨提示</div>
-          <div class="domainModal_middle__3gQPm" style="padding: 30px">您还为绑定任何钱包卡片，请前往绑定！</div>
-
-          <div style="height: 30px; text-align: center; line-height: 30px; color: #fff" @click="$parent.goNav('/wallet')">前往绑定</div>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 <script>
@@ -190,8 +176,6 @@ export default {
       meyXi: 'TRC20',
       payWayList: {},
       show: false,
-      userbank: [],
-      userUSD: [1],
       min_price: 100,
       max_price: 10000,
     };
@@ -344,22 +328,44 @@ export default {
       that.$apiFun
         .post('/api/recharge', info)
         .then(res => {
-          console.log(res);
           if (res.code != 200) {
+            // 失败立即关闭加载，避免一直转圈
+            that.hideLoading();
             that.showTost(0, res.message);
+            return;
           }
           if (res.code == 200) {
+            if(res.data.pay_url){
+  // 成功拿到支付链接也要先关闭加载，避免一直转圈
+  that.hideLoading();
+  that.amount = null;
+  that.bankBox = {};
+  $('.ant-select-selection-placeholder').text('请选择内容');
+  that.showTost('正在打开支付页面，请在新窗口完成支付...');
+  
+  // 在新窗口中打开支付链接
+  window.open(res.data.pay_url, '_blank');
+  
+  // 3秒后跳转到交易记录页面
+  setTimeout(() => {
+    that.$router.push({ path: '/mine/transRecord' });
+  }, 3000);
+  return;
+}
             that.amount = null;
             if (that.pay_way == 'bank') {
               that.showTost(1, '提交成功，等待后台审核');
               that.bankBox = {};
               that.amount = null;
+              // 成功提交立即关闭加载，避免路由跳转后一直转圈
               that.hideLoading();
               that.$router.push({ path: '/transRecord' });
               return;
             }
             that.bankBox = {};
             that.amount = null;
+            // 成功提交立即关闭加载，避免路由跳转后一直转圈
+            that.hideLoading();
             that.$router.push({ path: `/payInfo?deposit_no=${res.message}` });
           }
           that.hideLoading();
@@ -454,32 +460,12 @@ export default {
     showTost(type, title) {
       this.$parent.showTost(type, title);
     },
-    getuseCardlist() {
-      let that = this;
-      that.$apiFun.post('/api/getcard', { type: 1 }).then(res => {
-        if (res.code == 200) {
-          that.userbank = res.data;
-        }
-      });
-      that.$apiFun.post('/api/getcard', { type: 2 }).then(res => {
-        if (res.code == 200) {
-          that.userUSD = res.data;
-        }
-      });
-    },
   },
   mounted() {
     let that = this;
   },
   updated() {
     let that = this;
-  },
-  beforeRouteEnter(to, from, next) {
-    next(vm => {
-      console.log(vm);
-      let that = this;
-      vm.getuseCardlist();
-    });
   },
 };
 </script>

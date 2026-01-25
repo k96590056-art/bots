@@ -1241,22 +1241,24 @@ export default {
           transform: translateY(-50%);
           display: flex;
           align-items: baseline;
+          padding: 2px 10px 5px;
+          border-radius: 5px;
 
           .rebate-label {
-            font-size: 1.8vw;
+            font-size: calc(1.8vw - 2px);
             color: #333;
             font-weight: 700;
             margin-right: 0.3vw;
           }
 
           .rebate-value {
-            font-size: 2.8vw;
+            font-size: calc(2.8vw - 2px);
             font-weight: 700;
             color: #3b7ddd;
 
             em {
               font-style: normal;
-              font-size: 2.2vw;
+              font-size: calc(2.2vw - 2px);
             }
           }
         }

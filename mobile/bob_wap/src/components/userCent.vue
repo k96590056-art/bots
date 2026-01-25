@@ -1,9 +1,9 @@
 <template>
-  <div class="setting-page">
+  <div class="setting-page" :class="{ dark: nightMode }">
     <!-- 顶部导航 -->
     <div class="page-header">
       <div class="back-btn" @click="$router.back()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="#333" stroke-width="2" width="20" height="20">
+        <svg viewBox="0 0 24 24" fill="none" :stroke="nightMode ? '#fff' : '#333'" stroke-width="2" width="20" height="20">
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </div>
@@ -24,7 +24,7 @@
       <div class="setting-item" @click="$parent.goNav('/password?type=1')">
         <span class="item-label">修改密码</span>
         <div class="item-right">
-          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+          <svg viewBox="0 0 24 24" fill="none" :stroke="nightMode ? '#888' : '#ccc'" stroke-width="2" width="16" height="16">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </div>
@@ -33,7 +33,7 @@
         <span class="item-label">二级密码</span>
         <div class="item-right">
           <span class="item-status">{{ hasSecondPwd ? '已设置' : '未设置' }}</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="#ccc" stroke-width="2" width="16" height="16">
+          <svg viewBox="0 0 24 24" fill="none" :stroke="nightMode ? '#888' : '#ccc'" stroke-width="2" width="16" height="16">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </div>
@@ -68,6 +68,11 @@ export default {
   methods: {
     toggleNightMode(val) {
       localStorage.setItem('nightMode', val);
+      // 全局生效：同步更新 body class 并广播事件
+      try {
+        document.body.classList.toggle('dark', !!val);
+        window.dispatchEvent(new Event('nightModeChanged'));
+      } catch (e) {}
     },
     handleLogout() {
       let that = this;
@@ -94,6 +99,12 @@ export default {
 .setting-page {
   min-height: 100vh;
   background: #f5f5f5;
+  color: #333;
+
+  &.dark {
+    background: #111;
+    color: #fff;
+  }
 }
 
 // 顶部导航
@@ -106,6 +117,11 @@ export default {
   background: #fff;
   border-bottom: 1px solid #eee;
 
+  .setting-page.dark & {
+    background: #1a1a1a;
+    border-bottom: 1px solid #2a2a2a;
+  }
+
   .back-btn {
     width: 30px;
     display: flex;
@@ -116,6 +132,10 @@ export default {
     font-size: 17px;
     font-weight: 500;
     color: #333;
+
+    .setting-page.dark & {
+      color: #fff;
+    }
   }
 
   .header-right {
@@ -129,6 +149,10 @@ export default {
   margin: 10px 15px;
   border-radius: 10px;
   overflow: hidden;
+
+  .setting-page.dark & {
+    background: #1e1e1e;
+  }
 }
 
 .setting-item {
@@ -138,6 +162,10 @@ export default {
   padding: 16px 15px;
   border-bottom: 1px solid #f0f0f0;
 
+  .setting-page.dark & {
+    border-bottom: 1px solid #2a2a2a;
+  }
+
   &.no-border {
     border-bottom: none;
   }
@@ -145,6 +173,10 @@ export default {
   .item-label {
     font-size: 15px;
     color: #333;
+
+    .setting-page.dark & {
+      color: #fff;
+    }
   }
 
   .item-right {
@@ -155,6 +187,10 @@ export default {
       font-size: 14px;
       color: #999;
       margin-right: 5px;
+
+      .setting-page.dark & {
+        color: #bbb;
+      }
     }
   }
 }
@@ -167,5 +203,9 @@ export default {
   text-align: center;
   font-size: 16px;
   color: #333;
+
+  .setting-page.dark & {
+    color: #fff;
+  }
 }
 </style>

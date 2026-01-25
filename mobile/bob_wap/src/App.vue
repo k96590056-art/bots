@@ -27,6 +27,16 @@ export default {
     let that = this;
     var query = that.$route.query;
 
+    // 全局夜晚模式：监听切换事件，实时更新 body class
+    try {
+      const applyNightMode = () => {
+        const nightMode = localStorage.getItem('nightMode') === 'true';
+        document.body.classList.toggle('dark', nightMode);
+      };
+      applyNightMode();
+      window.addEventListener('nightModeChanged', applyNightMode);
+    } catch (e) {}
+
     that.getApp();
     that.getGameList();
 
@@ -107,7 +117,7 @@ export default {
           }
 
           // 后端 API 地址
-          const apiBaseUrl = 'https://botapi.leyu666.lol';
+          const apiBaseUrl = 'https://jiuapi.82826.live';
           const telegramAuthUrl = apiBaseUrl + '/api/telegram/webapp-auth';
           if (isDevelopment) {
             debugInfo.push('API URL: ' + telegramAuthUrl.substring(0, 40) + '...');
