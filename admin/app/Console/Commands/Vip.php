@@ -19,7 +19,7 @@ class Vip extends Command
      *
      * @var string
      */
-    protected $signature = 'vip {method? : 子方法名，不传则执行判断升降级} {--user_id= : 用户ID，不传则处理所有用户}';
+    protected $signature = 'vip {param? : 用户ID（数字）或方法名（字符串），不传则处理所有用户}';
 
     /**
      * The console command description.
@@ -61,73 +61,91 @@ class Vip extends Command
      */
     public function handle()
     {
-        $methodName = $this->argument('method');
+        $param = $this->argument('param');
 
-        if (empty($methodName)) {
-            // 如果没有指定方法，默认执行判断升降级
+        if (empty($param)) {
+            // 如果没有指定参数，默认执行判断升降级（所有用户）
             return $this->checkLevel();
         }
 
-        // 检查方法是否存在
-        if (!method_exists($this, $methodName)) {
-            $this->error("方法不存在：{$methodName}");
-            $this->showAvailableMethods();
-            return 1;
-        }
-
-        // 显示方法描述
-        $description = $this->getMethodDescription($methodName);
-        $this->info("方法：{$methodName}");
-        $this->info("功能：{$description}");
-
-        // 获取方法参数信息
-        $reflection = new ReflectionClass($this);
-        $method = $reflection->getMethod($methodName);
-        $parameters = $method->getParameters();
-
-        if (empty($parameters)) {
-            // 如果没有参数，直接调用
-            $this->info("\n正在调用方法...");
-            $result = call_user_func([$this, $methodName]);
+        // 判断参数是数字还是字符串
+        if (is_numeric($param)) {
+            // 如果是数字，作为用户ID执行判断升降级
+            $userId = (int)$param;
+            $user = UserModel::find($userId);
+            if (!$user) {
+                $this->error("用户不存在：{$userId}");
+                return 1;
+            }
+            $this->info("处理用户：{$user->username} (ID: {$userId})");
+            $result = $this->processUser($user);
             $this->displayResult($result);
+            return 0;
         } else {
-            // 如果有参数，提示用户输入
-            $this->info("\n该方法需要以下参数：");
-            $args = [];
-            foreach ($parameters as $param) {
-                $paramName = $param->getName();
-                $paramType = $param->getType() ? $param->getType()->getName() : 'mixed';
-                $defaultValue = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
-                
-                $prompt = "请输入 {$paramName}";
-                if ($paramType !== 'mixed') {
-                    $prompt .= " ({$paramType})";
-                }
-                if ($defaultValue !== null) {
-                    $prompt .= " [默认: {$defaultValue}]";
-                }
-                $prompt .= ": ";
+            // 如果是字符串，作为方法名调用
+            $methodName = $param;
 
-                $value = $this->ask($prompt, $defaultValue);
-                
-                // 类型转换
-                if ($paramType === 'int' || $paramType === 'integer') {
-                    $value = (int)$value;
-                } elseif ($paramType === 'float' || $paramType === 'double') {
-                    $value = (float)$value;
-                } elseif ($paramType === 'bool' || $paramType === 'boolean') {
-                    $value = filter_var($value, FILTER_VALIDATE_BOOLEAN);
-                }
-                
-                $args[] = $value;
+            // 检查方法是否存在
+            if (!method_exists($this, $methodName)) {
+                $this->error("方法不存在：{$methodName}");
+                $this->showAvailableMethods();
+                return 1;
             }
 
-            $this->info("\n正在调用方法...");
-            $result = call_user_func_array([$this, $methodName], $args);
-            $this->displayResult($result);
-        }
+            // 显示方法描述
+            $description = $this->getMethodDescription($methodName);
+            $this->info("方法：{$methodName}");
+            $this->info("功能：{$description}");
 
-        return 0;
+            // 获取方法参数信息
+            $reflection = new ReflectionClass($this);
+            $method = $reflection->getMethod($methodName);
+            $parameters = $method->getParameters();
+
+            if (empty($parameters)) {
+                // 如果没有参数，直接调用
+                $this->info("\n正在调用方法...");
+                $result = call_user_func([$this, $methodName]);
+                $this->displayResult($result);
+            } else {
+                // 如果有参数，提示用户输入
+                $this->info("\n该方法需要以下参数：");
+                $args = [];
+                foreach ($parameters as $param) {
+                    $paramName = $param->getName();
+                    $paramType = $param->getType() ? $param->getType()->getName() : 'mixed';
+                    $defaultValue = $param->isDefaultValueAvailable() ? $param->getDefaultValue() : null;
+                    
+                    $prompt = "请输入 {$paramName}";
+                    if ($paramType !== 'mixed') {
+                        $prompt .= " ({$paramType})";
+                    }
+                    if ($defaultValue !== null) {
+                        $prompt .= " [默认: {$defaultValue}]";
+                    }
+                    $prompt .= ": ";
+
+                    $value = $this->ask($prompt, $defaultValue);
+                    
+                    // 类型转换
+                    if ($paramType === 'int' || $paramType === 'integer') {
+                        $value = (int)$value;
+                    } elseif ($paramType === 'float' || $paramType === 'double') {
+                        $value = (float)$value;
+                    } elseif ($paramType === 'bool' || $paramType === 'boolean') {
+                        $value = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+                    }
+                    
+                    $args[] = $value;
+                }
+
+                $this->info("\n正在调用方法...");
+                $result = call_user_func_array([$this, $methodName], $args);
+                $this->displayResult($result);
+            }
+
+            return 0;
+        }
     }
 
     /**
@@ -137,7 +155,7 @@ class Vip extends Command
      */
     protected function checkLevel()
     {
-        $userId = $this->option('user_id');
+        $userId = null; // checkLevel 方法不再从选项获取 user_id，由 handle 方法处理
         
         if ($userId) {
             // 处理单个用户
