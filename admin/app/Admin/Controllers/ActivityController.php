@@ -26,6 +26,7 @@ class ActivityController extends AdminController
             $grid->column('type_data.name','活动类型');
             $grid->column('title');
             $grid->column('entitle');
+            $grid->column('jump_url','跳转链接');
             //$grid->column('content');
             $grid->column('apply_count');
             //$grid->column('banner');
@@ -58,6 +59,7 @@ class ActivityController extends AdminController
             $show->field('type');
             $show->field('title');
             $show->field('entitle');
+            $show->field('jump_url');
             $show->field('content');
             $show->field('apply_count');
             $show->field('banner')->image();
@@ -87,6 +89,7 @@ class ActivityController extends AdminController
             $form->select('type')->options($options)->required();
             $form->text('title')->required();
             $form->text('entitle')->required();
+            $form->text('jump_url','跳转链接')->help('非必填，可填写相对路径或完整链接');
             $form->editor('content')->required();
             $form->editor('encontent')->required();
             $form->editor('memo','活动条款与规则')->required();

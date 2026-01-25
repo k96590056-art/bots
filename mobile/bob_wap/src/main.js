@@ -12,12 +12,19 @@ import store from '@/store/index.js'
 import  "amfe-flexible";
 import Vant from 'vant';
 import 'vant/lib/index.css';
+import './assets/dark-mode.css';
 Vue.use(Vant);
 
 // 全局注册
 Vue.prototype.$apiFun = apiFun;//请求接口api
 
 Vue.config.productionTip = false
+
+// 全局夜晚模式：根据 localStorage.nightMode 给 body 打标
+try {
+  const nightMode = localStorage.getItem('nightMode') === 'true';
+  document.body.classList.toggle('dark', nightMode);
+} catch (e) {}
 
 router.afterEach((to, from, next) => {
   

@@ -175,6 +175,8 @@ export default {
   cursor: pointer;
 
   .service-info {
+    border-radius: 8px;
+    padding: 10px 15px;
     .service-title {
       font-size: 16px;
       font-weight: 500;

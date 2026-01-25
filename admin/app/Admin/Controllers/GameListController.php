@@ -11,6 +11,7 @@ use App\Services\TgService;
 use App\Admin\Tools\UrlEdit;
 use App\Models\GameCategory;
 use Illuminate\Http\Request;
+use App\Models\GameList as GameListModel;
 class GameListController extends AdminController
 {
     /**
@@ -171,6 +172,22 @@ class GameListController extends AdminController
             $grid->column('game_code');
             $grid->column('venue_code', '接口编码');
             $grid->column('with_api', '所属接口')->using($this->getApiOptions());
+            // 所属场馆：表中存的是场馆(game_lists.id)的引用，这里展示为“场馆名(平台)”
+            $grid->column('changguan', '所属场馆')->display(function ($venueId) {
+                $venueId = (int)($venueId ?? 0);
+                if ($venueId <= 0) {
+                    return '-';
+                }
+
+                static $cache = [];
+                if (!array_key_exists($venueId, $cache)) {
+                    $venue = GameListModel::query()->select(['id', 'name', 'platform_name'])->find($venueId);
+                    $cache[$venueId] = $venue
+                        ? ($venue->name . ' (' . $venue->platform_name . ')')
+                        : ('#' . $venueId);
+                }
+                return $cache[$venueId];
+            });
             //$grid->column('game_icon')->image('',100,100);
             // $grid->column('name_en');
             // $grid->column('keywords');

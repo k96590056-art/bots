@@ -16,12 +16,15 @@ use App\Models\Usersmoney;
 use App\Models\Withdraw;
 use App\Models\User;
 use App\Models\UserVip;
+use App\Services\RxPayService;
 use App\Services\TgService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use App\Models\Userredpacket;
 use App\Models\RedEnvelopes;
 use Illuminate\Support\Facades\Log;
 use App\Models\User_Api;
+use App\Models\GameList;
 use App\Services\PayService;
 use App\Services\DbevoService;
 use App\Services\DbkaiyuanService;
@@ -271,41 +274,106 @@ class PayController extends Controller
         $catepay = $data['catepay'] ?? '';
         unset($data['catepay']);
         unset($data['paytype']);
-
+        $usdtinfo = CodePay::where('status',1)->where('mch_id',$data['pay_way'])->first();
         switch ($data['pay_way']) {
             case "bank": //提交后台审核
                 $data['pay_way'] =1;
                 $data['cash_fee'] = 0;
-                $data['real_money'] = $data['amount'] - $data['cash_fee'];
-                $min_price = SystemConfig::getValue('min_price');
-                $max_price = SystemConfig::getValue('max_price');
-                if ($data['amount'] > $max_price || $data['amount'] < $min_price) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
-                $res = Recharge::create($data);
-                return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
-                break;
-            case "alipay": //提交后台审核  alipay
-                $data['cash_fee'] = 0;
-                $data['pay_way'] =3;
-                $usdtinfo = CodePay::where('status',1)->where('id',4)->first();
                 if(!$usdtinfo){
                      return $this->returnMsg(500,[],'系统维护中...');
                 }
                 if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
                 $data['real_money'] = $data['amount'] - $data['cash_fee'];
                 $res = Recharge::create($data);
-                 return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
+                if (!$res) {
+                    return $this->returnMsg(500,[],'创建订单失败');
+                }
+                $rxPay = new RxPayService();
+                $notifyUrl = url('/api/pay/rxpay_notify');
+                $returnUrl = url('/');
+                $rxResult = $rxPay->createPayOrder($data['out_trade_no'], $data['amount'], $usdtinfo["key"], $notifyUrl, $returnUrl);
+                if ((int)($rxResult['code'] ?? 0) !== 1 || empty($rxResult['pay_url'])) {
+                    // 下单失败：标记为失败，避免前端一直轮询
+                    $res->state = 3;
+                    $res->info = 'rxpay_create_failed:' . (string)($rxResult['msg'] ?? '');
+                    $res->save();
+                    return $this->returnMsg(500, ['rx' => $rxResult], '代收下单失败');
+                }
+                return $this->returnMsg(200, ['pay_url' => $rxResult['pay_url'], 'out_trade_no' => $data['out_trade_no']], $data['out_trade_no']);
                 break;
-            case "wxpay": //提交后台审核  wxpay
+            case "bankcode": //提交后台审核
+                $data['pay_way'] =2;
+                $data['cash_fee'] = 0;
+                if(!$usdtinfo){
+                     return $this->returnMsg(500,[],'系统维护中...');
+                }
+                if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
+                $data['real_money'] = $data['amount'] - $data['cash_fee'];
+                $res = Recharge::create($data);
+                if (!$res) {
+                    return $this->returnMsg(500,[],'创建订单失败');
+                }
+                $rxPay = new RxPayService();
+                $notifyUrl = url('/api/pay/rxpay_notify');
+                $returnUrl = url('/');
+                $rxResult = $rxPay->createPayOrder($data['out_trade_no'], $data['amount'], $usdtinfo["key"], $notifyUrl, $returnUrl);
+                if ((int)($rxResult['code'] ?? 0) !== 1 || empty($rxResult['pay_url'])) {
+                    // 下单失败：标记为失败，避免前端一直轮询
+                    $res->state = 3;
+                    $res->info = 'rxpay_create_failed:' . (string)($rxResult['msg'] ?? '');
+                    $res->save();
+                    return $this->returnMsg(500, ['rx' => $rxResult], '代收下单失败');
+                }
+                return $this->returnMsg(200, ['pay_url' => $rxResult['pay_url'], 'out_trade_no' => $data['out_trade_no']], $data['out_trade_no']);
+                break;
+            case "alipay":
+                $data['cash_fee'] = 0;
+                $data['pay_way'] =3;
+                if(!$usdtinfo){
+                     return $this->returnMsg(500,[],'系统维护中...');
+                }
+                if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
+                $data['real_money'] = $data['amount'] - $data['cash_fee'];
+                $res = Recharge::create($data);
+                if (!$res) {
+                    return $this->returnMsg(500,[],'创建订单失败');
+                }
+                $rxPay = new RxPayService();
+                $notifyUrl = url('/api/pay/rxpay_notify');
+                $returnUrl = url('/');
+                $rxResult = $rxPay->createPayOrder($data['out_trade_no'], $data['amount'], $usdtinfo["key"], $notifyUrl, $returnUrl);
+                if ((int)($rxResult['code'] ?? 0) !== 1 || empty($rxResult['pay_url'])) {
+                    // 下单失败：标记为失败，避免前端一直轮询
+                    $res->state = 3;
+                    $res->info = 'rxpay_create_failed:' . (string)($rxResult['msg'] ?? '');
+                    $res->save();
+                    return $this->returnMsg(500, ['rx' => $rxResult], '代收下单失败');
+                }
+                return $this->returnMsg(200, ['pay_url' => $rxResult['pay_url'], 'out_trade_no' => $data['out_trade_no']], $data['out_trade_no']);
+                break;
+            case "wxpay":
                 $data['cash_fee'] = 0;
                 $data['pay_way'] =4;
                 $data['real_money'] = $data['amount'] - $data['cash_fee'];
-                $usdtinfo = CodePay::where('status',1)->where('id',3)->first();
                 if(!$usdtinfo){
                      return $this->returnMsg(500,[],'系统维护中...');
                 }
                 if ($data['amount'] > $usdtinfo['max_price'] || $data['amount'] < $usdtinfo['min_price']) return $this->returnMsg(500,[],'充值金额不在该通道范围中');
                 $res = Recharge::create($data);
-                return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
+                if (!$res) {
+                    return $this->returnMsg(500,[],'创建订单失败');
+                }
+                $rxPay = new RxPayService();
+                $notifyUrl = url('/api/pay/rxpay_notify');
+                $returnUrl = url('/');
+                $rxResult = $rxPay->createPayOrder($data['out_trade_no'], $data['amount'], $usdtinfo["key"], $notifyUrl, $returnUrl);
+                if ((int)($rxResult['code'] ?? 0) !== 1 || empty($rxResult['pay_url'])) {
+                    $res->state = 3;
+                    $res->info = 'rxpay_create_failed:' . (string)($rxResult['msg'] ?? '');
+                    $res->save();
+                    return $this->returnMsg(500, ['rx' => $rxResult], '代收下单失败');
+                }
+                return $this->returnMsg(200, ['pay_url' => $rxResult['pay_url'], 'out_trade_no' => $data['out_trade_no']], $data['out_trade_no']);
                 break;
            case "usdt": //提交后台审核  USDT
                 $data['cash_fee'] = 0;
@@ -324,6 +392,9 @@ class PayController extends Controller
                 return $this->returnMsg($res ? 200 : 500,[],$data['out_trade_no']);
                 break;
             case 'ebpay':
+                $digital_rmb = [
+                    ['name' => '数字人民币', 'code' => 661, 'range' => [100, 5000]],
+                ];
                 $data['bank'] = 'ebpay';
         	    $data['pay_way'] = 7;
                 $data['cash_fee'] = 0;
@@ -357,32 +428,10 @@ class PayController extends Controller
             $max = SystemConfig::getValue('erc20_max_amount') ?? 0;
             return $this->returnMsg(200, ['min_price' => (float)$min, 'max_price' => (float)$max]);
         }
-        switch ($type) {
-            case 'bank':
-                $pay_way = 0;
-                break;
-            case 'alipay':
-                $pay_way = 4;
-                break;
-            case 'wechat':
-                $pay_way = 3;
-                break;
-            case 'usdt-erc20':
-                $pay_way = 7;
-                break;
-            case 'usdt-trc20':
-                $pay_way = 5;
-                break;
-            case 'ebpay':
-                $pay_way = 8;
-                break;
-            default:
-                $pay_way = 0;
-                break;
-        }
         $data = ['min_price' => 0,'max_price' => 0];
-        if ($pay_way > 0) {
-            $range = CodePay::where('id',$pay_way)->select('min_price','max_price')->first();
+        $type = $type == "wechat" ? "wxpay" : $type;
+        if ($type) {
+            $range = CodePay::where('mch_id',$type)->select('min_price','max_price')->first();
             if ($range) $data = ['min_price' => $range->min_price,'max_price' => $range->max_price];
         } else {
             $min_price = SystemConfig::getValue('min_price') ?? 0;
@@ -833,7 +882,32 @@ class PayController extends Controller
 					}
 				}
 				$service = new $serviceClass();
-				$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
+				
+				// 兼容不同平台 withdrawal 方法签名
+				if (strtolower($withApi) === 'db') {
+					// DbService::withdrawal($username, $amount, $serialNo, $venueCode, $currency)
+					// 先根据 user_api 表的 api_code 去 game_lists 获取 venue_code
+					$gameList = GameList::where('with_api', 'db')
+						->where('platform_name', $platformType)
+						->whereNotNull('venue_code')
+						->where('venue_code', '!=', '')
+						->first();
+					
+					if (!$gameList || empty($gameList->venue_code)) {
+						$transferlog = TransferLog::where('order_no', $order_no)->first();
+						if ($transferlog) {
+							$transferlog->delete();
+						}
+						return $this->returnMsg(400, [], "未找到 api_code ({$platformType}) 对应的 venue_code");
+					}
+					
+					$venueCode = $gameList->venue_code;
+					$res = $service->withdrawal($user->username, $amount, $order_no, $venueCode, 'USDT');
+				} else {
+					// 其他平台：withdrawal($username, $amount, $orderNo, $api_code/platform)
+					$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
+				}
+				
 				if ($res['code'] == 200) {
 					$user->balance += $data['amount'];
 					$user->save();
@@ -976,7 +1050,32 @@ class PayController extends Controller
 			'state' => 0
 		];
 		TransferLog::create($arr);
-		$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
+		
+		// 兼容不同平台 withdrawal 方法签名
+		if (strtolower($withApi) === 'db') {
+			// DbService::withdrawal($username, $amount, $serialNo, $venueCode, $currency)
+			// 先根据 user_api 表的 api_code 去 game_lists 获取 venue_code
+			$gameList = GameList::where('with_api', 'db')
+				->where('platform_name', $platformType)
+				->whereNotNull('venue_code')
+				->where('venue_code', '!=', '')
+				->first();
+			
+			if (!$gameList || empty($gameList->venue_code)) {
+				$transferlog = TransferLog::where('order_no', $order_no)->first();
+				if ($transferlog) {
+					$transferlog->delete();
+				}
+				return $this->returnMsg(400, [], "未找到 api_code ({$platformType}) 对应的 venue_code");
+			}
+			
+			$venueCode = $gameList->venue_code;
+			$res = $service->withdrawal($user->username, $amount, $order_no, $venueCode, 'USDT');
+		} else {
+			// 其他平台：withdrawal($username, $amount, $orderNo, $api_code/platform)
+			$res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
+		}
+		
 		if($res['code'] != 200){
 			return $this->returnMsg(201, '', $res['message']);
 		}
@@ -1323,6 +1422,100 @@ class PayController extends Controller
 		echo 'success';
 		exit;
 	}
+
+    /**
+     * RXPay 支付回调（代收）
+     * 文档：回调成功需返回小写 success
+     */
+    public function rxpay_notify(Request $request)
+    {
+        // RXPay 回调为 application/x-www-form-urlencoded
+        $params = $request->all();
+
+        Log::info('rxpay_notify params', $params);
+
+        $rxPay = new RxPayService();
+
+        // 参考 demo/notify.php：验签只取 appid/amount/order_no/time/status
+        if (!$rxPay->verifyPayCallback($params)) {
+            Log::warning('rxpay_notify sign verify failed', $params);
+            echo 'fail';
+            return;
+        }
+
+        $orderNo = (string)($params['order_no'] ?? '');
+        $status = (string)($params['status'] ?? '');
+
+        if ($orderNo === '') {
+            echo 'success';
+            return;
+        }
+
+        // 只处理支付成功（参考 demo/notify.php：status=1 才执行业务）
+        if ($status !== '1') {
+            echo 'success';
+            return;
+        }else{
+            $recharge = Recharge::where('out_trade_no', $orderNo)->lockForUpdate()->first();
+            $recharge->state = 3;
+            $recharge->save();
+        }
+
+        DB::beginTransaction();
+        try {
+            /** @var \App\Models\Recharge|null $recharge */
+            $recharge = Recharge::where('out_trade_no', $orderNo)->lockForUpdate()->first();
+            if (!$recharge) {
+                DB::commit();
+                echo 'success';
+                return;
+            }
+            // 幂等：已成功则直接返回 success
+            if ((int)$recharge->state === 2) {
+                DB::commit();
+                echo 'success';
+                return;
+            }
+
+            // 金额校验（两位小数）
+            $cbAmount = number_format((float)($params['amount'] ?? 0), 2, '.', '');
+            $dbAmount = number_format((float)$recharge->amount, 2, '.', '');
+            if ($cbAmount !== $dbAmount) {
+                Log::warning('rxpay_notify amount mismatch', [
+                    'order_no' => $orderNo,
+                    'cb_amount' => $cbAmount,
+                    'db_amount' => $dbAmount,
+                ]);
+                // 金额不一致也返回 success，避免三方无限重试；订单留待人工处理
+                DB::commit();
+                echo 'success';
+                return;
+            }
+
+            $recharge->state = 2;
+            // 记录备注便于排查
+            $recharge->info = trim((string)$recharge->info . ' rxpay_paid_at:' . (string)($params['time'] ?? ''));
+            $recharge->save();
+
+            $user = User::where('id', $recharge->user_id)->lockForUpdate()->first();
+            if ($user) {
+                $user->balance = (float)$user->balance + (float)$recharge->amount;
+                $user->save();
+            }
+
+            DB::commit();
+            echo 'success';
+            return;
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('rxpay_notify exception', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            echo 'fail';
+            return;
+        }
+    }
 
     /**
      * 兼容线上旧版本 Lib：如果缺少方法则本地兜底，避免 fatal error

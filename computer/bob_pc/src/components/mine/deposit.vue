@@ -245,15 +245,6 @@
                                   <div class="ant-form-item-control-input">
                                     <div class="ant-form-item-control-input-content">
                                       <div class="ant-spin-nested-loading">
-                                        <div class="ant-spin-container">
-                                          <!-- <ul class="_2tZRPt8E select_number1">
-                                        <li data-title="13003">￥13003</li>
-                                        <li data-title="13009">￥13009</li>
-                                        <li data-title="13003">￥15003</li>
-                                        <li data-title="17007">￥17007</li>
-                                        <li data-title="18001">￥18001</li>
-                                      </ul> -->
-                                        </div>
                                       </div>
                                     </div>
                                   </div>

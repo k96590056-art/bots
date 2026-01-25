@@ -23,6 +23,7 @@ Route::post('/getservicerurl','Api\IndexController@getServicerUrl'); //客户
 Route::post('/gamelist','Api\IndexController@getGameList');
 Route::post('/gamelistBycode','Api\IndexController@gameslist');
 Route::post('/banklist','Api\IndexController@banklist');
+Route::get('/sponsorList','Api\IndexController@getSponsorList'); // 获取赞助商列表
 
 Route::post('/bannerList','Api\IndexController@bannerList');
 Route::any('/homenotice','Api\IndexController@homenotice');
@@ -46,6 +47,7 @@ Route::get('/all/plat','Api\IndexController@getAllPlat');
  Route::post('/uservip','Api\IndexController@uservip');  
 Route::post('/article','Api\IndexController@article');
 Route::any('/pay/jc_notify','Api\PayController@jcNotify');
+Route::any('/pay/rxpay_notify','Api\PayController@rxpay_notify');
 
 Route::middleware(['crosstttp','api_auth'])->group(function () {
     // 用户

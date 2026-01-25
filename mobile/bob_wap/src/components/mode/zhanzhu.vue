@@ -8,7 +8,7 @@
     <!-- 赞助卡片列表 -->
     <div class="sponsor-list">
       <!-- 佛罗伦萨 -->
-      <div class="sponsor-card" @click="$parent.goNav('/zhanzhuye?type=1')">
+      <div class="sponsor-card" @click="toDetail(1)">
         <div class="card-left">
           <div class="team-logo">
             <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="佛罗伦萨" />
@@ -23,7 +23,7 @@
       </div>
 
       <!-- 赫塔菲 -->
-      <div class="sponsor-card" @click="$parent.goNav('/zhanzhuye?type=2')">
+      <div class="sponsor-card" @click="toDetail(2)">
         <div class="card-left">
           <div class="team-logo">
             <img src="/static/image/ddf471901f2b4fff9ee57015a1698227.png" alt="赫塔菲" />
@@ -49,8 +49,12 @@ export default {
   data() {
     return {};
   },
+  methods: {
+    toDetail(/*type*/) {
+      this.$router.push({ path: '/applyagent' });
+    },
+  },
   created() {},
-  methods: {},
   mounted() {},
   updated() {},
   beforeDestroy() {},
@@ -100,7 +104,7 @@ export default {
 
   .card-left {
     width: 40%;
-    padding: 20px 15px;
+    padding: 5px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -151,7 +155,6 @@ export default {
 
     img {
       width: 100%;
-      height: 100%;
       object-fit: cover;
     }
   }
