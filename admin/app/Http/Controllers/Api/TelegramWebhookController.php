@@ -3192,38 +3192,42 @@ class TelegramWebhookController extends Controller
                       ->orWhere('fid', $user->id);
             })->count();
 
-            // 构建消息文本
-            $text = "👋 <b>邀请好友</b>\n\n";
-            $text .= "━━━━━━━━━━━━━━━\n\n";
+            // 构建消息文本（参考图片样式）
+            $text = "🎁 <b>推荐计划</b>\n";
+            $text .= "邀请你的朋友，赚取所有赌注的0.3%，无论他们是赢还是输!\n";
+            $text .= "💡拉好友进群，自动绑定代理哦\n";
+            $text .= "注意 机器人互相独立此链接仅绑定此版本\n\n";
+            $text .= "👥 已邀请人数: {$inviteCount}\n";
 
             if (!empty($inviteLink)) {
-                $text .= "🔗 <b>您的专属邀请链接：</b>\n";
-                $text .= "<code>{$inviteLink}</code>\n\n";
-                $text .= "💡 <i>点击链接可复制</i>\n\n";
+                $text .= "🔗 邀请链接: {$inviteLink}";
             } else {
-                $text .= "⚠️ 邀请链接暂未配置，请联系客服\n\n";
+                $text .= "⚠️ 邀请链接暂未配置，请联系客服";
             }
 
-            $text .= "━━━━━━━━━━━━━━━\n\n";
-            $text .= "👥 <b>已邀请人数：</b> {$inviteCount} 人\n\n";
-            $text .= "━━━━━━━━━━━━━━━\n\n";
-            $text .= "📢 分享链接给好友，好友通过链接注册即可成为您的下级！";
+            // 构建内联键盘按钮（分享领奖 + 主菜单）
+            // 使用 Telegram 分享链接实现分享功能
+            $shareMessage = "🎁 邀请你一起玩，点击链接加入：\n{$inviteLink}";
+            $shareUrl = 'https://t.me/share/url?url=' . urlencode($inviteLink) . '&text=' . urlencode("🎁 邀请你一起玩，点击链接加入");
 
-            // 构建内联键盘按钮
-            $inlineKeyboard = [
-                [
-                    [
-                        'text' => '🏠 返回主菜单',
-                        'callback_data' => 'back_main'
-                    ]
-                ]
+            $inlineKeyboard = [];
+            if (!empty($inviteLink)) {
+                $inlineKeyboard[] = [
+                    ['text' => '🔀 分享领奖', 'url' => $shareUrl]
+                ];
+            }
+            $inlineKeyboard[] = [
+                ['text' => '🏠 主菜单', 'callback_data' => 'back_main']
             ];
 
-            // 发送或编辑消息
-            if ($messageId) {
+            // 编辑图片消息的caption和按钮（图片保持不变）
+            $result = $this->telegramBot->editMessageCaptionWithInlineKeyboard($chatId, $messageId, $text, $inlineKeyboard);
+            if ($result['code'] != 200) {
+                // 如果编辑caption失败，尝试编辑普通文本消息
                 $result = $this->telegramBot->editMessageText($chatId, $messageId, $text, 'HTML', $inlineKeyboard);
-            } else {
-                $result = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard, 'HTML');
+                if ($result['code'] != 200) {
+                    Log::error('显示邀请信息失败', ['result' => $result]);
+                }
             }
 
             return response()->json(['ok' => true]);
