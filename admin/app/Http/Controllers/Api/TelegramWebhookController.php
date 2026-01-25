@@ -888,9 +888,8 @@ class TelegramWebhookController extends Controller
                 'api_token' => Str::random(60),
             ];
 
-            // 如果有邀请者ID，设置上级关系
+            // 如果有邀请者ID，设置上级关系（使用pid字段）
             if ($inviteUserId) {
-                $userData['fid'] = $inviteUserId;
                 $userData['pid'] = $inviteUserId;
             }
 
@@ -3186,11 +3185,8 @@ class TelegramWebhookController extends Controller
                 $inviteLink = "https://t.me/{$botUsername}?start={$user->id}";
             }
 
-            // 统计邀请人数（pid 或 fid 等于当前用户ID的用户数量）
-            $inviteCount = User::where(function($query) use ($user) {
-                $query->where('pid', $user->id)
-                      ->orWhere('fid', $user->id);
-            })->count();
+            // 统计邀请人数（pid 等于当前用户ID的用户数量）
+            $inviteCount = User::where('pid', $user->id)->count();
 
             // 构建消息文本（参考图片样式）
             $text = "🎁 <b>推荐计划</b>\n";
