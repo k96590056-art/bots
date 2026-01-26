@@ -316,6 +316,11 @@ class TelegramWebhookController extends Controller
                     'user_id' => $user->id,
                     'username' => $user->username
                 ]);
+
+                // 如果是通过邀请链接注册，给邀请者发送通知
+                if ($inviteUserId) {
+                    $this->notifyInviterNewUser($inviteUserId, $user);
+                }
             }
 
         // 检查用户是否在输入状态（充值/提现金额或地址）
@@ -347,7 +352,7 @@ class TelegramWebhookController extends Controller
             'Empty text: ' . (empty($text) ? 'Yes' : 'No') . PHP_EOL . 
             '---' . PHP_EOL, FILE_APPEND);
         
-        if ($text === '/start' || empty($text)) {
+        if ($text === '/start' || empty($text) || preg_match('/^\/start\s+\d+$/', $text)) {
             // 清除用户状态，避免残留状态影响
             $this->clearUserState($telegramId);
 
@@ -872,8 +877,18 @@ class TelegramWebhookController extends Controller
                 }
             }
 
-            // 生成随机密码明文
-            $plainPassword = Str::random(32);
+            // 生成简单的随机密码（3位字母 + 3位数字）
+            $letters = 'abcdefghjkmnpqrstuvwxyz';
+            $numbers = '23456789';
+            $plainPassword = '';
+            // 前3位字母
+            for ($i = 0; $i < 3; $i++) {
+                $plainPassword .= $letters[random_int(0, strlen($letters) - 1)];
+            }
+            // 后3位数字
+            for ($i = 0; $i < 3; $i++) {
+                $plainPassword .= $numbers[random_int(0, strlen($numbers) - 1)];
+            }
 
             // 创建用户数据
             $userData = [
@@ -3234,6 +3249,55 @@ class TelegramWebhookController extends Controller
                 'error' => $e->getMessage()
             ]);
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 通知邀请者有新用户通过邀请链接注册
+     *
+     * @param int $inviterId 邀请者用户ID
+     * @param User $newUser 新注册的用户
+     * @return void
+     */
+    protected function notifyInviterNewUser($inviterId, $newUser)
+    {
+        try {
+            // 查询邀请者信息
+            $inviter = User::find($inviterId);
+            if (!$inviter || empty($inviter->telegram_id)) {
+                Log::info('邀请者不存在或没有绑定Telegram', ['inviter_id' => $inviterId]);
+                return;
+            }
+
+            // 统计邀请者当前的下级总数
+            $totalInvited = User::where('pid', $inviterId)->count();
+
+            // 构建通知消息
+            $registerTime = date('Y-m-d H:i:s');
+            $text = "🎉 <b>恭喜！您成功邀请了一位新用户</b>\n\n";
+            $text .= "👤 新用户：{$newUser->username}\n";
+            $text .= "📅 注册时间：{$registerTime}\n";
+            $text .= "👥 您已邀请总人数：{$totalInvited} 人";
+
+            // 发送通知给邀请者
+            $result = $this->telegramBot->sendMessage($inviter->telegram_id, $text, 'HTML');
+
+            if ($result['code'] == 200) {
+                Log::info('邀请通知发送成功', [
+                    'inviter_id' => $inviterId,
+                    'new_user_id' => $newUser->id
+                ]);
+            } else {
+                Log::error('邀请通知发送失败', [
+                    'inviter_id' => $inviterId,
+                    'result' => $result
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::error('发送邀请通知异常', [
+                'inviter_id' => $inviterId,
+                'error' => $e->getMessage()
+            ]);
         }
     }
 
