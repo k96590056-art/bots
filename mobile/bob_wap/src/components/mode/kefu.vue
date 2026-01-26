@@ -60,6 +60,19 @@ export default {
     },
     // 打开在线客服（通过公共 webview 路由打开）
     openOnlineService() {
+      // 检测是否在 Telegram 环境中
+      const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
+
+      if (isTelegram) {
+        // Telegram 环境下使用特定的客服链接
+        const userId = this.$store.state.userInfo.id || 0;
+        const telegramKefuUrl = `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}&mobile=1`;
+        // 在 Telegram 中直接打开外部链接
+        window.Telegram.WebApp.openLink(telegramKefuUrl);
+        return;
+      }
+
+      // 非 Telegram 环境走原有逻辑
       if (!this.url) {
         this.$toast('客服链接获取中，请稍后再试');
         return;
