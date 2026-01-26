@@ -3317,7 +3317,7 @@ class TelegramWebhookController extends Controller
             $text .= "👥 您已邀请总人数：{$totalInvited} 人";
 
             // 发送通知给邀请者
-            $result = $this->telegramBot->sendMessage($inviter->telegram_id, $text, 'HTML');
+            $result = $this->telegramBot->sendMessage($inviter->telegram_id, $text);
 
             if ($result['code'] == 200) {
                 Log::info('邀请通知发送成功', [
