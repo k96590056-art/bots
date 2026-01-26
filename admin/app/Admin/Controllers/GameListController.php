@@ -21,10 +21,10 @@ class GameListController extends AdminController
     protected function getApiOptions()
     {
         return [
-            'tg' => 'Leyu聚合',
-            'dp' => 'DP',
-            'pussy' => 'Pussy888',
-            'dbdianzi' => '1369',
+            // 'tg' => 'Leyu聚合',
+            'db' => 'DB',
+            // 'pussy' => 'Pussy888',
+            // 'dbdianzi' => '1369',
             'dbgmag' => 'GMAG',
             'dboneapi' => 'ONEAPI',
         ];
