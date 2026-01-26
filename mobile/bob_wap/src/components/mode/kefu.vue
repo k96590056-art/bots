@@ -60,27 +60,24 @@ export default {
     },
     // 打开在线客服（通过公共 webview 路由打开）
     openOnlineService() {
+      const userId = this.$store.state.userInfo.id || 0;
+
       // 检测是否在 Telegram 环境中
       const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
 
       if (isTelegram) {
-        // Telegram 环境下使用特定的客服链接
-        const userId = this.$store.state.userInfo.id || 0;
+        // Telegram 环境下使用特定的客服链接，强制手机端
         const telegramKefuUrl = `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}&mobile=1`;
         // 在 Telegram 中直接打开外部链接
         window.Telegram.WebApp.openLink(telegramKefuUrl);
         return;
       }
 
-      // 非 Telegram 环境走原有逻辑
-      if (!this.url) {
-        this.$toast('客服链接获取中，请稍后再试');
-        return;
-      }
-      const fullUrl = `${this.url}${this.url.indexOf('?') >= 0 ? '&' : '?'}visiter_id=0&visiter_name=${encodeURIComponent(this.$store.state.realname || '')}&avatar=${encodeURIComponent(this.$store.state.user_photo || '')}`;
+      // 非 Telegram 环境（电脑浏览器、手机浏览器）
+      const kefuUrl = `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}`;
       this.$router.push({
         path: '/webview',
-        query: { url: encodeURIComponent(fullUrl), title: '在线客服' },
+        query: { url: encodeURIComponent(kefuUrl), title: '在线客服' },
       });
     },
     // 跳转意见反馈
