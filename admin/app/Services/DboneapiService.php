@@ -254,7 +254,9 @@ class DboneapiService
             'lobbyUrl' => $lobby_url,
             'ipAddress' => $ip_address
         ];
-
+        Log::error('OneAPI获取游戏URL', [
+                "我是请求游戏的时候传入的参数不要忽略我"=>$data,
+            ]);
         $url = $this->oneapi_site . '/game/url';
         $res = $this->sendRequest($url, $data);
 

@@ -1093,6 +1093,8 @@ class TelegramWebhookController extends Controller
 
             // 从系统配置读取游戏入口地址
             $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
+            // 确保是有效的字符串类型
+            $gameUrl = (string)$gameUrl;
 
             // 调试日志 - showMainMenu inline keyboard
             file_put_contents(storage_path('logs/telegram_webhook.log'),
@@ -1201,8 +1203,8 @@ class TelegramWebhookController extends Controller
 
             if ($messageId) {
                 // 返回主菜单时，把欢迎文字合并到caption中一起编辑
-                $welcomeText = "欢迎来到MK体育飞投\n\n";
-                $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！\n\n";
+                $welcomeText = "欢迎来到星云娱乐飞投\n\n";
+                $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！\n\n";
                 $fullText = $welcomeText . $text;
 
                 // 编辑原消息为图片消息（包含欢迎文字）
@@ -1220,8 +1222,8 @@ class TelegramWebhookController extends Controller
                 }
             } else {
                 // 先发送欢迎文字消息（带常驻键盘）
-                $welcomeText = "欢迎来到MK体育飞投\n\n";
-                $welcomeText .= "🎁MK体育飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                $welcomeText = "欢迎来到星云娱乐飞投\n\n";
+                $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
                 $replyKeyboard = $this->getPersistentKeyboard();
                 $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
 
@@ -1406,11 +1408,12 @@ class TelegramWebhookController extends Controller
         }
 
         // "开始游戏"按钮直接使用web_app类型，绑定游戏链接（放在最前面）
-        if ($gameUrl) {
+        // 确保 $gameUrl 是有效的非空字符串
+        if (!empty($gameUrl) && is_string($gameUrl) && filter_var($gameUrl, FILTER_VALIDATE_URL)) {
             $inlineKeyboard[] = [[
                 'text' => '🎮 开始游戏',
                 'web_app' => [
-                    'url' => $gameUrl
+                    'url' => (string)$gameUrl
                 ]
             ]];
         } else {
@@ -1698,7 +1701,22 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
             }
 
-            $gameUrl = $loginResult['data'];
+            $gameUrl = isset($loginResult["data"]["gameUrl"]) ? $loginResult["data"]["gameUrl"]  : $loginResult['data'];
+            
+            // 确保 $gameUrl 是有效的字符串类型
+            if (!is_string($gameUrl) || empty($gameUrl) || !filter_var($gameUrl, FILTER_VALIDATE_URL)) {
+                Log::error('开始游戏 - 游戏链接无效', [
+                    'user_id' => $user->id,
+                    'platform' => $platformName,
+                    'game_code' => $gameCode,
+                    'game_url' => $gameUrl,
+                    'game_url_type' => gettype($gameUrl)
+                ]);
+                $this->telegramBot->sendMessage($chatId, '获取游戏链接失败，请稍后重试');
+                return response()->json(['ok' => true]);
+            }
+            
+            $gameUrl = (string)$gameUrl; // 确保是字符串类型
             Log::info('开始游戏 - 获取游戏链接成功', [
                 'game_url' => $gameUrl,
             ]);
@@ -1784,7 +1802,7 @@ class TelegramWebhookController extends Controller
                         [
                             'text' => '🎮 开始游戏',
                             'web_app' => [
-                                'url' => $gameUrl
+                                'url' => (string)$gameUrl
                             ]
                         ]
                     ]];
@@ -1803,7 +1821,7 @@ class TelegramWebhookController extends Controller
                     [
                         'text' => '🎮 开始游戏',
                         'web_app' => [
-                            'url' => $gameUrl
+                            'url' => (string)$gameUrl
                         ]
                     ]
                 ]];
@@ -2253,7 +2271,21 @@ class TelegramWebhookController extends Controller
                 return null;
             }
 
-            return $loginResult['data'];
+            // 确保返回的是字符串类型
+            $gameUrl = $loginResult['data'];
+            if (!is_string($gameUrl)) {
+                Log::error('获取游戏链接 - 返回的URL不是字符串类型', [
+                    'user_id' => $user->id,
+                    'platform' => $platformName,
+                    'game_code' => $gameCode,
+                    'with_api' => $withApi,
+                    'game_url' => $gameUrl,
+                    'game_url_type' => gettype($gameUrl)
+                ]);
+                return null;
+            }
+
+            return $gameUrl;
         } catch (\Exception $e) {
             Log::error('获取游戏链接 - 异常', [
                 'user_id' => $user->id,
@@ -2480,6 +2512,9 @@ class TelegramWebhookController extends Controller
         // 从系统配置读取地址
         $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
         $officialUrl = SystemConfig::getValue('telegram_bot_official_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
+        // 确保是有效的字符串类型
+        $gameUrl = (string)$gameUrl;
+        $officialUrl = (string)$officialUrl;
 
         // 调试日志
         file_put_contents(storage_path('logs/telegram_webhook.log'),
@@ -2524,6 +2559,8 @@ class TelegramWebhookController extends Controller
     {
         // 从系统配置读取游戏入口地址
         $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
+        // 确保是有效的字符串类型
+        $gameUrl = (string)$gameUrl;
 
         // 构建 Inline Keyboard（web_app 类型，点击后会传递 initData）
         $inlineKeyboard = [[
