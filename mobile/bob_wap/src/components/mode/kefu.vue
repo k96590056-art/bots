@@ -65,16 +65,11 @@ export default {
       // 检测是否在 Telegram 环境中
       const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
 
-      if (isTelegram) {
-        // Telegram 环境下使用特定的客服链接，强制手机端
-        const telegramKefuUrl = `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}&mobile=1`;
-        // 在 Telegram 中直接打开外部链接
-        window.Telegram.WebApp.openLink(telegramKefuUrl);
-        return;
-      }
+      // 统一使用 webview 内嵌方式打开客服，Telegram 环境下添加 mobile=1 参数
+      const kefuUrl = isTelegram
+        ? `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}&mobile=1`
+        : `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}`;
 
-      // 非 Telegram 环境（电脑浏览器、手机浏览器）
-      const kefuUrl = `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}`;
       this.$router.push({
         path: '/webview',
         query: { url: encodeURIComponent(kefuUrl), title: '在线客服' },
