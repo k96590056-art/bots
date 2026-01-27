@@ -67,8 +67,8 @@ export default {
 
       // 统一使用 webview 内嵌方式打开客服，Telegram 环境下添加 mobile=1 参数
       const kefuUrl = isTelegram
-        ? `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}&mobile=1`
-        : `https://xb0033.xyz/chat?business_id=59&groupid=72&uid=${userId}`;
+        ? `${this.url}&uid=${userId}&mobile=1`
+        : `${this.url}&uid=${userId}`;
 
       this.$router.push({
         path: '/webview',
