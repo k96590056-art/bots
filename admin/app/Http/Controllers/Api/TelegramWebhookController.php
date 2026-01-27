@@ -3049,7 +3049,7 @@ class TelegramWebhookController extends Controller
     protected function getUserFlowDetail($user)
     {
         // 从数据库读取游戏分类（按 order 排序）
-        $categories = GameCategory::orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
+        $categories = GameCategory::where("pid",0)->orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
 
         // 今日开始和结束时间
         $todayStart = date('Y-m-d 00:00:00');
@@ -3063,49 +3063,60 @@ class TelegramWebhookController extends Controller
         $todayFlows = [];
         $yesterdayFlows = [];
 
-        // 遍历每个分类，统计流水
+        // 1. 获取所有开启的游戏列表，按分类编码分组
+        $gameLists = GameList::where('app_state', 1)
+            ->whereNotNull('child_id')
+            ->where('child_id', '>', 0)
+            ->get(['platform_name', 'category_id']);
+
+        $platformsByCategory = [];
+        foreach ($gameLists as $game) {
+            // 这里的 category_id 存储的是分类的 code
+            $platformsByCategory[$game->category_id][] = $game->platform_name;
+        }
+
+        // 2. 获取用户今日和昨日的所有游戏流水统计（按平台分组）
+        $todayStats = GameRecord::where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('bet_time', [$todayStart, $todayEnd])
+            ->select('platform_type', DB::raw('SUM(valid_amount) as total_valid'))
+            ->groupBy('platform_type')
+            ->pluck('total_valid', 'platform_type')
+            ->toArray();
+
+        $yesterdayStats = GameRecord::where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
+            ->select('platform_type', DB::raw('SUM(valid_amount) as total_valid'))
+            ->groupBy('platform_type')
+            ->pluck('total_valid', 'platform_type')
+            ->toArray();
+
+        // 3. 根据分类 code 组装数据
         foreach ($categories as $category) {
             $categoryCode = $category->code;
             $categoryName = $category->name;
+            
+            // 获取该分类下的平台
+            $platformNames = $platformsByCategory[$categoryCode] ?? [];
 
-            // 获取该分类下的所有平台名称（通过 game_lists 表的 category_id 字段关联）
-            $platformNames = GameList::where('category_id', $categoryCode)
-                ->where('app_state', 1)
-                ->whereNotNull('child_id')
-                ->where('child_id', '>', 0)
-                ->pluck('platform_name')
-                ->toArray();
-
-            if (empty($platformNames)) {
-                // 如果该分类下没有平台，流水为0
-                $todayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
-                $yesterdayFlows[$categoryCode] = ['total_valid' => 0, 'name' => $categoryName];
-                continue;
+            // 计算今日流水
+            $todaySum = 0;
+            foreach ($platformNames as $platform) {
+                $todaySum += $todayStats[$platform] ?? 0;
             }
-
-            // 查询今日流水：通过 platform_type 关联到 game_lists.platform_name，再关联到分类
-            $todayFlow = GameRecord::where('user_id', $user->id)
-                ->where('status', 1) // 只统计已结算的
-                ->whereIn('platform_type', $platformNames)
-                ->whereBetween('bet_time', [$todayStart, $todayEnd])
-                ->select(DB::raw('SUM(valid_amount) as total_valid'))
-                ->first();
-
             $todayFlows[$categoryCode] = [
-                'total_valid' => $todayFlow->total_valid ?? 0,
+                'total_valid' => $todaySum,
                 'name' => $categoryName
             ];
 
-            // 查询昨日流水
-            $yesterdayFlow = GameRecord::where('user_id', $user->id)
-                ->where('status', 1) // 只统计已结算的
-                ->whereIn('platform_type', $platformNames)
-                ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
-                ->select(DB::raw('SUM(valid_amount) as total_valid'))
-                ->first();
-
+            // 计算昨日流水
+            $yesterdaySum = 0;
+            foreach ($platformNames as $platform) {
+                $yesterdaySum += $yesterdayStats[$platform] ?? 0;
+            }
             $yesterdayFlows[$categoryCode] = [
-                'total_valid' => $yesterdayFlow->total_valid ?? 0,
+                'total_valid' => $yesterdaySum,
                 'name' => $categoryName
             ];
         }
@@ -3160,13 +3171,6 @@ class TelegramWebhookController extends Controller
         $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
         $text .= "🔸 今日输赢: " . number_format($todayWinLoss, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
-
-        // 预计反水、下级总流水、预计返佣、还需完成流水（暂时设为0，后续可根据实际需求实现）
-        $text .= "🔸 预计反水: 0.00 USDT\n";
-        $text .= "🔸 下级总流水: 0 USDT\n";
-        $text .= "🔸 预计返佣: 0.00 USDT\n";
-        $text .= "🔹 还需完成流水: 0.00 USDT";
-
         return $text;
     }
 
