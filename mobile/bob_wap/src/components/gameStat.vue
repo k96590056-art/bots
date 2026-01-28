@@ -128,7 +128,7 @@ export default {
   name: 'gameStat',
   data() {
     return {
-      date: 2, // 默认近7天
+      date: 1, // 默认今日
       dateName: ['', '今日', '近7日', '近15日', '近30日'],
       platformFilter: '', // 空字符串表示全部平台
       platformFilterName: '全部',
@@ -238,7 +238,7 @@ export default {
       }
     }
     if (that.$route.query.date) {
-      that.date = parseInt(that.$route.query.date) || 2;
+      that.date = parseInt(that.$route.query.date) || 1;
     }
   },
 };
