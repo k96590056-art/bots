@@ -1673,7 +1673,7 @@ class TelegramWebhookController extends Controller
             } elseif ($withApi === 'dboneapi') {
                 // DboneapiService::getGameUrl($username,$game_code,$language,$platform,...)
                 $platform = 'H5';
-                $res = $service->getGameUrl($user->username, $gameCode, '', $platform,(strtolower($venueCode) == "aa" ? "USD" : ""));
+                $res = $service->getGameUrl($user->username, $gameCode, '', $platform,(strtolower($game->venue_code) == "aa" ? "USD" : ""));
                 $loginResult = $res;
                 if (isset($res['code']) && (int)$res['code'] === 200) {
                     if (isset($res['data']['url'])) {
