@@ -333,28 +333,38 @@ class TelegramWebhookController extends Controller
                 }
             }
 
-        // 检查用户是否在输入状态（充值/提现金额或地址）
-        $userState = $this->getUserState($telegramId);
-        $isCommand = !empty($text) && strpos($text, '/') === 0;
-        if ($userState && !empty($text) && !$isCommand) {
-            switch ($userState['action']) {
-                // TRC20
-                case self::STATE_WAITING_RECHARGE_AMOUNT:
-                    return $this->processRechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
-                case self::STATE_WAITING_WITHDRAW_AMOUNT:
-                    return $this->processWithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
-                case self::STATE_WAITING_WITHDRAW_ADDRESS:
-                    return $this->processWithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
-                // ERC20
-                case self::STATE_WAITING_ERC20_RECHARGE_AMOUNT:
-                    return $this->processErc20RechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
-                case self::STATE_WAITING_ERC20_WITHDRAW_AMOUNT:
-                    return $this->processErc20WithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
-                case self::STATE_WAITING_ERC20_WITHDRAW_ADDRESS:
-                    return $this->processErc20WithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
+            // 检查用户是否在输入状态（充值/提现金额或地址）
+            $userState = $this->getUserState($telegramId);
+            $isCommand = !empty($text) && strpos($text, '/') === 0;
+            if ($userState && !empty($text) && !$isCommand) {
+                switch ($userState['action']) {
+                    // TRC20
+                    case self::STATE_WAITING_RECHARGE_AMOUNT:
+                        return $this->processRechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
+                    case self::STATE_WAITING_WITHDRAW_AMOUNT:
+                        return $this->processWithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
+                    case self::STATE_WAITING_WITHDRAW_ADDRESS:
+                        return $this->processWithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
+                    // ERC20
+                    case self::STATE_WAITING_ERC20_RECHARGE_AMOUNT:
+                        return $this->processErc20RechargeAmountInput($chatId, $user, $telegramId, $text, $userState);
+                    case self::STATE_WAITING_ERC20_WITHDRAW_AMOUNT:
+                        return $this->processErc20WithdrawAmountInput($chatId, $user, $telegramId, $text, $userState);
+                    case self::STATE_WAITING_ERC20_WITHDRAW_ADDRESS:
+                        return $this->processErc20WithdrawAddressInput($chatId, $user, $telegramId, $text, $userState);
+                }
             }
-        }
 
+            // 处理/start命令或首次进入
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 检查是否为 /start 命令 ===' . PHP_EOL .
+                'Text: "' . $text . '"' . PHP_EOL .
+                'Text === /start: ' . ($text === '/start' ? 'Yes' : 'No') . PHP_EOL .
+                'Empty text: ' . (empty($text) ? 'Yes' : 'No') . PHP_EOL .
+                '---' . PHP_EOL, FILE_APPEND);
+
+            if ($text === '/start' || empty($text) || preg_match('/^\/start\s+\d+$/', $text)) {
+                // 清除用户状态，避免残留状态影响
+                $this->clearUserState($telegramId);
         // 处理/start命令或首次进入
         @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 检查是否为 /start 命令 ===' . PHP_EOL .
             'Text: "' . $text . '"' . PHP_EOL .
@@ -366,6 +376,51 @@ class TelegramWebhookController extends Controller
             // 清除用户状态，避免残留状态影响
             $this->clearUserState($telegramId);
 
+                Log::info('触发显示主菜单', [
+                    'chat_id' => $chatId,
+                    'user_id' => $user->id,
+                    'text' => $text,
+                    'is_new_user' => $isNewUser,
+                    'line' => __LINE__
+                ]);
+
+                // 记录到文件日志
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 触发显示主菜单 ===' . PHP_EOL .
+                    'Chat ID: ' . $chatId . PHP_EOL .
+                    'User ID: ' . $user->id . PHP_EOL .
+                    'Text: ' . $text . PHP_EOL .
+                    'Is New User: ' . ($isNewUser ? 'Yes' : 'No') . PHP_EOL .
+                    '准备调用 showMainMenu...' . PHP_EOL .
+                    '---' . PHP_EOL, FILE_APPEND);
+
+                // showMainMenu会自动检查first_password并显示密码（如果是新用户）
+                // 传递 Telegram 用户信息以获取最新的名称、用户名和ID
+                $telegramUserInfo = [
+                    'first_name' => $firstName,
+                    'username' => $username
+                ];
+
+                try {
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
+                    $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用完成 ===' . PHP_EOL .
+                        'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL .
+                        '---' . PHP_EOL, FILE_APPEND);
+                    Log::info('showMainMenu返回结果', ['result' => $result]);
+                    return $result;
+                } catch (\Throwable $e) {
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL .
+                        'Error: ' . $e->getMessage() . PHP_EOL .
+                        'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL .
+                        '---' . PHP_EOL, FILE_APPEND);
+                    Log::error('showMainMenu调用异常', [
+                        'error' => $e->getMessage(),
+                        'file' => $e->getFile(),
+                        'line' => $e->getLine()
+                    ]);
+                    throw $e;
+                }
+            }
             Log::info('触发显示主菜单', [
                 'chat_id' => $chatId,
                 'user_id' => $user->id,
@@ -412,97 +467,113 @@ class TelegramWebhookController extends Controller
             }
         }
 
-        // 处理/help命令
-        if ($text === '/help') {
-            return $this->showHelpMessage($chatId, $user);
-        }
+            // 处理/help命令
+            if ($text === '/help') {
+                return $this->showHelpMessage($chatId, $user);
+            }
 
-        // 如果是新注册用户且发送了其他指令，显示用户名和密码信息
-        if ($isNewUser && !empty($user->first_password)) {
-            // 使用first_password字段，这是明文密码（不是加密后的password字段）
-            $firstPassword = $user->first_password;
-            $welcomeText = "🔴⚠️ <b>欢迎注册！请牢记以下信息，后续将不再显示！</b> ⚠️🔴\n";
-            $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-            $welcomeText .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
-            $welcomeText .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
-            $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-            $welcomeText .= "您已成功注册，可以使用机器人功能了！\n\n";
-            $welcomeText .= "请发送 /start 开始使用机器人。";
+            // 如果是新注册用户且发送了其他指令，显示用户名和密码信息
+            if ($isNewUser && !empty($user->first_password)) {
+                // 使用first_password字段，这是明文密码（不是加密后的password字段）
+                $firstPassword = $user->first_password;
+                $welcomeText = "🔴⚠️ <b>欢迎注册！请牢记以下信息，后续将不再显示！</b> ⚠️🔴\n";
+                $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                $welcomeText .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
+                $welcomeText .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
+                $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                $welcomeText .= "您已成功注册，可以使用机器人功能了！\n\n";
+                $welcomeText .= "请发送 /start 开始使用机器人。";
 
-            // 发送欢迎消息时同时设置常驻键盘
+                // 发送欢迎消息时同时设置常驻键盘
                 $replyKeyboard = $this->getPersistentKeyboard();
                 $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
 
-            // 清空first_password，确保后续不再显示
-            $user->first_password = null;
-            $user->save();
+                // 清空first_password，确保后续不再显示
+                $user->first_password = null;
+                $user->save();
 
-            Log::info('新注册用户显示密码信息', [
-                'user_id' => $user->id,
-                'username' => $user->username
-            ]);
-        }
+                Log::info('新注册用户显示密码信息', [
+                    'user_id' => $user->id,
+                    'username' => $user->username
+                ]);
+            }
 
-        // 处理常驻键盘菜单按钮点击
-        switch ($text) {
-            case '🎮 游戏入口':
-                // 发送带 Inline Keyboard 的消息，用户点击后可自动登录
-                $telegramUserInfo = [
-                    'first_name' => $message['from']['first_name'] ?? null,
-                    'username' => $message['from']['username'] ?? null
-                ];
-                return $this->sendGameEntryMessage($chatId, $user, $telegramUserInfo);
+            // 处理常驻键盘菜单按钮点击
+            switch ($text) {
+                case '🎮 游戏入口':
+                    // 发送带 Inline Keyboard 的消息，用户点击后可自动登录
+                    $telegramUserInfo = [
+                        'first_name' => $message['from']['first_name'] ?? null,
+                        'username' => $message['from']['username'] ?? null
+                    ];
+                    return $this->sendGameEntryMessage($chatId, $user, $telegramUserInfo);
 
-            case '💰 账户余额':
-                // 显示账户余额信息
-                // 从 message 中获取 Telegram 用户信息
-                $telegramUserInfo = [
-                    'first_name' => $message['from']['first_name'] ?? null,
-                    'username' => $message['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+                case '💰 账户余额':
+                    // 显示账户余额信息
+                    // 从 message 中获取 Telegram 用户信息
+                    $telegramUserInfo = [
+                        'first_name' => $message['from']['first_name'] ?? null,
+                        'username' => $message['from']['username'] ?? null
+                    ];
+                    return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
 
-            case '🏅 官方频道':
-            case '🏅 官方入口':
-                // 显示官方频道
-                $officialUrl = SystemConfig::getValue('telegram_bot_official_url') ?: (SystemConfig::getValue('h5_url') ?: '');
-                if ($officialUrl) {
-                    // 通过带URL的内联键盘发送，客户端可直接打开
-                    $inlineKeyboard = [[
-                        [
-                            'text' => '🏅 打开官方入口',
-                            'url' => $officialUrl
-                        ]
-                    ]];
-                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, '请选择：', $inlineKeyboard);
-                } else {
-                    $this->telegramBot->sendMessage($chatId, '未配置官方地址');
-                }
-                // 设置键盘，确保键盘始终显示
-                $this->setPersistentKeyboard($chatId);
-                return response()->json(['ok' => true]);
+                case '🏅 官方频道':
+                case '🏅 官方入口':
+                    // 显示官方频道
+                    $officialUrl = SystemConfig::getValue('telegram_bot_official_url') ?: (SystemConfig::getValue('h5_url') ?: '');
+                    if ($officialUrl) {
+                        // 通过带URL的内联键盘发送，客户端可直接打开
+                        $inlineKeyboard = [[
+                            [
+                                'text' => '🏅 打开官方入口',
+                                'url' => $officialUrl
+                            ]
+                        ]];
+                        $this->telegramBot->sendMessageWithInlineKeyboard($chatId, '请选择：', $inlineKeyboard);
+                    } else {
+                        $this->telegramBot->sendMessage($chatId, '未配置官方地址');
+                    }
+                    // 设置键盘，确保键盘始终显示
+                    $this->setPersistentKeyboard($chatId);
+                    return response()->json(['ok' => true]);
 
-            case '🤷 在线客服':
-                // 显示在线客服（功能开发中）
-                // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
-                // 设置键盘，确保键盘始终显示
-                $this->setPersistentKeyboard($chatId);
-                return response()->json(['ok' => true]);
+                case '🤷 在线客服':
+                    $base = SystemConfig::getValue('kf_url') ?: '';
+                    $base = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $base);
+                    if ($base) {
+                        $separator = strpos($base, '?') !== false ? '&' : '?';
+                        $userId = $user->id ?? 0;
+                        $kefuUrl = $base . $separator . 'uid=' . $userId . '&mobile=1';
+                        $kefuUrl = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $kefuUrl);
+                        $btnText = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '打开在线客服');
+                        $title = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '请选择：');
+                        $inlineKeyboard = [[
+                            [
+                                'text' => $btnText,
+                                'url' => $kefuUrl
+                            ]
+                        ]];
+                        $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $title, $inlineKeyboard);
+                    } else {
+                        $this->telegramBot->sendMessage($chatId, preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '未配置客服地址'));
+                    }
+                    $this->setPersistentKeyboard($chatId);
+                    return response()->json(['ok' => true]);
 
-            case '🤝 招商代理':
-                // 显示招商代理信息（功能开发中）
-                // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
-                // 设置键盘，确保键盘始终显示
-                $this->setPersistentKeyboard($chatId);
-                return response()->json(['ok' => true]);
+                case '🤝 招商代理':
+                    // 显示招商代理信息（功能开发中）
+                    // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
+                    // 设置键盘，确保键盘始终显示
+                    $this->setPersistentKeyboard($chatId);
+                    return response()->json(['ok' => true]);
 
-            default:
-                // 其他消息，忽略或显示提示
-                Log::info('收到未知消息', ['text' => $text, 'user_id' => $user->id]);
-                // 设置键盘，确保键盘始终显示
-                $this->setPersistentKeyboard($chatId);
-                return response()->json(['ok' => true]);
-        }
+                default:
+                    // 其他消息，忽略或显示提示
+                    Log::info('收到未知消息', ['text' => $text, 'user_id' => $user->id]);
+                    // 设置键盘，确保键盘始终显示
+                    $this->setPersistentKeyboard($chatId);
+                    return response()->json(['ok' => true]);
+            }
         } catch (\Exception $e) {
             $logFile = storage_path('logs/telegram_webhook.log');
             $errorLog = date('Y-m-d H:i:s') . ' === handleMessage 异常 ===' . PHP_EOL;
@@ -536,129 +607,175 @@ class TelegramWebhookController extends Controller
             $data = $callbackQuery['data'];
             $telegramId = $callbackQuery['from']['id'];
 
-        // 解析回调数据：action:data
-        $parts = explode(':', $data, 2);
-        $action = $parts[0];
-        $param = $parts[1] ?? '';
+            // 解析回调数据：action:data
+            $parts = explode(':', $data, 2);
+            $action = $parts[0];
+            $param = $parts[1] ?? '';
 
-        $user = User::where('telegram_id', $telegramId)->first();
-        $isNewUser = false;
+            $user = User::where('telegram_id', $telegramId)->first();
+            $isNewUser = false;
 
-        if (!$user) {
-            // 自动注册用户（从callbackQuery中获取用户信息）
-            $telegramUsername = $callbackQuery['from']['username'] ?? '';
-            $telegramFirstName = $callbackQuery['from']['first_name'] ?? '';
-            $user = $this->registerUserFromTelegram($telegramId, $telegramUsername, $telegramFirstName);
             if (!$user) {
-                Log::error('回调查询时用户注册失败', [
+                // 自动注册用户（从callbackQuery中获取用户信息）
+                $telegramUsername = $callbackQuery['from']['username'] ?? '';
+                $telegramFirstName = $callbackQuery['from']['first_name'] ?? '';
+                $user = $this->registerUserFromTelegram($telegramId, $telegramUsername, $telegramFirstName);
+                if (!$user) {
+                    Log::error('回调查询时用户注册失败', [
+                        'telegram_id' => $telegramId,
+                        'username' => $telegramUsername
+                    ]);
+                    $this->telegramBot->sendMessage($chatId, '注册失败，请联系客服');
+                    return response()->json(['ok' => true]);
+                }
+                $isNewUser = true;
+                Log::info('回调查询时用户自动注册成功', [
                     'telegram_id' => $telegramId,
-                    'username' => $telegramUsername
-                ]);
-                $this->telegramBot->sendMessage($chatId, '注册失败，请联系客服');
-                return response()->json(['ok' => true]);
-            }
-            $isNewUser = true;
-            Log::info('回调查询时用户自动注册成功', [
-                'telegram_id' => $telegramId,
-                'user_id' => $user->id,
-                'username' => $user->username
-            ]);
-
-            // 如果是新注册用户，显示用户名和密码信息
-            if (!empty($user->first_password)) {
-                // 使用first_password字段，这是明文密码（不是加密后的password字段）
-                $firstPassword = $user->first_password;
-                $welcomeText = "🔴⚠️ <b>欢迎注册！请牢记以下账号信息，后续将不再显示密码！</b> ⚠️🔴\n";
-                $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-                $welcomeText .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
-                $welcomeText .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
-                $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-                $welcomeText .= "您已成功注册，可以使用机器人功能了！";
-
-                // 发送欢迎消息时同时设置常驻键盘
-                $replyKeyboard = $this->getPersistentKeyboard();
-                $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
-
-                // 清空first_password，确保后续不再显示
-                $user->first_password = null;
-                $user->save();
-
-                Log::info('回调查询时新注册用户显示密码信息', [
                     'user_id' => $user->id,
                     'username' => $user->username
                 ]);
+
+                // 如果是新注册用户，显示用户名和密码信息
+                if (!empty($user->first_password)) {
+                    // 使用first_password字段，这是明文密码（不是加密后的password字段）
+                    $firstPassword = $user->first_password;
+                    $welcomeText = "🔴⚠️ <b>欢迎注册！请牢记以下账号信息，后续将不再显示密码！</b> ⚠️🔴\n";
+                    $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    $welcomeText .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
+                    $welcomeText .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
+                    $welcomeText .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    $welcomeText .= "您已成功注册，可以使用机器人功能了！";
+
+                    // 发送欢迎消息时同时设置常驻键盘
+                    $replyKeyboard = $this->getPersistentKeyboard();
+                    $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
+
+                    // 清空first_password，确保后续不再显示
+                    $user->first_password = null;
+                    $user->save();
+
+                    Log::info('回调查询时新注册用户显示密码信息', [
+                        'user_id' => $user->id,
+                        'username' => $user->username
+                    ]);
+                }
             }
-        }
 
-        // 记录回调ID，在操作完成后显示状态提示
-        $callbackQueryId = $callbackQuery['id'];
+            // 记录回调ID，在操作完成后显示状态提示
+            $callbackQueryId = $callbackQuery['id'];
 
-        switch ($action) {
-            case 'game_category':
-                // 点击游戏分类，显示该分类下的游戏列表
-                // 不调用answerCallbackQuery以避免显示绿色图标
-                $result = $this->showGameList($chatId, $messageId, $user, $param);
-                return $result;
+            switch ($action) {
+                case 'game_category':
+                    // 点击游戏分类，显示该分类下的游戏列表
+                    // 不调用answerCallbackQuery以避免显示绿色图标
+                    $result = $this->showGameList($chatId, $messageId, $user, $param);
+                    return $result;
 
-            case 'game_select':
-                // 点击具体游戏，显示游戏账户信息和操作菜单
-                // 不调用answerCallbackQuery以避免显示绿色图标
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                $result = $this->showGameInfo($chatId, $messageId, $user, $param, $telegramUserInfo);
-                return $result;
+                case 'game_select':
+                    // 点击具体游戏，显示游戏账户信息和操作菜单
+                    // 不调用answerCallbackQuery以避免显示绿色图标
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    $result = $this->showGameInfo($chatId, $messageId, $user, $param, $telegramUserInfo);
+                    return $result;
 
-            case 'transfer_in':
-                // 转入游戏
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->transferToGame($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
+                case 'transfer_in':
+                    // 转入游戏
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->transferToGame($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
-            case 'transfer_out':
-                // 转回钱包
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->transferToWallet($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
+                case 'transfer_out':
+                    // 转回钱包
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->transferToWallet($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
-            case 'refresh':
-                // 刷新账户信息
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->refreshGameInfo($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
+                case 'refresh':
+                    // 刷新账户信息
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->refreshGameInfo($chatId, $messageId, $user, $param, $callbackQueryId, $telegramUserInfo);
 
-            case 'start_game':
-                // 开始游戏
-                return $this->startGame($chatId, $messageId, $user, $param, $callbackQueryId);
+                case 'start_game':
+                    // 开始游戏
+                    return $this->startGame($chatId, $messageId, $user, $param, $callbackQueryId);
 
-            case 'back_main':
-            case 'back_to_main_menu':
-                // 返回主菜单
-                // 不调用answerCallbackQuery以避免显示绿色图标
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                $result = $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo);
-                return $result;
+                case 'back_main':
+                case 'back_to_main_menu':
+                    // 返回主菜单
+                    // 不调用answerCallbackQuery以避免显示绿色图标
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    $result = $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo);
+                    return $result;
 
-            case 'back_game_list':
-                // 返回游戏列表
-                // 不调用answerCallbackQuery以避免显示绿色图标
-                $result = $this->backToGameList($chatId, $messageId, $user, $param);
-                return $result;
+                case 'back_game_list':
+                    // 返回游戏列表
+                    // 不调用answerCallbackQuery以避免显示绿色图标
+                    $result = $this->backToGameList($chatId, $messageId, $user, $param);
+                    return $result;
 
-            case 'official_games':
-                // 官方游戏入口（已改为web_app类型，此case理论上不会触发，但保留作为后备）
-                return response()->json(['ok' => true]);
+                case 'official_games':
+                    // 官方游戏入口（已改为web_app类型，此case理论上不会触发，但保留作为后备）
+                    return response()->json(['ok' => true]);
 
+                case 'reclaim_balance':
+                    // 回收余额 - 调用一键回收方法
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+
+                    // 确保用户有 api_token
+                    if (empty($user->api_token)) {
+                        $user->api_token = Str::random(60);
+                        $user->save();
+                    }
+
+                    // 创建 PayController 实例并调用 transAll 方法
+                    $payController = new \App\Http\Controllers\Api\PayController();
+                    $request = Request::create('/api/pay/transAll', 'POST', [], [], [], [
+                        'HTTP_AUTHORIZATION' => 'Bearer ' . $user->api_token
+                    ]);
+                    $request->headers->set('authorization', 'Bearer ' . $user->api_token);
+
+                    try {
+                        $result = $payController->transAll($request);
+                        // returnMsg 返回的是 Response 对象，需要获取 JSON 内容
+                        $resultData = json_decode($result->getContent(), true);
+
+                        // 根据返回结果生成提示语
+                        if (isset($resultData['code']) && $resultData['code'] == 200) {
+                            $message = !empty($resultData['message']) ? $resultData['message'] : '回收成功';
+                            $tipMessage = '✅ ' . $message;
+                        } else {
+                            $message = !empty($resultData['message']) ? $resultData['message'] : '回收失败，请稍后重试';
+                            $tipMessage = '❌ ' . $message;
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('Telegram一键回收异常', [
+                            'user_id' => $user->id,
+                            'username' => $user->username,
+                            'error' => $e->getMessage(),
+                            'file' => $e->getFile(),
+                            'line' => $e->getLine()
+                        ]);
+                        $tipMessage = '❌ 回收失败：' . $e->getMessage();
+                    }
+
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, $tipMessage);
             case 'reclaim_balance':
                 // 回收余额 - 调用一键回收方法
                 $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
@@ -706,119 +823,119 @@ class TelegramWebhookController extends Controller
                 ];
                 return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, $tipMessage);
 
-            case 'deposit_withdraw':
-                // 充值提现二级菜单
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                $this->clearUserState($telegramId);
-                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
+                case 'deposit_withdraw':
+                    // 充值提现二级菜单
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    $this->clearUserState($telegramId);
+                    return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
 
-            case 'recharge':
-                // 充值 - 显示网络选择
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                $this->clearUserState($telegramId);
-                return $this->showRechargeNetworkMenu($chatId, $messageId, $user);
+                case 'recharge':
+                    // 充值 - 显示网络选择
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    $this->clearUserState($telegramId);
+                    return $this->showRechargeNetworkMenu($chatId, $messageId, $user);
 
-            case 'withdraw':
-                // 提现 - 显示网络选择
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                $this->clearUserState($telegramId);
-                return $this->showWithdrawNetworkMenu($chatId, $messageId, $user);
+                case 'withdraw':
+                    // 提现 - 显示网络选择
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    $this->clearUserState($telegramId);
+                    return $this->showWithdrawNetworkMenu($chatId, $messageId, $user);
 
-            case 'recharge_trc20':
-                // TRC20 充值 - 检查通道是否开启
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                if (SystemConfig::getValue('recharge_trc20_enabled', '1') != '1') {
-                    return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20充值通道已关闭');
-                }
-                return $this->handleRechargeTrc20($chatId, $messageId, $user, $telegramId);
+                case 'recharge_trc20':
+                    // TRC20 充值 - 检查通道是否开启
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    if (SystemConfig::getValue('recharge_trc20_enabled', '1') != '1') {
+                        return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20充值通道已关闭');
+                    }
+                    return $this->handleRechargeTrc20($chatId, $messageId, $user, $telegramId);
 
-            case 'recharge_erc20':
-                // ERC20 充值 - 检查通道是否开启
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                if (SystemConfig::getValue('recharge_erc20_enabled', '1') != '1') {
-                    return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20充值通道已关闭');
-                }
-                return $this->handleRechargeErc20($chatId, $messageId, $user, $telegramId);
+                case 'recharge_erc20':
+                    // ERC20 充值 - 检查通道是否开启
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    if (SystemConfig::getValue('recharge_erc20_enabled', '1') != '1') {
+                        return $this->showRechargeNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20充值通道已关闭');
+                    }
+                    return $this->handleRechargeErc20($chatId, $messageId, $user, $telegramId);
 
-            case 'withdraw_trc20':
-                // TRC20 提现 - 检查通道是否开启
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                if (SystemConfig::getValue('withdraw_trc20_enabled', '1') != '1') {
-                    return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20提现通道已关闭');
-                }
-                return $this->handleWithdrawTrc20($chatId, $messageId, $user, $telegramId);
+                case 'withdraw_trc20':
+                    // TRC20 提现 - 检查通道是否开启
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    if (SystemConfig::getValue('withdraw_trc20_enabled', '1') != '1') {
+                        return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ TRC20提现通道已关闭');
+                    }
+                    return $this->handleWithdrawTrc20($chatId, $messageId, $user, $telegramId);
 
-            case 'withdraw_erc20':
-                // ERC20 提现 - 检查通道是否开启
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                if (SystemConfig::getValue('withdraw_erc20_enabled', '1') != '1') {
-                    return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20提现通道已关闭');
-                }
-                return $this->handleWithdrawErc20($chatId, $messageId, $user, $telegramId);
+                case 'withdraw_erc20':
+                    // ERC20 提现 - 检查通道是否开启
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    if (SystemConfig::getValue('withdraw_erc20_enabled', '1') != '1') {
+                        return $this->showWithdrawNetworkMenu($chatId, $messageId, $user, '⚠️ ERC20提现通道已关闭');
+                    }
+                    return $this->handleWithdrawErc20($chatId, $messageId, $user, $telegramId);
 
-            case 'cancel_recharge_order':
-                // 取消充值订单
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                return $this->cancelRechargeOrder($chatId, $messageId, $user, $param, $telegramId);
+                case 'cancel_recharge_order':
+                    // 取消充值订单
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    return $this->cancelRechargeOrder($chatId, $messageId, $user, $param, $telegramId);
 
-            case 'cancel_input':
-                // 取消输入操作
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                $this->clearUserState($telegramId);
-                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
+                case 'cancel_input':
+                    // 取消输入操作
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    $this->clearUserState($telegramId);
+                    return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
 
-            case 'back_to_deposit_withdraw':
-                // 返回充值提现菜单
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                $this->clearUserState($telegramId);
-                return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
+                case 'back_to_deposit_withdraw':
+                    // 返回充值提现菜单
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    $this->clearUserState($telegramId);
+                    return $this->showDepositWithdrawMenu($chatId, $messageId, $user);
 
-            case 'invite_friends':
-                // 邀请好友
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
-                return $this->showInviteInfo($chatId, $user, $messageId);
+                case 'invite_friends':
+                    // 邀请好友
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false);
+                    return $this->showInviteInfo($chatId, $user, $messageId);
 
-            case 'transaction_details':
-                // 流水明细
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                $flowDetail = $this->getUserFlowDetail($user);
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, null, $flowDetail);
+                case 'transaction_details':
+                    // 流水明细
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    $flowDetail = $this->getUserFlowDetail($user);
+                    return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, null, $flowDetail);
 
-            case 'send_redpacket':
-                // 发红包（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                case 'send_redpacket':
+                    // 发红包（待实现）
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
-            case 'language':
-                // 语言切换（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                case 'language':
+                    // 语言切换（待实现）
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
-            case 'official_channel':
-                // 官方频道（待实现）
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+                case 'official_channel':
+                    // 官方频道（待实现）
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    $telegramUserInfo = [
+                        'first_name' => $callbackQuery['from']['first_name'] ?? null,
+                        'username' => $callbackQuery['from']['username'] ?? null
+                    ];
+                    return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
-            default:
-                // 未知操作
-                return response()->json(['ok' => true]);
-        }
+                default:
+                    // 未知操作
+                    return response()->json(['ok' => true]);
+            }
         } catch (\Throwable $e) {
             // 记录异常日志
             $logFile = storage_path('logs/telegram_webhook.log');
@@ -1042,58 +1159,58 @@ class TelegramWebhookController extends Controller
 
                 // 如果是首次进入，显示用户名和密码信息
                 if ($isFirstLogin) {
-                // 使用first_password字段，这是明文密码（不是加密后的password字段）
-                $firstPassword = $user->first_password;
-                // 使用HTML格式，用加粗和代码格式突出显示，并用警告符号引起注意
-                // Telegram HTML模式不支持color样式，但可以用特殊符号和格式来强调
-                $text .= "🔴⚠️ <b>重要提示：请牢记以下账号信息，后续将不再显示密码！</b> ⚠️🔴\n";
-                $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
-                $text .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
-                $text .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
-                $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    // 使用first_password字段，这是明文密码（不是加密后的password字段）
+                    $firstPassword = $user->first_password;
+                    // 使用HTML格式，用加粗和代码格式突出显示，并用警告符号引起注意
+                    // Telegram HTML模式不支持color样式，但可以用特殊符号和格式来强调
+                    $text .= "🔴⚠️ <b>重要提示：请牢记以下账号信息，后续将不再显示密码！</b> ⚠️🔴\n";
+                    $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    $text .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
+                    $text .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
+                    $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
 
-                // 显示完密码后，清空 first_password 字段，确保后续不再显示
-                $user->first_password = null;
-                $user->save();
+                    // 显示完密码后，清空 first_password 字段，确保后续不再显示
+                    $user->first_password = null;
+                    $user->save();
 
-                Log::info('首次登录显示密码信息', [
-                    'user_id' => $user->id,
-                    'username' => $user->username
-                ]);
-            } else {
-                // 非首次登录，显示 Telegram 名称、用户名和ID
-                $telegramFirstName = null;
-                $telegramUsername = null;
-                if ($telegramUserInfo) {
-                    $telegramFirstName = $telegramUserInfo['first_name'] ?? null;
-                    $telegramUsername = $telegramUserInfo['username'] ?? null;
+                    Log::info('首次登录显示密码信息', [
+                        'user_id' => $user->id,
+                        'username' => $user->username
+                    ]);
+                } else {
+                    // 非首次登录，显示 Telegram 名称、用户名和ID
+                    $telegramFirstName = null;
+                    $telegramUsername = null;
+                    if ($telegramUserInfo) {
+                        $telegramFirstName = $telegramUserInfo['first_name'] ?? null;
+                        $telegramUsername = $telegramUserInfo['username'] ?? null;
+                    }
+
+                    // 显示Telegram名称（如果有）
+                    if (!empty($telegramFirstName)) {
+                        $safeFirstName = htmlspecialchars($telegramFirstName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        $text .= "👤 <b>名称：</b>{$safeFirstName}\n";
+                    }
+
+                    // 显示Telegram用户名（如果有）
+                    if (!empty($telegramUsername)) {
+                        $safeUsername = htmlspecialchars($telegramUsername, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                        $usernameDisplay = (strpos($safeUsername, '@') === 0) ? $safeUsername : '@' . $safeUsername;
+                        $text .= "📱 <b>用户名：</b>{$usernameDisplay}\n";
+                    }
                 }
 
-                // 显示Telegram名称（如果有）
-                if (!empty($telegramFirstName)) {
-                    $safeFirstName = htmlspecialchars($telegramFirstName, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                    $text .= "👤 <b>名称：</b>{$safeFirstName}\n";
+                // 显示Telegram ID
+                $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
+                $text .= "💰 钱包余额: {$walletBalance} CNY\n";
+                $text .= "💵 游戏余额: {$gameBalance} CNY\n";
+
+                // 显示钱包地址
+                $moneyAddress = $user->money_address ?? '';
+                if (!empty($moneyAddress)) {
+                    $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                    $text .= "🔗 <b>钱包地址：</b><code>{$safeAddress}</code>\n";
                 }
-
-                // 显示Telegram用户名（如果有）
-                if (!empty($telegramUsername)) {
-                    $safeUsername = htmlspecialchars($telegramUsername, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                    $usernameDisplay = (strpos($safeUsername, '@') === 0) ? $safeUsername : '@' . $safeUsername;
-                    $text .= "📱 <b>用户名：</b>{$usernameDisplay}\n";
-                }
-            }
-
-            // 显示Telegram ID
-            $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
-            $text .= "💰 钱包余额: {$walletBalance} CNY\n";
-            $text .= "💵 游戏余额: {$gameBalance} CNY\n";
-
-            // 显示钱包地址
-            $moneyAddress = $user->money_address ?? '';
-            if (!empty($moneyAddress)) {
-                $safeAddress = htmlspecialchars($moneyAddress, ENT_QUOTES | ENT_HTML5, 'UTF-8');
-                $text .= "🔗 <b>钱包地址：</b><code>{$safeAddress}</code>\n";
-            }
 
                 $text .= "⏰ 当前时间: " . date('Y-m-d H:i:s');
             }
@@ -1182,20 +1299,6 @@ class TelegramWebhookController extends Controller
 
             // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
             $inlineKeyboard[] = $redpacketRow;
-
-            $inlineKeyboard[] = [[
-                'text' => '🌐 Language',
-                'callback_data' => 'language'
-            ], [
-                'text' => '🏛️ 官方频道',
-                'callback_data' => 'official_channel'
-            ]];
-
-            Log::info('构建完成内联键盘', [
-                'keyboard' => $inlineKeyboard,
-                'button_count' => count($inlineKeyboard)
-            ]);
-
             // 获取图片URL
             $mainImagePath = SystemConfig::getValue('telegram_bot_main_image');
             if ($mainImagePath) {
@@ -1682,7 +1785,7 @@ class TelegramWebhookController extends Controller
             } elseif ($withApi === 'dboneapi') {
                 // DboneapiService::getGameUrl($username,$game_code,$language,$platform,...)
                 $platform = 'H5';
-                $res = $service->getGameUrl($user->username, $gameCode, '', $platform);
+                $res = $service->getGameUrl($user->username, $gameCode, '', $platform,(strtolower($game->venue_code) == "aa" ? "USD" : ""));
                 $loginResult = $res;
                 if (isset($res['code']) && (int)$res['code'] === 200) {
                     if (isset($res['data']['url'])) {
@@ -2098,7 +2201,7 @@ class TelegramWebhookController extends Controller
             $categories = GameCategory::where(function($query) {
                 $query->where('pid', 0)->orWhereNull('pid');
             })
-            ->orderBy('order')->orderBy('id')->get(['name', 'code']);
+                ->orderBy('order')->orderBy('id')->get(['name', 'code']);
             Log::info('数据库查询完成', [
                 'count' => $categories->count(),
                 'categories' => $categories->toArray()
@@ -2551,22 +2654,16 @@ class TelegramWebhookController extends Controller
         return [
             // 第一行：进入游戏按钮（普通文本按钮，点击后发送带Inline Keyboard的消息）
             [
-                ['text' => '🎮 游戏入口']
+                ['text' => '🎮 游戏入口'],['text' => '💰 账户余额']
             ],
             // 第二行：账户余额、官方入口（web_app类型）
             [
-                ['text' => '💰 账户余额'],
                 [
                     'text' => '🏅 官方入口',
                     'web_app' => [
                         'url' => $officialUrl
                     ]
-                ]
-            ],
-            // 第三行：在线客服、招商代理
-            [
-                ['text' => '🤷 在线客服'],
-                ['text' => '🤝 招商代理']
+                ],['text' => '🤷 在线客服']
             ]
         ];
     }
@@ -2627,13 +2724,13 @@ class TelegramWebhookController extends Controller
      */
     protected function setPersistentKeyboard($chatId)
     {
-        $replyKeyboard = $this->getPersistentKeyboard();
+        $replyKeyboard = $this->sanitizeKeyboard($this->getPersistentKeyboard());
 
         // 发送一条消息来设置键盘，使用空格作为文本（Telegram 不允许空文本，但可以用空格）
         // 注意：Telegram会自动显示键盘，即使消息被删除，键盘也会保留
         $keyboardResult = $this->telegramBot->sendMessageWithReplyKeyboard(
             $chatId,
-            '\u200B',  // 零宽空格，Telegram 接受但不显示
+            ' ',  // 使用普通空格，避免显示 \u200B 文本
             $replyKeyboard,
             true,  // resize_keyboard
             false  // one_time_keyboard (false表示常驻，键盘会一直显示)
@@ -3122,130 +3219,140 @@ class TelegramWebhookController extends Controller
      */
     protected function getUserFlowDetail($user)
     {
-        // 从数据库读取游戏分类（按 order 排序）
-        $categories = GameCategory::where("pid",0)->orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
+        // 1. 获取顶级分类并初始化统计数据
+        $categories = GameCategory::where('pid', 0)
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get(['id', 'name', 'code']);
 
-        // 今日开始和结束时间
+        $categoriesMap = [];
+        foreach ($categories as $cat) {
+            // 使用 ID 作为键，因为 GameList 中的 category_id 是关联到 GameCategory 的 id
+            $categoriesMap[$cat->id] = [
+                'name' => $cat->name,
+                'today_flow' => 0,
+                'yesterday_flow' => 0
+            ];
+        }
+
         $todayStart = date('Y-m-d 00:00:00');
         $todayEnd = date('Y-m-d 23:59:59');
-
-        // 昨日开始和结束时间
         $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
         $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
 
-        // 初始化分类流水数组
-        $todayFlows = [];
-        $yesterdayFlows = [];
+        // 2. 查询时间段内的所有有效注单
+        $records = DB::table('game_records')
+            ->where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('updated_at', [$yesterdayStart, $todayEnd])
+            ->select('platform_type', 'game_type', 'valid_amount', 'win_loss', 'updated_at')
+            ->get();
 
-        // 1. 获取所有开启的游戏列表，按分类编码分组
-        $gameLists = GameList::where('app_state', 1)
-            ->whereNotNull('child_id')
-            ->where('child_id', '>', 0)
-            ->get(['platform_name', 'category_id']);
-
-        $platformsByCategory = [];
-        foreach ($gameLists as $game) {
-            // 这里的 category_id 存储的是分类的 code
-            $platformsByCategory[$game->category_id][] = $game->platform_name;
+        if ($records->isEmpty()) {
+            return $this->formatFlowText($user, $categoriesMap, 0, 0);
         }
 
-        // 2. 获取用户今日和昨日的所有游戏流水统计（按平台分组）
-        $todayStats = GameRecord::where('user_id', $user->id)
-            ->where('status', 1)
-            ->whereBetween('bet_time', [$todayStart, $todayEnd])
-            ->select('platform_type', DB::raw('SUM(valid_amount) as total_valid'))
-            ->groupBy('platform_type')
-            ->pluck('total_valid', 'platform_type')
-            ->toArray();
+        // 3. 获取相关的 game_lists 映射信息
+        $platformTypes = $records->pluck('platform_type')->unique()->toArray();
 
-        $yesterdayStats = GameRecord::where('user_id', $user->id)
-            ->where('status', 1)
-            ->whereBetween('bet_time', [$yesterdayStart, $yesterdayEnd])
-            ->select('platform_type', DB::raw('SUM(valid_amount) as total_valid'))
-            ->groupBy('platform_type')
-            ->pluck('total_valid', 'platform_type')
-            ->toArray();
+        $gameLists = GameList::whereIn('platform_name', $platformTypes)
+            ->get(['platform_name', 'game_code', 'category_id']);
 
-        // 3. 根据分类 code 组装数据
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
+        // 构建映射表
+        $exactMap = []; // 精确映射: platform + game_code -> category_id
+        $fuzzyMap = []; // 模糊映射: platform -> category_id
 
-            // 获取该分类下的平台
-            $platformNames = $platformsByCategory[$categoryCode] ?? [];
+        foreach ($gameLists as $gl) {
+            // 精确匹配键
+            $key = $gl->platform_name . '_' . $gl->game_code;
+            $exactMap[$key] = $gl->category_id;
 
-            // 计算今日流水
-            $todaySum = 0;
-            foreach ($platformNames as $platform) {
-                $todaySum += $todayStats[$platform] ?? 0;
+            // 模糊匹配键
+            // 注意：如果同一个平台有多个分类的游戏，模糊匹配可能会不准确
+            // 这里我们假设大部分平台属于单一分类，或者至少能覆盖大部分情况
+            if (!isset($fuzzyMap[$gl->platform_name])) {
+                $fuzzyMap[$gl->platform_name] = $gl->category_id;
             }
-            $todayFlows[$categoryCode] = [
-                'total_valid' => $todaySum,
-                'name' => $categoryName
-            ];
-
-            // 计算昨日流水
-            $yesterdaySum = 0;
-            foreach ($platformNames as $platform) {
-                $yesterdaySum += $yesterdayStats[$platform] ?? 0;
-            }
-            $yesterdayFlows[$categoryCode] = [
-                'total_valid' => $yesterdaySum,
-                'name' => $categoryName
-            ];
         }
 
-        // 今日总流水和输赢（所有分类）
-        $todayTotal = GameRecord::where('user_id', $user->id)
-            ->where('status', 1)
-            ->whereBetween('bet_time', [$todayStart, $todayEnd])
-            ->select(
-                DB::raw('SUM(valid_amount) as total_flow'),
-                DB::raw('SUM(win_loss) as total_winloss')
-            )
-            ->first();
+        $todayTotalFlow = 0;
+        $todayTotalWinLoss = 0;
 
-        $todayTotalFlow = $todayTotal->total_flow ?? 0;
-        $todayWinLoss = $todayTotal->total_winloss ?? 0;
+        // 4. 遍历注单进行归类统计
+        foreach ($records as $record) {
+            $catId = null;
 
-        // 注册时间
+            // 尝试精确匹配
+            $exactKey = $record->platform_type . '_' . $record->game_type;
+            if (isset($exactMap[$exactKey])) {
+                $catId = $exactMap[$exactKey];
+            }
+            // 尝试模糊匹配
+            elseif (isset($fuzzyMap[$record->platform_type])) {
+                $catId = $fuzzyMap[$record->platform_type];
+            }
+
+            // 如果找到了分类，且该分类在我们的统计列表中
+            if ($catId && isset($categoriesMap[$catId])) {
+                $amount = $record->valid_amount;
+                $winLoss = $record->win_loss;
+
+                // 统计今日数据
+                if ($record->updated_at >= $todayStart && $record->updated_at <= $todayEnd) {
+                    $categoriesMap[$catId]['today_flow'] += $amount;
+                    $todayTotalFlow += $amount;
+                    $todayTotalWinLoss += $winLoss;
+                }
+
+                // 统计昨日数据
+                if ($record->updated_at >= $yesterdayStart && $record->updated_at <= $yesterdayEnd) {
+                    $categoriesMap[$catId]['yesterday_flow'] += $amount;
+                }
+            }
+        }
+
+        return $this->formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss);
+    }
+
+    /**
+     * 格式化流水文本
+     */
+    protected function formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss)
+    {
         $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
 
-        // 构建显示文本
         $text = '';
 
-        // 今日流水（按分类显示）
-        $text .= "💎 <b>今日流水</b>\n";
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
-            // 移除emoji，只保留中文名称
-            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
-            $cleanName = trim($cleanName);
-            $flowAmount = $todayFlows[$categoryCode]['total_valid'] ?? 0;
-            $text .= "🔸 今日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        // 今日流水
+        $text .= "💎 <b>今日流水 (" . date('Y-m-d') . ")</b>\n";
+        foreach ($categoriesMap as $cat) {
+            $name = $this->cleanEmoji($cat['name']);
+            $text .= "🔸 今日{$name}流水: " . number_format($cat['today_flow'], 2) . " USDT\n";
         }
 
-        // 昨日流水（按分类显示）
-        $text .= "\n💎 <b>昨日流水</b>\n";
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
-            // 移除emoji，只保留中文名称
-            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
-            $cleanName = trim($cleanName);
-            $flowAmount = $yesterdayFlows[$categoryCode]['total_valid'] ?? 0;
-            $text .= "🔹 昨日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        // 昨日流水
+        $text .= "\n💎 <b>昨日流水 (" . date('Y-m-d', strtotime('-1 day')) . ")</b>\n";
+        foreach ($categoriesMap as $cat) {
+            $name = $this->cleanEmoji($cat['name']);
+            $text .= "🔹 昨日{$name}流水: " . number_format($cat['yesterday_flow'], 2) . " USDT\n";
         }
 
-        // 提示信息
+        // 汇总信息
         $text .= "\n💡 (流水更新大约有十分钟延迟哦~)\n\n";
-
-        // 今日流水总计和输赢
         $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
-        $text .= "🔸 今日输赢: " . number_format($todayWinLoss, 2) . " USDT\n";
+        $text .= "🔸 今日输赢: " . number_format($todayTotalWinLoss, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
+
         return $text;
+    }
+
+    /**
+     * 移除 Emoji
+     */
+    protected function cleanEmoji($text)
+    {
+        $clean = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $text);
+        return trim($clean);
     }
 
     /**
@@ -3460,6 +3567,42 @@ class TelegramWebhookController extends Controller
         Cache::forget($this->getUserStateCacheKey($telegramId));
     }
 
+    /**
+     * 清理零宽字符
+     */
+    protected function sanitizeZW($text)
+    {
+        if ($text === null) {
+            return $text;
+        }
+        return preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', (string)$text);
+    }
+    /**
+     * 清理内联键盘中的零宽字符
+     */
+    protected function sanitizeKeyboard($inlineKeyboard)
+    {
+        if (!is_array($inlineKeyboard)) {
+            return $inlineKeyboard;
+        }
+        foreach ($inlineKeyboard as $rowIdx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $btnIdx => $btn) {
+                if (isset($btn['text'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['text'] = $this->sanitizeZW($btn['text']);
+                }
+                if (isset($btn['url'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['url'] = $this->sanitizeZW($btn['url']);
+                }
+                if (isset($btn['callback_data'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['callback_data'] = $this->sanitizeZW($btn['callback_data']);
+                }
+            }
+        }
+        return $inlineKeyboard;
+    }
     // ==================== 充值提现菜单 ====================
 
     /**
