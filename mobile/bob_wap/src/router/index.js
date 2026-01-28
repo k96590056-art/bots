@@ -31,6 +31,7 @@ import usdtmore from '@/components/usdtmore'
 import password from '@/components/password'
 import welfare from '@/components/welfare'
 import betRecord from '@/components/betRecord'
+import gameStat from '@/components/gameStat'
 import activityRecord from '@/components/activityRecord'
 import transRecord from '@/components/transRecord'
 import money from '@/components/money'
@@ -239,6 +240,13 @@ export default new Router({
       path: '/betRecord',
       name: 'betRecord',
       component: betRecord,
+      meta: {
+        requireAuth: true,
+      }
+    }, {
+      path: '/gameStat',
+      name: 'gameStat',
+      component: gameStat,
       meta: {
         requireAuth: true,
       }

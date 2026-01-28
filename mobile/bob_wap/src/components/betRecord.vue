@@ -3,11 +3,6 @@
     <van-nav-bar style="position: fixed; top: 0; left: 0; width: 100%; background-color: #ede9e7" title="投注记录" left-arrow @click-left="$router.back()" />
     <div style="height: 46px"></div>
     <div style="width: 95%; min-width: 250px; margin: 0 auto; background: #fff; border-radius: 10px; box-sizing: border-box; padding: 10px; min-height: 90vh">
-      <!-- 筛选条件 -->
-      <div class="saibox">
-        <div class="sai" @click="showPopup(1)">{{ name }}</div>
-        <div class="sai" @click="showPopup(2)">{{ dateName[date] }}</div>
-      </div>
       <van-list style="margin-top: 10px; padding-bottom: 120px" finished-text="没有更多了" offset="300" v-model="loading" :finished="list.length == pageData.total" @load="getData" v-if="list.length > 0">
         <van-cell v-for="(item, index) in list" :key="index">
           <div style="font-size: 0.3rem">订单号：{{ item.bet_id }}</div>
@@ -27,28 +22,6 @@
         <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '20px ' }">空空如也</van-divider>
       </div>
     </div>
-    <!-- 弹出层 -->
-    <van-popup v-model="popup" position="bottom" :style="{ height: 'calc(100% - 1.9rem - 46px)' }">
-      <div class="lisg" v-if="showXuan == 1">
-        <div class="bs" v-for="(item, index) in dogameLis" :key="index" @click="changDogame(item.name, item.platname)">
-          <div :class="api_type == item.platname ? 'lisga act' : 'lisga'">{{ item.name }}</div>
-        </div>
-      </div>
-      <div class="lisg" v-if="showXuan == 2">
-        <div class="bs" @click="changtype('date', 1)">
-          <div :class="date == 1 ? 'lisga act' : 'lisga'">今日</div>
-        </div>
-        <div class="bs" @click="changtype('date', 2)">
-          <div :class="date == 2 ? 'lisga act' : 'lisga'">近7日</div>
-        </div>
-        <div class="bs" @click="changtype('date', 3)">
-          <div :class="date == 3 ? 'lisga act' : 'lisga'">近15日</div>
-        </div>
-        <div class="bs" @click="changtype('date', 4)">
-          <div :class="date == 4 ? 'lisga act' : 'lisga'">近30日</div>
-        </div>
-      </div>
-    </van-popup>
   </div>
 </template>
 <script>
@@ -61,71 +34,21 @@ export default {
       pageData: {},
       page: 1,
       statuType: ['无效注单', '已结算', '未结算'],
-      dogameLis: [],
       api_type: '',
       loading: false,
-      name: '全平台',
-      show: false,
-      dateName: ['', '今日', '近7日', '近15日', '近30日'],
-      popup: false,
-      showXuan: 1, //1平台选择 2 日期选择
     };
   },
   created() {
     let that = this;
-    that.getdogame();
+    if (this.$route.query.api_type !== undefined) {
+      this.api_type = this.$route.query.api_type;
+    }
+    if (this.$route.query.date !== undefined) {
+      this.date = parseInt(this.$route.query.date) || 4;
+    }
     that.getData();
   },
   methods: {
-    changDogame(name, type) {
-      let that = this;
-      that.name = name;
-      that.api_type = type;
-      that.popup = false;
-      that.page = 1;
-      that.getData();
-    },
-    changtype(name, val) {
-      let that = this;
-      that[name] = val;
-      that.popup = false;
-      that.page = 1;
-      that.getData();
-    },
-    showPopup(val) {
-      this.popup = true;
-      this.showXuan = val;
-    },
-    openOrclose() {
-      this.show = !this.show;
-    },
-    changtab() {
-      let that = this;
-      that.page = 1;
-      that.list = [];
-      that.pageData = {};
-      that.getData();
-    },
-    getdogame() {
-      let that = this;
-
-      that.$apiFun.post('/api/balancelist', {}).then(res => {
-        console.log(res);
-        if (res.code != 200) {
-          that.showTost(res.message);
-        }
-        if (res.code == 200) {
-          that.dogameLis = res.data;
-          that.dogameLis.unshift({ name: '全平台', platname: '' });
-        }
-      });
-    },
-    changeDate() {
-      let that = this;
-      that.page = 1;
-      that.getData();
-    },
-
     // 获取交易记录
     getData() {
       let that = this;
@@ -179,52 +102,5 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.saibox {
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  height: 1.1rem;
-  box-sizing: border-box;
-  padding: 0 12px;
-  .sai {
-    height: 0.8rem;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    width: 40%;
-    background: #f7f8fc;
-    border-radius: 1.1rem;
-    font-size: 0.3rem;
-  }
-}
-.lisg {
-  box-sizing: border-box;
-  padding: 10px 8px;
-  display: flex;
-  flex-wrap: wrap;
-  .bs {
-    width: 25%;
-    height: 1.1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    .lisga {
-      width: calc(100% - 8px);
-      height: 0.9rem;
-      border: 0.02rem solid #cbced8;
-      border-radius: 0.08rem;
-      color: #a5a9b3;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.2rem;
-      text-align: center;
-    }
-    .lisga.act {
-      background: #1890ff;
-      color: #fff;
-      border: none;
-    }
-  }
-}
+
 </style>

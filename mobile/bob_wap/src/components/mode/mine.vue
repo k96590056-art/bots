@@ -176,7 +176,7 @@
             </div>
             <span>交易记录</span>
           </div>
-          <div class="menu-item" @click="$parent.goNav('/betRecord')">
+          <div class="menu-item" @click="$parent.goNav('/gameStat')">
             <div class="menu-icon">
               <img src="/static/image/betting_record.png" alt="投注记录" class="menu-icon-img" />
             </div>
