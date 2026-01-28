@@ -2598,13 +2598,13 @@ class TelegramWebhookController extends Controller
      */
     protected function setPersistentKeyboard($chatId)
     {
-        $replyKeyboard = $this->getPersistentKeyboard();
+        $replyKeyboard = $this->sanitizeKeyboard($this->getPersistentKeyboard());
 
         // 发送一条消息来设置键盘，使用空格作为文本（Telegram 不允许空文本，但可以用空格）
         // 注意：Telegram会自动显示键盘，即使消息被删除，键盘也会保留
         $keyboardResult = $this->telegramBot->sendMessageWithReplyKeyboard(
             $chatId,
-            '\u200B',  // 零宽空格，Telegram 接受但不显示
+            ' ',  // 使用普通空格，避免显示 \u200B 文本
             $replyKeyboard,
             true,  // resize_keyboard
             false  // one_time_keyboard (false表示常驻，键盘会一直显示)
