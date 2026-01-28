@@ -1188,20 +1188,6 @@ class TelegramWebhookController extends Controller
 
             // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
             $inlineKeyboard[] = $redpacketRow;
-
-            $inlineKeyboard[] = [[
-                'text' => '🌐 Language',
-                'callback_data' => 'language'
-            ], [
-                'text' => '🏛️ 官方频道',
-                'callback_data' => 'official_channel'
-            ]];
-
-            Log::info('构建完成内联键盘', [
-                'keyboard' => $inlineKeyboard,
-                'button_count' => count($inlineKeyboard)
-            ]);
-
             // 获取图片URL
             $mainImagePath = SystemConfig::getValue('telegram_bot_main_image');
             if ($mainImagePath) {
@@ -3396,6 +3382,42 @@ class TelegramWebhookController extends Controller
         Cache::forget($this->getUserStateCacheKey($telegramId));
     }
 
+    /**
+     * 清理零宽字符
+     */
+    protected function sanitizeZW($text)
+    {
+        if ($text === null) {
+            return $text;
+        }
+        return preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', (string)$text);
+    }
+    /**
+     * 清理内联键盘中的零宽字符
+     */
+    protected function sanitizeKeyboard($inlineKeyboard)
+    {
+        if (!is_array($inlineKeyboard)) {
+            return $inlineKeyboard;
+        }
+        foreach ($inlineKeyboard as $rowIdx => $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            foreach ($row as $btnIdx => $btn) {
+                if (isset($btn['text'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['text'] = $this->sanitizeZW($btn['text']);
+                }
+                if (isset($btn['url'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['url'] = $this->sanitizeZW($btn['url']);
+                }
+                if (isset($btn['callback_data'])) {
+                    $inlineKeyboard[$rowIdx][$btnIdx]['callback_data'] = $this->sanitizeZW($btn['callback_data']);
+                }
+            }
+        }
+        return $inlineKeyboard;
+    }
     // ==================== 充值提现菜单 ====================
 
     /**
