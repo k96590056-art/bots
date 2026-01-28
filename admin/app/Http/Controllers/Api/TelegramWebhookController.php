@@ -473,9 +473,25 @@ class TelegramWebhookController extends Controller
                 return response()->json(['ok' => true]);
 
             case '🤷 在线客服':
-                // 显示在线客服（功能开发中）
-                // 注意：键盘按钮无法使用弹窗提示，因为它们是文本消息而非回调查询
-                // 设置键盘，确保键盘始终显示
+                $base = SystemConfig::getValue('kf_url') ?: '';
+                $base = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $base);
+                if ($base) {
+                    $separator = strpos($base, '?') !== false ? '&' : '?';
+                    $userId = $user->id ?? 0;
+                    $kefuUrl = $base . $separator . 'uid=' . $userId . '&mobile=1';
+                    $kefuUrl = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $kefuUrl);
+                    $btnText = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '打开在线客服');
+                    $title = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '请选择：');
+                    $inlineKeyboard = [[
+                        [
+                            'text' => $btnText,
+                            'url' => $kefuUrl
+                        ]
+                    ]];
+                    $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $title, $inlineKeyboard);
+                } else {
+                    $this->telegramBot->sendMessage($chatId, preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', '未配置客服地址'));
+                }
                 $this->setPersistentKeyboard($chatId);
                 return response()->json(['ok' => true]);
 
@@ -1657,7 +1673,7 @@ class TelegramWebhookController extends Controller
             } elseif ($withApi === 'dboneapi') {
                 // DboneapiService::getGameUrl($username,$game_code,$language,$platform,...)
                 $platform = 'H5';
-                $res = $service->getGameUrl($user->username, $gameCode, '', $platform);
+                $res = $service->getGameUrl($user->username, $gameCode, '', $platform,(strtolower($venueCode) == "aa" ? "USD" : ""));
                 $loginResult = $res;
                 if (isset($res['code']) && (int)$res['code'] === 200) {
                     if (isset($res['data']['url'])) {
@@ -2526,22 +2542,16 @@ class TelegramWebhookController extends Controller
         return [
             // 第一行：进入游戏按钮（普通文本按钮，点击后发送带Inline Keyboard的消息）
             [
-                ['text' => '🎮 游戏入口']
+                ['text' => '🎮 游戏入口'],['text' => '💰 账户余额']
             ],
             // 第二行：账户余额、官方入口（web_app类型）
             [
-                ['text' => '💰 账户余额'],
                 [
                     'text' => '🏅 官方入口',
                     'web_app' => [
                         'url' => $officialUrl
                     ]
-                ]
-            ],
-            // 第三行：在线客服、招商代理
-            [
-                ['text' => '🤷 在线客服'],
-                ['text' => '🤝 招商代理']
+                ],['text' => '🤷 在线客服']
             ]
         ];
     }
