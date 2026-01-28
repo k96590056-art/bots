@@ -3044,141 +3044,140 @@ class TelegramWebhookController extends Controller
      */
     protected function getUserFlowDetail($user)
     {
+        // 1. 获取顶级分类并初始化统计数据
+        $categories = GameCategory::where('pid', 0)
+            ->orderBy('order')
+            ->orderBy('id')
+            ->get(['id', 'name', 'code']);
 
-        // 从数据库读取游戏分类（按 order 排序）
-        $categories = GameCategory::where("pid",0)->orderBy('order')->orderBy('id')->get(['id', 'name', 'code']);
+        $categoriesMap = [];
+        foreach ($categories as $cat) {
+            // 使用 ID 作为键，因为 GameList 中的 category_id 是关联到 GameCategory 的 id
+            $categoriesMap[$cat->id] = [
+                'name' => $cat->name,
+                'today_flow' => 0,
+                'yesterday_flow' => 0
+            ];
+        }
 
-        
-        // 今日开始和结束时间
         $todayStart = date('Y-m-d 00:00:00');
         $todayEnd = date('Y-m-d 23:59:59');
-
-        // 临时新增：通过连接查询获取详细数据（等待后续指令处理）
-        $query = DB::table('game_records')
-            ->join('game_lists', 'game_records.platform_type', '=', 'game_lists.platform_name')
-            ->where('game_records.user_id', $user->id)
-            ->where('game_records.status', 1)
-            // 修改查询范围为昨天到今天，以便一次性获取两天数据
-            ->whereBetween('game_lists.updated_at', [date('Y-m-d 00:00:00', strtotime('-1 day')), date('Y-m-d 23:59:59')])
-            ->where(function ($query) {
-                $query->where('game_lists.app_state', 1)
-                    ->orWhere('game_lists.site_state', 1);
-            })
-            ->groupBy('game_records.id')
-            ->select(
-                DB::raw('MAX(game_lists.category_id) as category_id'),
-                DB::raw('MAX(game_lists.updated_at) as list_updated_at'),
-                'game_records.platform_type as platform_name',
-                'game_records.win_loss',
-                'game_records.bet_time',
-                DB::raw('ABS(game_records.win_loss) as abs_win_loss')
-            );
-        
-        Log::info('用户流水详情查询SQL', [
-            'sql' => $query->toSql(),
-            'bindings' => $query->getBindings(),
-            'user_id' => $user->id
-        ]);
-
-        $flowDetails = $query->get();
-        // 昨日开始和结束时间
         $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
         $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
 
-        // 申明总流水和总输赢变量
-        $todayTotalFlow = 0;
-        $todayWinLoss = 0;
+        // 2. 查询时间段内的所有有效注单
+        $records = DB::table('game_records')
+            ->where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('updated_at', [$yesterdayStart, $todayEnd])
+            ->select('platform_type', 'game_type', 'valid_amount', 'win_loss', 'updated_at')
+            ->get();
 
-        // 初始化分类流水统计数组
-        $todayCategoryStats = [];
-        $yesterdayCategoryStats = [];
+        if ($records->isEmpty()) {
+            return $this->formatFlowText($user, $categoriesMap, 0, 0);
+        }
 
-        // 遍历 flowDetails 数组
-        foreach ($flowDetails as $detail) {
-            $checkTime = $detail->list_updated_at;
+        // 3. 获取相关的 game_lists 映射信息
+        $platformTypes = $records->pluck('platform_type')->unique()->toArray();
+        
+        $gameLists = GameList::whereIn('platform_name', $platformTypes)
+            ->get(['platform_name', 'game_code', 'category_id']);
 
-            // 判断是否为今日数据
-            if ($checkTime >= $todayStart && $checkTime <= $todayEnd) {
-                // 累加总流水和总输赢
-                $todayTotalFlow += $detail->abs_win_loss;
-                $todayWinLoss += $detail->win_loss;
+        // 构建映射表
+        $exactMap = []; // 精确映射: platform + game_code -> category_id
+        $fuzzyMap = []; // 模糊映射: platform -> category_id
 
-                // 按分类累加今日流水
-                if (!isset($todayCategoryStats[$detail->category_id])) {
-                    $todayCategoryStats[$detail->category_id] = 0;
-                }
-                $todayCategoryStats[$detail->category_id] += $detail->abs_win_loss;
-            } 
-            // 判断是否为昨日数据
-            elseif ($checkTime >= $yesterdayStart && $checkTime <= $yesterdayEnd) {
-                // 按分类累加昨日流水
-                if (!isset($yesterdayCategoryStats[$detail->category_id])) {
-                    $yesterdayCategoryStats[$detail->category_id] = 0;
-                }
-                $yesterdayCategoryStats[$detail->category_id] += $detail->abs_win_loss;
+        foreach ($gameLists as $gl) {
+            // 精确匹配键
+            $key = $gl->platform_name . '_' . $gl->game_code;
+            $exactMap[$key] = $gl->category_id;
+            
+            // 模糊匹配键
+            // 注意：如果同一个平台有多个分类的游戏，模糊匹配可能会不准确
+            // 这里我们假设大部分平台属于单一分类，或者至少能覆盖大部分情况
+            if (!isset($fuzzyMap[$gl->platform_name])) {
+                $fuzzyMap[$gl->platform_name] = $gl->category_id;
             }
         }
 
-        // 3. 根据分类 code 组装数据
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
+        $todayTotalFlow = 0;
+        $todayTotalWinLoss = 0;
 
-            // 计算今日流水（直接从统计好的数组中获取）
-            $todaySum = $todayCategoryStats[$categoryCode] ?? 0;
+        // 4. 遍历注单进行归类统计
+        foreach ($records as $record) {
+            $catId = null;
             
-            $todayFlows[$categoryCode] = [
-                'total_valid' => $todaySum,
-                'name' => $categoryName
-            ];
+            // 尝试精确匹配
+            $exactKey = $record->platform_type . '_' . $record->game_type;
+            if (isset($exactMap[$exactKey])) {
+                $catId = $exactMap[$exactKey];
+            } 
+            // 尝试模糊匹配
+            elseif (isset($fuzzyMap[$record->platform_type])) {
+                $catId = $fuzzyMap[$record->platform_type];
+            }
 
-            // 计算昨日流水（直接从统计好的数组中获取）
-            $yesterdaySum = $yesterdayCategoryStats[$categoryCode] ?? 0;
-
-            $yesterdayFlows[$categoryCode] = [
-                'total_valid' => $yesterdaySum,
-                'name' => $categoryName
-            ];
+            // 如果找到了分类，且该分类在我们的统计列表中
+            if ($catId && isset($categoriesMap[$catId])) {
+                $amount = $record->valid_amount;
+                $winLoss = $record->win_loss;
+                
+                // 统计今日数据
+                if ($record->updated_at >= $todayStart && $record->updated_at <= $todayEnd) {
+                    $categoriesMap[$catId]['today_flow'] += $amount;
+                    $todayTotalFlow += $amount;
+                    $todayTotalWinLoss += $winLoss;
+                }
+                
+                // 统计昨日数据
+                if ($record->updated_at >= $yesterdayStart && $record->updated_at <= $yesterdayEnd) {
+                    $categoriesMap[$catId]['yesterday_flow'] += $amount;
+                }
+            }
         }
 
-        // 注册时间
+        return $this->formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss);
+    }
+
+    /**
+     * 格式化流水文本
+     */
+    protected function formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss)
+    {
         $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
-
-        // 构建显示文本
+        
         $text = '';
-
-        // 今日流水（按分类显示）
-        $text .= "💎 <b>今日流水</b>\n";
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
-            // 移除emoji，只保留中文名称
-            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
-            $cleanName = trim($cleanName);
-            $flowAmount = $todayFlows[$categoryCode]['total_valid'] ?? 0;
-            $text .= "🔸 今日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        
+        // 今日流水
+        $text .= "💎 <b>今日流水 (" . date('Y-m-d') . ")</b>\n";
+        foreach ($categoriesMap as $cat) {
+            $name = $this->cleanEmoji($cat['name']);
+            $text .= "🔸 今日{$name}流水: " . number_format($cat['today_flow'], 2) . " USDT\n";
         }
 
-        // 昨日流水（按分类显示）
-        $text .= "\n💎 <b>昨日流水</b>\n";
-        foreach ($categories as $category) {
-            $categoryCode = $category->code;
-            $categoryName = $category->name;
-            // 移除emoji，只保留中文名称
-            $cleanName = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $categoryName);
-            $cleanName = trim($cleanName);
-            $flowAmount = $yesterdayFlows[$categoryCode]['total_valid'] ?? 0;
-            $text .= "🔹 昨日{$cleanName}流水: " . number_format($flowAmount, 2) . " USDT\n";
+        // 昨日流水
+        $text .= "\n💎 <b>昨日流水 (" . date('Y-m-d', strtotime('-1 day')) . ")</b>\n";
+        foreach ($categoriesMap as $cat) {
+            $name = $this->cleanEmoji($cat['name']);
+            $text .= "🔹 昨日{$name}流水: " . number_format($cat['yesterday_flow'], 2) . " USDT\n";
         }
 
-        // 提示信息
+        // 汇总信息
         $text .= "\n💡 (流水更新大约有十分钟延迟哦~)\n\n";
-
-        // 今日流水总计和输赢
         $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
-        $text .= "🔸 今日输赢: " . number_format($todayWinLoss, 2) . " USDT\n";
+        $text .= "🔸 今日输赢: " . number_format($todayTotalWinLoss, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
+        
         return $text;
+    }
+
+    /**
+     * 移除 Emoji
+     */
+    protected function cleanEmoji($text)
+    {
+        $clean = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $text);
+        return trim($clean);
     }
 
     /**
