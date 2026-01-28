@@ -42,7 +42,7 @@ class CrawGameRecord extends Command
     {
         $tg = new TgService;
         $data = $tg->allRecords();
-        if ($data['code'] == 200) {
+        if (is_array($data) && isset($data['code']) && $data['code'] == 200) {
             $record = $data['data'];
             foreach ($record as $k => $v) {
                 $user = User::where('username',$v['username'])->first();

@@ -65,10 +65,13 @@ export default {
       // 检测是否在 Telegram 环境中
       const isTelegram = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData;
 
+      // 判断 URL 中是否已有参数
+      const separator = this.url && this.url.includes('?') ? '&' : '?';
+
       // 统一使用 webview 内嵌方式打开客服，Telegram 环境下添加 mobile=1 参数
       const kefuUrl = isTelegram
-        ? `${this.url}&uid=${userId}&mobile=1`
-        : `${this.url}&uid=${userId}`;
+        ? `${this.url}${separator}uid=${userId}&mobile=1`
+        : `${this.url}${separator}uid=${userId}`;
 
       this.$router.push({
         path: '/webview',
