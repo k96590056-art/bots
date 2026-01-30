@@ -815,6 +815,11 @@ class TelegramWebhookController extends Controller
                     ];
                     return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
+                case 'newbie_offer':
+                    // 显示新人特惠图片
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    return $this->showNewbieOffer($chatId, $user);
+
                 case 'show_activities':
                     // 显示福利活动图片
                     $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
@@ -1049,6 +1054,13 @@ class TelegramWebhookController extends Controller
             $walletBalance = number_format($user->balance, 2);
             $gameBalance = number_format(Usersmoney::getTotalAppUserBalance($user->id), 4);
 
+            // 获取未发放的下级返佣金额
+            $unclaimedCommission = \App\Models\TransferLog::where('user_id', $user->id)
+                ->where('transfer_type', 99)  // 下级返水记录
+                ->where('state', 0)  // 未发放
+                ->sum('money');
+            $unclaimedCommission = number_format((float)($unclaimedCommission ?? 0), 2);
+
             // 检查是否是首次进入（判断 first_password 是否存在）
             $isFirstLogin = !empty($user->first_password);
 
@@ -1075,6 +1087,9 @@ class TelegramWebhookController extends Controller
                     $text .= "👤 <b>用户名：</b><code>{$user->username}</code>\n";
                     $text .= "🔑 <b>密码：</b><code>{$firstPassword}</code>\n\n";
                     $text .= "━━━━━━━━━━━━━━━━━━━━\n\n";
+                    $text .= "💰 钱包余额: {$walletBalance}\n";
+                    $text .= "💵 游戏余额: {$gameBalance}\n";
+                    $text .= "💸 返佣金额: {$unclaimedCommission}\n\n";
 
                     // 显示完密码后，清空 first_password 字段，确保后续不再显示
                     $user->first_password = null;
@@ -1112,6 +1127,7 @@ class TelegramWebhookController extends Controller
                 $text .= "🆔 <b>用户名：</b>{$user->username}\n";
                 $text .= "💰 钱包余额: {$walletBalance}\n";
                 $text .= "💵 游戏余额: {$gameBalance}\n";
+                $text .= "💸 返佣金额: {$unclaimedCommission}\n";
 
                 // 显示钱包地址
                 $moneyAddress = $user->money_address ?? '';
@@ -1190,21 +1206,25 @@ class TelegramWebhookController extends Controller
             // 根据系统配置决定是否显示发红包按钮
             $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
 
-            // 构建红包和福利活动按钮行
-            $redpacketRow = [];
+            // 构建红包、新人特惠和福利活动按钮行
+            $activityRow = [];
             if ($redpacketEnabled) {
-                $redpacketRow[] = [
+                $activityRow[] = [
                     'text' => '🧧 发红包',
                     'callback_data' => 'send_redpacket'
                 ];
             }
-            $redpacketRow[] = [
+            $activityRow[] = [
+                'text' => '🎉 新人特惠',
+                'callback_data' => 'newbie_offer'
+            ];
+            $activityRow[] = [
                 'text' => '🎁 福利活动',
                 'callback_data' => 'show_activities'
             ];
 
-            // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
-            $inlineKeyboard[] = $redpacketRow;
+            $inlineKeyboard[] = $activityRow;
+
             // 获取图片URL
             $mainImagePath = SystemConfig::getValue('telegram_bot_main_image');
             if ($mainImagePath) {
@@ -4835,6 +4855,59 @@ class TelegramWebhookController extends Controller
      * @param User $user
      * @return \Illuminate\Http\JsonResponse
      */
+    protected function showNewbieOffer($chatId, $user)
+    {
+        try {
+            // 获取新人特惠图片地址
+            $appUrl = env('APP_URL');
+            $imageUrl = $appUrl . '/static/images/xinren.jpg';
+
+            // 获取游戏入口地址用于构建优惠页面URL
+            $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
+            $gameUrl = (string)$gameUrl;
+            $promotionUrl = rtrim($gameUrl, '/') . '/promotion';
+
+            // 构建内联键盘按钮 - 活动专区
+            $inlineKeyboard = [[
+                [
+                    'text' => '🎁 活动专区',
+                    'web_app' => [
+                        'url' => $promotionUrl
+                    ]
+                ]
+            ]];
+
+            // 发送带按钮的图片（图片下方有活动专区按钮）
+            $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $imageUrl, '', $inlineKeyboard);
+
+            if ($result['code'] == 200) {
+                Log::info('新人特惠图片发送成功', [
+                    'user_id' => $user->id,
+                    'image_url' => $imageUrl,
+                    'promotion_url' => $promotionUrl
+                ]);
+            } else {
+                Log::warning('发送新人特惠图片失败', [
+                    'user_id' => $user->id,
+                    'image_url' => $imageUrl,
+                    'error' => $result['message'] ?? '未知错误',
+                    'result' => $result
+                ]);
+            }
+
+            return response()->json(['ok' => true]);
+
+        } catch (\Throwable $e) {
+            Log::error('显示新人特惠异常', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // 不发送错误提示，静默失败
+            return response()->json(['ok' => true]);
+        }
+    }
+
     protected function showActivities($chatId, $user)
     {
         try {
