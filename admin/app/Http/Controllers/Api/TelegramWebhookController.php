@@ -383,8 +383,8 @@ class TelegramWebhookController extends Controller
 
                 try {
                     // 先发送欢迎文字消息（带常驻键盘）
-                    $welcomeText = "欢迎来到星云娱乐飞投\n\n";
-                    $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                    $welcomeText = "欢迎来到MK体育\n\n";
+                    $welcomeText .= "🎁MK体育：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
                     $replyKeyboard = $this->getPersistentKeyboard();
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                     
@@ -1251,8 +1251,8 @@ class TelegramWebhookController extends Controller
 
             if ($messageId) {
                 // 返回主菜单时，把欢迎文字合并到caption中一起编辑
-                $welcomeText = "欢迎来到星云娱乐飞投\n\n";
-                $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！\n\n";
+                $welcomeText = "欢迎来到MK体育\n\n";
+                $welcomeText .= "🎁MK体育：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！\n\n";
                 $fullText = $welcomeText . $text;
 
                 // 编辑原消息为图片消息（包含欢迎文字）
@@ -1282,8 +1282,8 @@ class TelegramWebhookController extends Controller
             } else {
                 // 如果没有跳过欢迎文字，先发送欢迎文字消息（带常驻键盘）
                 if (!$skipWelcomeText) {
-                    $welcomeText = "欢迎来到星云娱乐飞投\n\n";
-                    $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                    $welcomeText = "欢迎来到MK体育\n\n";
+                    $welcomeText .= "🎁MK体育：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
                     $replyKeyboard = $this->getPersistentKeyboard();
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                 }
