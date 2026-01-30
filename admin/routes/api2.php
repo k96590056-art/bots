@@ -102,6 +102,8 @@ Route::middleware(['crosstttp','api_auth'])->group(function () {
 
     Route::post('/getfanshui','Api\IndexController@fanshui');  //获取返水记录
     Route::post('/dofanshui','Api\IndexController@dofanshui');  //领取返水
+    Route::post('/getsubordinatefanshui','Api\IndexController@subordinateFanshui');  //获取下级返水记录
+    Route::post('/dosubordinatefanshui','Api\IndexController@doSubordinateFanshui');  //领取下级返水
     Route::post('/balance','Api\AuthController@getUserBalance');
     Route::post('/logoff','Api\AuthController@logoff');
     Route::post('/applyagentdo','Api\IndexController@applyagentdo');

@@ -10,7 +10,7 @@
       <div class="nav-back" @click="$router.back()">
         <van-icon name="arrow-left" size="20" color="#333" />
       </div>
-      <div class="nav-title">实时返水</div>
+      <div class="nav-title">下级返水</div>
       <div class="nav-right">
         <div class="nav-link" @click="goVipLevel">VIP等级 <van-icon name="arrow" size="12" /></div>
         <div class="nav-link" @click="showRules">返水规则 <van-icon name="arrow" size="12" /></div>
@@ -22,7 +22,7 @@
       <div class="rebate-card">
         <div class="rebate-card-inner">
           <div class="rebate-label">可结算返水</div>
-          <div class="rebate-tip">VIP等级越高返水比例越高</div>
+          <div class="rebate-tip">来自下级用户的投注返水</div>
           <div class="rebate-amount">{{ formatAmount(nojisuan) }}</div>
         </div>
       </div>
@@ -31,11 +31,6 @@
     <!-- 立即领取按钮 -->
     <div class="claim-btn-wrapper">
       <div class="claim-btn" @click="lingqu">立即领取</div>
-    </div>
-
-    <!-- 下级返水按钮 -->
-    <div class="subordinate-btn-wrapper">
-      <div class="subordinate-btn" @click="goSubordinateFanshui">下级返水</div>
     </div>
 
     <!-- 返水记录区域 -->
@@ -71,9 +66,9 @@
     <!-- 返水规则弹窗 -->
     <van-popup v-model="rulesPopup" position="bottom" round :style="{ maxHeight: '70%' }">
       <div class="rules-popup">
-        <div class="rules-title">返水规则</div>
+        <div class="rules-title">下级返水规则</div>
         <div class="rules-content">
-          <p>1. 返水金额根据您的有效投注额和VIP等级计算</p>
+          <p>1. 下级返水金额根据下级用户的有效投注额和您的VIP等级计算</p>
           <p>2. VIP等级越高，返水比例越高</p>
           <p>3. 返水每日结算，可随时领取</p>
           <p>4. 领取的返水将直接到账您的余额</p>
@@ -148,24 +143,12 @@
         </div>
       </div>
     </van-popup>
-
-    <!-- 申请代理提示弹窗 -->
-    <van-dialog
-      v-model="agentDialog"
-      title="提示"
-      message="您还不是代理，需要申请成为代理才可以访问下级返水页面"
-      show-cancel-button
-      confirm-button-text="立即申请"
-      cancel-button-text="暂时不用"
-      @confirm="goApplyAgent"
-      @cancel="agentDialog = false"
-    />
   </div>
 </template>
 
 <script>
 export default {
-  name: 'fanshui',
+  name: 'subordinate_fanshui',
   data() {
     return {
       date: 4,
@@ -184,7 +167,6 @@ export default {
       showXuan: 1,
       rulesPopup: false,
       morePopup: false,
-      agentDialog: false,
     };
   },
   created() {
@@ -200,27 +182,6 @@ export default {
     },
     showMoreRecords() {
       this.morePopup = true;
-    },
-    goSubordinateFanshui() {
-      let that = this;
-      // 检查用户是否是代理
-      const userInfo = that.$store.state.userInfo || {};
-      // 检查 isagent 或 is_agent 字段（兼容不同的字段名）
-      const isAgent = userInfo.isagent == 1 || userInfo.is_agent == 1 || userInfo.isagent === 1 || userInfo.is_agent === 1;
-      
-      if (isAgent) {
-        // 是代理，直接跳转到下级返水页面
-        that.$router.push('/subordinate_fanshui');
-      } else {
-        // 不是代理，显示提示弹窗
-        that.agentDialog = true;
-      }
-    },
-    goApplyAgent() {
-      let that = this;
-      that.agentDialog = false;
-      // 跳转到申请代理页面
-      that.$router.push('/applyagent');
     },
     changDogame(name, type) {
       this.name = name;
@@ -254,7 +215,7 @@ export default {
       }
       that.$parent.showLoading();
       that.$apiFun
-        .post('/api/dofanshui', {})
+        .post('/api/dosubordinatefanshui', {})
         .then(res => {
           that.$parent.getUserInfo();
           that.$parent.showTost(1, res.message);
@@ -292,7 +253,7 @@ export default {
         type: '',
       };
       that.$apiFun
-        .post('/api/getfanshui', info)
+        .post('/api/getsubordinatefanshui', info)
         .then(res => {
           if (res.code == 200) {
             that.pageData = res.data.list;
@@ -471,7 +432,7 @@ export default {
 
 // 立即领取按钮
 .claim-btn-wrapper {
-  padding: 10px 30px 20px;
+  padding: 10px 30px 30px;
 }
 
 .claim-btn {
@@ -485,29 +446,6 @@ export default {
   font-weight: 600;
   color: #fff;
   box-shadow: 0 4px 15px rgba(64, 158, 255, 0.4);
-
-  &:active {
-    transform: scale(0.98);
-    opacity: 0.9;
-  }
-}
-
-// 下级返水按钮
-.subordinate-btn-wrapper {
-  padding: 0 30px 30px;
-}
-
-.subordinate-btn {
-  height: 50px;
-  background: linear-gradient(90deg, #67c23a 0%, #85ce61 100%);
-  border-radius: 25px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  box-shadow: 0 4px 15px rgba(103, 194, 58, 0.4);
 
   &:active {
     transform: scale(0.98);

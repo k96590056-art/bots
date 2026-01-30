@@ -22,6 +22,7 @@ import boutBallBet from '@/components/boutBallBet'
 import boutBallBetInfo from '@/components/boutBallBetInfo'
 import message from '@/components/message'
 import fanshui from '@/components/fanshui'
+import subordinateFanshui from '@/components/subordinate_fanshui'
 import userInfo from '@/components/userInfo'
 import userCent from '@/components/userCent'
 import wallet from '@/components/wallet'
@@ -177,6 +178,12 @@ export default new Router({
       path: '/fanshui',
       name: 'fanshui',
       component: fanshui, meta: {
+        requireAuth: true,
+      }
+    }, {
+      path: '/subordinate_fanshui',
+      name: 'subordinate_fanshui',
+      component: subordinateFanshui, meta: {
         requireAuth: true,
       }
     }, {

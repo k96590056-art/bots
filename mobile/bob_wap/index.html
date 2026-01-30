@@ -20,13 +20,264 @@
 				console.log('[Telegram预保存] user:', JSON.stringify(window.__TELEGRAM_INIT_DATA_UNSAFE__.user || {}));
 			}
 		})();
+		
+		// 检查是否是本地地址
+		function isLocalhost() {
+			var hostname = window.location.hostname;
+			var host = window.location.host;
+			
+			// 检查是否是本地地址
+			if (hostname === 'localhost' || 
+			    hostname === '127.0.0.1' || 
+			    hostname === '0.0.0.0' ||
+			    hostname === '[::1]' ||
+			    host.indexOf('localhost') !== -1 ||
+			    host.indexOf('127.0.0.1') !== -1) {
+				return true;
+			}
+			
+			// 检查是否是内网IP
+			if (hostname.startsWith('192.168.') || hostname.startsWith('10.')) {
+				return true;
+			}
+			
+			// 检查是否是172.16.0.0 - 172.31.255.255 内网IP段
+			if (hostname.startsWith('172.')) {
+				var parts = hostname.split('.');
+				if (parts.length >= 2) {
+					var secondOctet = parseInt(parts[1], 10);
+					if (secondOctet >= 16 && secondOctet <= 31) {
+						return true;
+					}
+				}
+			}
+			
+			return false;
+		}
+		
+		// 禁止调试 - 强化版（本地地址不限制）
+		(function() {
+			'use strict';
+			
+			// 如果是本地地址，不执行调试限制
+			if (isLocalhost()) {
+				console.log('[调试模式] 检测到本地地址，已禁用调试限制功能');
+				return;
+			}
+			
+			// 禁用右键菜单 - 多种方式
+			function disableRightClick(e) {
+				// 本地地址不限制
+				if (isLocalhost()) {
+					return true;
+				}
+				e.preventDefault();
+				e.stopPropagation();
+				e.stopImmediatePropagation();
+				return false;
+			}
+			
+			// 在文档加载前就绑定事件
+			if (document.addEventListener) {
+				document.addEventListener('contextmenu', disableRightClick, true);
+				document.addEventListener('selectstart', disableRightClick, true);
+				document.addEventListener('dragstart', disableRightClick, true);
+			}
+			if (document.attachEvent) {
+				document.attachEvent('oncontextmenu', disableRightClick);
+				document.attachEvent('onselectstart', disableRightClick);
+				document.attachEvent('ondragstart', disableRightClick);
+			}
+			
+			// 禁用所有快捷键
+			function disableShortcuts(e) {
+				// 本地地址不限制
+				if (isLocalhost()) {
+					return true;
+				}
+				
+				var keyCode = e.keyCode || e.which || e.charCode;
+				var ctrlKey = e.ctrlKey || e.metaKey;
+				var shiftKey = e.shiftKey;
+				var altKey = e.altKey;
+				
+				// F12
+				if (keyCode === 123) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+Shift+I (开发者工具)
+				if (ctrlKey && shiftKey && keyCode === 73) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+Shift+J (控制台)
+				if (ctrlKey && shiftKey && keyCode === 74) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+Shift+C (检查元素)
+				if (ctrlKey && shiftKey && keyCode === 67) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+U (查看源代码)
+				if (ctrlKey && keyCode === 85) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+S (保存页面)
+				if (ctrlKey && keyCode === 83) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+P (打印)
+				if (ctrlKey && keyCode === 80) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Ctrl+Shift+Delete
+				if (ctrlKey && shiftKey && keyCode === 46) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+				
+				// Alt+F4
+				if (altKey && keyCode === 115) {
+					e.preventDefault();
+					e.stopPropagation();
+					e.stopImmediatePropagation();
+					return false;
+				}
+			}
+			
+			// 绑定键盘事件 - 捕获阶段
+			if (document.addEventListener) {
+				document.addEventListener('keydown', disableShortcuts, true);
+				document.addEventListener('keyup', disableShortcuts, true);
+				document.addEventListener('keypress', disableShortcuts, true);
+			}
+			if (document.attachEvent) {
+				document.attachEvent('onkeydown', disableShortcuts);
+				document.attachEvent('onkeyup', disableShortcuts);
+				document.attachEvent('onkeypress', disableShortcuts);
+			}
+			
+			// 禁用控制台 - 重写所有方法（本地地址不限制）
+			if (!isLocalhost()) {
+				var noop = function() {};
+				var noopObj = {};
+				var methods = ['log', 'debug', 'info', 'warn', 'error', 'assert', 'dir', 'dirxml', 
+					'group', 'groupEnd', 'time', 'timeEnd', 'count', 'trace', 'profile', 'profileEnd',
+					'clear', 'table', 'groupCollapsed'];
+				
+				for (var i = 0; i < methods.length; i++) {
+					try {
+						console[methods[i]] = noop;
+						noopObj[methods[i]] = noop;
+					} catch(e) {}
+				}
+				
+				// 重写整个console对象
+				try {
+					Object.defineProperty(window, 'console', {
+						value: noopObj,
+						writable: false,
+						configurable: false
+					});
+				} catch(e) {
+					// 如果无法重写，至少重写方法
+				}
+			}
+			
+			// 检测开发者工具 - 多种检测方式（本地地址不限制）
+			if (!isLocalhost()) {
+				var devtools = {
+					open: false,
+					orientation: null
+				};
+				
+				function detectDevTools() {
+					var threshold = 160;
+					var widthThreshold = window.outerWidth - window.innerWidth > threshold;
+					var heightThreshold = window.outerHeight - window.innerHeight > threshold;
+					
+					if (widthThreshold || heightThreshold) {
+						if (!devtools.open) {
+							devtools.open = true;
+							// 检测到开发者工具打开
+							try {
+								document.body.innerHTML = '';
+								document.body.style.display = 'none';
+							} catch(e) {}
+						}
+					} else {
+						devtools.open = false;
+					}
+				}
+				
+				// 多种检测方式
+				setInterval(detectDevTools, 200);
+				
+				// 使用debugger检测
+				setInterval(function() {
+					var start = performance.now();
+					debugger;
+					var end = performance.now();
+					if (end - start > 100) {
+						// 检测到调试器
+						try {
+							document.body.innerHTML = '';
+							document.body.style.display = 'none';
+						} catch(e) {}
+					}
+				}, 1000);
+				
+				// 检测控制台打开
+				var element = new Image();
+				Object.defineProperty(element, 'id', {
+					get: function() {
+						// 检测到控制台打开
+						try {
+							document.body.innerHTML = '';
+							document.body.style.display = 'none';
+						} catch(e) {}
+					}
+				});
+				
+				// 页面卸载时清除
+				window.addEventListener('beforeunload', function(e) {
+					e.preventDefault();
+					e.returnValue = '';
+				});
+			}
+			
+		})();
 	</script>
-	<!-- <link rel="shortcut icon" type="image/x-icon" id="iconconfig"
-		href="/static/image/uacPoGJlcBWACL_fAAAlvjvOsR4020.ico"> -->
-
-
-
-
+	<link rel="shortcut icon" type="image/x-icon" id="iconconfig" href="/static/image/favicon.ico">
 	<style>
 		*{
 			font-size: 12px;
@@ -94,7 +345,7 @@
 	<script src="/static/js/swiper.min.js"></script>
 </head>
 
-<body >
+<body>
 
 	<div id="app"></div>
 </body>
