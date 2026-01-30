@@ -820,9 +820,9 @@ class TelegramWebhookController extends Controller
                     return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
 
                 case 'newbie_offer':
-                    // 显示新人特惠图片
+                    // 显示新人特惠（发送文字+图片）
                     $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-                    return $this->showNewbieOffer($chatId, $user);
+                    return $this->showNewbieOfferMessage($chatId, $user);
 
                 case 'show_activities':
                     // 显示福利活动图片
@@ -1210,8 +1210,8 @@ class TelegramWebhookController extends Controller
             // 根据系统配置决定是否显示发红包按钮
             $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
 
-            // 构建优惠页面URL（用于新人特惠按钮）
-            $promotionUrl = rtrim($gameUrl, '/') . '/promotion';
+            // 构建优惠页面URL（用于新人特惠按钮，前端使用hash模式需要添加 # 符号）
+            $promotionUrl = rtrim($gameUrl, '/') . '/#/promotion';
 
             // 构建红包、新人特惠和福利活动按钮行
             $activityRow = [];
@@ -1223,9 +1223,7 @@ class TelegramWebhookController extends Controller
             }
             $activityRow[] = [
                 'text' => '🎉 新人特惠',
-                'web_app' => [
-                    'url' => $promotionUrl
-                ]
+                'callback_data' => 'newbie_offer'
             ];
             $activityRow[] = [
                 'text' => '🎁 福利活动',
@@ -4852,8 +4850,56 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * 显示福利活动图片
-     * 单独发送第一张活动图片
+     * 显示新人特惠（发送文字+图片）
+     * 用于消息下方内联按钮的"新人特惠"
+     *
+     * @param int $chatId
+     * @param User $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function showNewbieOfferMessage($chatId, $user)
+    {
+        try {
+            // 获取新人特惠图片地址
+            $appUrl = env('APP_URL');
+            $imageUrl = $appUrl . '/static/images/xinren.jpg';
+
+            // 文字内容
+            $caption = "🎁新人特惠领取方式：\n咨询上级合营伙伴领取专属新人福利，点击图片查看福利详情！";
+
+            // 发送图片+文字（不带按钮）
+            $result = $this->telegramBot->sendPhoto($chatId, $imageUrl, $caption);
+
+            if ($result['code'] == 200) {
+                Log::info('新人特惠消息发送成功', [
+                    'user_id' => $user->id,
+                    'image_url' => $imageUrl
+                ]);
+            } else {
+                Log::warning('发送新人特惠消息失败', [
+                    'user_id' => $user->id,
+                    'image_url' => $imageUrl,
+                    'error' => $result['message'] ?? '未知错误',
+                    'result' => $result
+                ]);
+            }
+
+            return response()->json(['ok' => true]);
+
+        } catch (\Throwable $e) {
+            Log::error('显示新人特惠消息异常', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // 不发送错误提示，静默失败
+            return response()->json(['ok' => true]);
+        }
+    }
+
+    /**
+     * 显示福利专区（发送图片+活动专区按钮）
+     * 用于键盘下方的"福利专区"
      *
      * @param int $chatId
      * @param User $user
@@ -4862,14 +4908,15 @@ class TelegramWebhookController extends Controller
     protected function showNewbieOffer($chatId, $user)
     {
         try {
-            // 获取新人特惠图片地址
+            // 获取福利专区图片地址
             $appUrl = env('APP_URL');
-            $imageUrl = $appUrl . '/static/images/xinren.jpg';
+            $imageUrl = $appUrl . '/static/images/fuli.jpg';
 
             // 获取游戏入口地址用于构建优惠页面URL
             $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
             $gameUrl = (string)$gameUrl;
-            $promotionUrl = rtrim($gameUrl, '/') . '/promotion';
+            // 前端使用hash模式，需要添加 # 符号
+            $promotionUrl = rtrim($gameUrl, '/') . '/#/promotion';
 
             // 构建内联键盘按钮 - 活动专区
             $inlineKeyboard = [[
@@ -4885,13 +4932,13 @@ class TelegramWebhookController extends Controller
             $result = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $imageUrl, '', $inlineKeyboard);
 
             if ($result['code'] == 200) {
-                Log::info('新人特惠图片发送成功', [
+                Log::info('福利专区图片发送成功', [
                     'user_id' => $user->id,
                     'image_url' => $imageUrl,
                     'promotion_url' => $promotionUrl
                 ]);
             } else {
-                Log::warning('发送新人特惠图片失败', [
+                Log::warning('发送福利专区图片失败', [
                     'user_id' => $user->id,
                     'image_url' => $imageUrl,
                     'error' => $result['message'] ?? '未知错误',
@@ -4902,7 +4949,7 @@ class TelegramWebhookController extends Controller
             return response()->json(['ok' => true]);
 
         } catch (\Throwable $e) {
-            Log::error('显示新人特惠异常', [
+            Log::error('显示福利专区异常', [
                 'user_id' => $user->id ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
