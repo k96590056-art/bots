@@ -447,7 +447,7 @@ class TelegramWebhookController extends Controller
 
             // 处理常驻键盘菜单按钮点击
             switch ($text) {
-                case '🎮 游戏入口':
+                case '🎮 游戏大厅':
                     // 发送带 Inline Keyboard 的消息，用户点击后可自动登录
                     $telegramUserInfo = [
                         'first_name' => $message['from']['first_name'] ?? null,
@@ -464,9 +464,13 @@ class TelegramWebhookController extends Controller
                     ];
                     return $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
 
+                case '🎉 福利专区':
+                    // 显示福利专区（和新人特惠一样的逻辑：发送图片+活动专区按钮）
+                    return $this->showNewbieOffer($chatId, $user);
+
                 case '🏅 官方频道':
                 case '🏅 官方入口':
-                    // 显示官方频道
+                    // 显示官方频道（向后兼容，保留旧按钮处理）
                     $officialUrl = SystemConfig::getValue('telegram_bot_official_url') ?: (SystemConfig::getValue('h5_url') ?: '');
                     if ($officialUrl) {
                         // 通过带URL的内联键盘发送，客户端可直接打开
@@ -1206,6 +1210,9 @@ class TelegramWebhookController extends Controller
             // 根据系统配置决定是否显示发红包按钮
             $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
 
+            // 构建优惠页面URL（用于新人特惠按钮）
+            $promotionUrl = rtrim($gameUrl, '/') . '/promotion';
+
             // 构建红包、新人特惠和福利活动按钮行
             $activityRow = [];
             if ($redpacketEnabled) {
@@ -1216,7 +1223,9 @@ class TelegramWebhookController extends Controller
             }
             $activityRow[] = [
                 'text' => '🎉 新人特惠',
-                'callback_data' => 'newbie_offer'
+                'web_app' => [
+                    'url' => $promotionUrl
+                ]
             ];
             $activityRow[] = [
                 'text' => '🎁 福利活动',
@@ -2601,16 +2610,11 @@ class TelegramWebhookController extends Controller
         return [
             // 第一行：进入游戏按钮（普通文本按钮，点击后发送带Inline Keyboard的消息）
             [
-                ['text' => '🎮 游戏入口'],['text' => '💰 账户余额']
+                ['text' => '🎮 游戏大厅'],['text' => '💰 账户余额']
             ],
-            // 第二行：账户余额、官方入口（web_app类型）
+            // 第二行：福利专区、在线客服（普通文本按钮）
             [
-                [
-                    'text' => '🏅 官方入口',
-                    'web_app' => [
-                        'url' => $officialUrl
-                    ]
-                ],['text' => '🤷 在线客服']
+                ['text' => '🎉 福利专区'],['text' => '🤷 在线客服']
             ]
         ];
     }
