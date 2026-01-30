@@ -356,7 +356,7 @@ export default new Router({
       name: 'promotion',
       component: promotion,
       meta: {
-        requireAuth: true,
+        requireAuth: false,
       }
     }
     , {
