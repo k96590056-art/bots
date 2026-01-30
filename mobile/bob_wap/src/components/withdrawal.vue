@@ -5,37 +5,17 @@
 
     <div class="tabVox">
       <div :class="activeName == 1 ? 'tab atc' : 'tab'" @click="changevT(1)">USDT取款</div>
-      <div :class="activeName == 2 ? 'tab atc' : 'tab'" @click="changevT(2)">银行卡取款</div>
     </div>
     <div style="background: #fff; box-sizing: border-box; padding: 0 20px">
       <div class="qibao">
         <div class="fes">钱包金额</div>
         <div class="imgs"><img @click="$parent.getUserInfoShowLoding()" src="/static/image/iconRefresh.5b108ae65439270527aeee8ac17c2aca.png" alt="" /></div>
-        <div class="btns" @click="transall">一键回收</div>
+        <van-button class="recover-btn" type="primary" size="small" @click="transall">一键回收</van-button>
       </div>
       <div class="mesg">
         <div class="bosgf">
           <div class="top"><img src="/static/image/qianbao123.png" alt="" />中心钱包</div>
-          <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance || 0 }}</div>
-        </div>
-        <div class="bosgf">
-          <div class="top"><img src="/static/image/qianbao123.png" alt="" />游戏钱包</div>
-          <div class="bots"><span>￥</span>{{ $store.state.userInfo.gameblance }}</div>
-        </div>
-      </div>
-
-      <div class="gameBox" v-if="balancelist.length">
-        <div class="lis" v-for="(item, index) in balancelist" v-if="index < showLis " :key="index">
-          <div class="name">{{ item.name }}</div>
-          <div class="num">{{ item.balance }}</div>
-        </div>
-        <div class="lis" v-if="showLis != 3" @click="changShowLis(3)">
-          <div class="name">收起</div>
-          <div class="num"><img src="/static/image/xiangshang.png" alt="" /></div>
-        </div>
-        <div class="lis" v-if="showLis == 3" @click="changShowLis(balancelist.length )">
-          <div class="name">展开</div>
-          <div class="num"><img src="/static/image/xiangxia.png" alt="" /></div>
+          <div class="bots">{{ $store.state.userInfo.balance || 0 }} USDT</div>
         </div>
       </div>
     </div>
@@ -85,18 +65,22 @@
       </div>
 
       <div style="height: 0.2rem; background: #f8f8f8; width: 100wh"></div>
-      <div class="hgs" v-if="chanmeyXi">
+      <div class="hgs" v-if="bankId && chanmeyXi">
         <div class="nams">每笔手续费</div>
-        <div>{{ chanmeyXi == 'ERC20' ? $store.state.userInfo.withdrawcashfee : $store.state.userInfo.withdrawfeeusdttrc }} USDT</div>
+        <div class="fee-amount">{{ getFeeRate() }}%</div>
       </div>
 
-      <div v-if="chanmeyXi" style="height: 0.2rem; background: #f8f8f8; width: 100wh"></div>
-      <div class="hgs">
-        <div class="nams">折合USDT</div>
-        <div style="padding-top: 5px">
-          <span style="color: rgb(240, 80, 80)">≈ </span>{{ amount ? Math.floor((amount / $store.state.userInfo.withdrawusdtrate) * 100) / 100 : '0.00' }} SDT &nbsp;&nbsp;&nbsp;&nbsp; &nbsp;&nbsp;&nbsp;&nbsp;参考汇率：{{ $store.state.userInfo.withdrawusdtrate }} 实时变化
+      <div v-if="bankId && chanmeyXi" style="height: 0.2rem; background: #f8f8f8; width: 100wh"></div>
+      <div class="hgs" v-if="amount">
+        <div class="nams">实际到账</div>
+        <div class="actual-amount">
+          <span class="amount-value">{{ getActualAmount() }} USDT</span>
         </div>
-        <div class="lasthg" style="padding: 5px 0">实际到账：{{ amount ? Math.floor((amount / $store.state.userInfo.withdrawusdtrate) * 100) / 100 - (chanmeyXi == 'ERC20' ? $store.state.userInfo.withdrawcashfee * 1 : $store.state.userInfo.withdrawfeeusdttrc * 1) : '0.00' }}USDT</div>
+        <div class="fee-info">
+          <span class="fee-label">手续费：</span>
+          <span class="fee-value">{{ getFeeAmount() }} USDT</span>
+        </div>
+        <div v-if="!bankId || !chanmeyXi" class="amount-tip">请先选择USDT地址以计算准确手续费</div>
       </div>
 
       <div style="height: 0.2rem; background: #f8f8f8; width: 100wh"></div>
@@ -239,6 +223,41 @@ export default {
     bigMey(val) {
       this.amount = val * 1;
     },
+    getActualAmount() {
+      if (!this.amount || this.amount <= 0) return '0.00';
+      
+      // 从 store 获取手续费率：withdrawcashfee / 100
+      const userInfo = this.$store.state.userInfo || {};
+      const feePercent = parseFloat(userInfo.withdrawcashfee) || 0;
+      const feeRate = feePercent / 100;
+      
+      // 实际到账 = 输入金额 - (输入金额 × 手续费率)
+      const inputAmount = parseFloat(this.amount) || 0;
+      const fee = inputAmount * feeRate;
+      const actual = Math.max(0, inputAmount - fee);
+      
+      return actual.toFixed(2);
+    },
+    getFeeAmount() {
+      if (!this.amount || this.amount <= 0) return '0.00';
+      
+      // 从 store 获取手续费率：withdrawcashfee / 100
+      const userInfo = this.$store.state.userInfo || {};
+      const feePercent = parseFloat(userInfo.withdrawcashfee) || 0;
+      const feeRate = feePercent / 100;
+      
+      // 手续费 = 输入金额 × 手续费率
+      const inputAmount = parseFloat(this.amount) || 0;
+      const fee = inputAmount * feeRate;
+      
+      return fee.toFixed(2);
+    },
+    getFeeRate() {
+      // 从 store 获取手续费率百分比
+      const userInfo = this.$store.state.userInfo || {};
+      const feePercent = parseFloat(userInfo.withdrawcashfee) || 0;
+      return feePercent.toFixed(2);
+    },
     changShow() {
       this.show = !this.show;
     },
@@ -298,19 +317,25 @@ export default {
           that.$parent.hideLoading();
         });
     },
+    refreshusermoney() {
+      let that = this;
+      that.$apiFun.post('/api/refreshusermoney', {}).then(res => {
+        if (res.code == 200) {
+          localStorage.setItem('userInfo', JSON.stringify(res.data));
+          that.$store.commit('changUserInfo');
+        }
+      });
+    },
+    showTost(type, title) {
+      this.$parent.showTost(type, title);
+    },
     changApiType(e) {
       let that = this;
       that.hgInfo = e;
       console.log(e);
-      if (that.qutype == 1) {
-        let chanmeyXi = null;
-        that.usdssLis.forEach(el => {
-          if (el.id == e) {
-            chanmeyXi = el.bank_owner;
-            return;
-          }
-        });
-        that.chanmeyXi = chanmeyXi;
+      if (that.activeName == 1) {
+        // USDT取款，从选中的USDT地址获取协议类型
+        that.chanmeyXi = e.bank_owner || null;
       } else {
         that.chanmeyXi = null;
       }
@@ -460,7 +485,7 @@ export default {
   align-items: center;
   padding-top: 5px;
   .tab {
-    width: 50%;
+    width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
@@ -506,9 +531,14 @@ export default {
       align-items: center;
     }
   }
-  .btns {
-    color: #697b8c;
-    font-size: 0.28rem;
+  .recover-btn {
+    height: 0.7rem;
+    line-height: 0.7rem;
+    padding: 0 0.3rem;
+    font-size: 0.32rem;
+    font-weight: 600;
+    border-radius: 0.35rem;
+    min-width: 1.6rem;
   }
 }
 
@@ -517,6 +547,7 @@ export default {
   align-items: center;
   height: 2rem;
   border-bottom: 1px solid #f8f8f8;
+  padding: 10px 0;
 
   .bosgf {
     flex: 1;
@@ -535,36 +566,16 @@ export default {
       margin-top: 0.1rem;
       font-size: 0.5rem;
       color: #158bf4;
+      font-weight: 600;
+      display: flex;
+      align-items: baseline;
+      justify-content: center;
       span {
-        font-size: 0.23rem;
+        font-size: 0.4rem;
+        font-weight: 700;
+        margin-right: 2px;
+        color: #158bf4;
       }
-    }
-  }
-}
-
-.gameBox {
-  display: flex;
-  flex-wrap: wrap;
-  .lis {
-    width: 25%;
-    text-align: center;
-    box-sizing: border-box;
-    padding-top: 0.4rem;
-    .name {
-      font-size: 0.23rem;
-      color: #383b43;
-      line-height: 1;
-      overflow: hidden; //超出隐藏
-      text-overflow: ellipsis; //显示省略号
-      white-space: nowrap; //强制不换行
-    }
-    .num {
-      font-size: 0.23rem;
-      color: #cbced8;
-      margin-top: 0.2rem;
-    }
-    img {
-      width: 0.32rem;
     }
   }
 }
@@ -573,9 +584,12 @@ export default {
   background: #fff;
   box-sizing: border-box;
   padding-top: 5px;
+  margin-top: 10px;
+  border-radius: 10px 10px 0 0;
   .hgs {
     width: calc(100% - 40px);
     margin: 0 auto;
+    padding: 8px 0;
   }
   .nams {
     font-size: 0.38rem;
@@ -583,6 +597,43 @@ export default {
     vertical-align: middle;
     margin-top: 10px;
     font-weight: 700;
+  }
+  .fee-amount {
+    font-size: 0.36rem;
+    color: #666;
+    padding: 5px 0;
+  }
+  .actual-amount {
+    padding: 8px 0;
+    .amount-value {
+      font-size: 0.48rem;
+      font-weight: 700;
+      color: #158bf4;
+    }
+  }
+  .amount-tip {
+    font-size: 0.28rem;
+    color: #999;
+    padding: 5px 0;
+    margin-top: 5px;
+  }
+  .fee-info {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    margin-top: 8px;
+    font-size: 0.32rem;
+    min-height: 20px;
+    .fee-label {
+      color: #666;
+      margin-right: 8px;
+      font-weight: 500;
+    }
+    .fee-value {
+      color: #f56c6c;
+      font-weight: 600;
+      font-size: 0.34rem;
+    }
   }
   .imgsa {
     position: relative;

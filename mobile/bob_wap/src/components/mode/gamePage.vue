@@ -3,7 +3,7 @@
     <!-- 顶部导航栏 -->
     <van-nav-bar 
       class="game-nav-bar"
-      title="" 
+      title="星云娱乐" 
       left-arrow 
       @click-left="$router.back()"
     />
@@ -85,7 +85,7 @@ export default {
     calculateMaxHeight() {
       // 动态获取导航栏的实际高度
       const navBar = document.querySelector('.game-nav-bar');
-      const navBarHeight = navBar ? navBar.offsetHeight : 46;
+      const navBarHeight = navBar ? navBar.offsetHeight : 40;
       this.maxHeight = window.innerHeight - navBarHeight;
     },
     
@@ -304,6 +304,8 @@ export default {
   top: 0;
   left: 0;
   width: 100%;
+  height: 40px;
+  min-height: 40px;
   background: linear-gradient(135deg, #6e8efb, #a777e3);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
@@ -312,10 +314,14 @@ export default {
   color: white;
 }
 
+.game-nav-bar /deep/ .van-nav-bar__title {
+  color: white;
+}
+
 .game-main {
   flex: 1;
-  margin-top: 46px;
-  height: calc(100vh - 46px);
+  margin-top: 40px;
+  height: calc(100vh - 40px);
   position: relative;
   overflow: hidden;
 }

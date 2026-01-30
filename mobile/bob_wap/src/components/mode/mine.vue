@@ -113,7 +113,7 @@
               </svg>
             </div>
             <div class="wallet-balance">
-              <span class="currency">¥</span>
+              <span class="currency">$</span>
               <span v-if="showBalance">{{ $store.state.userInfo.balance || '0.00' }}</span>
               <span v-else>****</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2" width="16" height="16" @click.stop="refreshBalance">
@@ -142,12 +142,6 @@
               <img src="/static/image/icon_deposit.png" alt="存款" class="wallet-icon" />
             </div>
             <span>存款</span>
-          </div>
-          <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/transfer') : $parent.goNav('/login')">
-            <div class="btn-icon">
-              <img src="/static/image/icon_transfer.png" alt="转账" class="wallet-icon" />
-            </div>
-            <span>转账</span>
           </div>
           <div class="wallet-btn" @click="$store.state.token ? $parent.goNav('/withdrawal') : $parent.goNav('/login')">
             <div class="btn-icon">
@@ -206,7 +200,7 @@
             </div>
             <span>意见反馈</span>
           </div>
-          <div class="menu-item" @click="$parent.goNav('/boutBallBet')">
+          <div class="menu-item" @click="$parent.goNav('/kefu')">
             <div class="menu-icon">
               <img src="/static/image/Help_center.png" alt="帮助中心" class="menu-icon-img" />
             </div>

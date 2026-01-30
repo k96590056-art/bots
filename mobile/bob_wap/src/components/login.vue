@@ -166,6 +166,9 @@ export default {
     if (query.pid) {
       that.pid = query.pid;
     }
+    if (query.msg === 'expired') {
+      that.$parent.showTost(0, '登录已过期，请重新登录');
+    }
     // 回填记住的账号密码
     try {
       const saved = localStorage.getItem('login_remember');
@@ -346,10 +349,17 @@ export default {
                 name: that.formData.name,
                 password: that.formData.password,
               }));
+              // 记住密码：Token 永久有效（不设置过期时间）
+              localStorage.setItem('token', res.data.api_token);
+              localStorage.removeItem('token_expire_time');
             } catch (e) {}
           } else {
             try {
               localStorage.removeItem('login_remember');
+              // 不记住密码：Token 有效期 1 天
+              localStorage.setItem('token', res.data.api_token);
+              let expireTime = new Date().getTime() + 24 * 60 * 60 * 1000;
+              localStorage.setItem('token_expire_time', expireTime);
             } catch (e) {}
           }
           sessionStorage.setItem('token', res.data.api_token);

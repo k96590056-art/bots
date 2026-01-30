@@ -110,12 +110,12 @@ class PayController extends Controller
         $data['mobile'] = $user->phone;
         $data['email'] = $user->mail;
         $data['birthday'] = $user->birthday;
-        $data['usdtrate'] = $info->value;
-        $data['withdrawusdtrate'] =$info_withdraw->value;
+        $data['usdtrate'] = $info ? ($info->value ?? '7.2') : '7.2';
+        $data['withdrawusdtrate'] = $info_withdraw ? ($info_withdraw->value ?? '7.2') : '7.2';
         $info_withdrawcashfee = SystemConfig::where('key','withdraw_fee_usdt_erc')->first();
-        $data['withdrawcashfee'] =$info_withdrawcashfee->value;
+        $data['withdrawcashfee'] = $info_withdrawcashfee ? ($info_withdrawcashfee->value ?? '0') : '0';
         $info_withdrawfeeusdttrc = SystemConfig::where('key','withdraw_cash_fee')->first();
-        $data['withdrawfeeusdttrc'] =$info_withdrawfeeusdttrc->value;
+        $data['withdrawfeeusdttrc'] = $info_withdrawfeeusdttrc ? ($info_withdrawfeeusdttrc->value ?? '0') : '0';
         $uservip = UserVip::where('id',$user->vip)->first();
         if($uservip){
                 $data['vipname'] =  '/static/style/'.strtolower($uservip->vipname).'.png';
@@ -1139,6 +1139,358 @@ class PayController extends Controller
 
     }
 
+    /**
+     * 回收指定平台的余额（公共方法，供其他控制器调用）
+     * 
+     * @param User $user 用户对象
+     * @param string $platformType 平台类型（platform_name）
+     * @return array 返回结果 ['code' => 200/201, 'message' => '', 'data' => []]
+     */
+    public function recyclePlatformBalance($user, $platformType)
+    {
+        try {
+            // 规范化平台类型
+            $originalPlatformType = $platformType;
+            $platformType = $this->normalizePlatformTypeCompat($platformType);
+            $withApi = $this->resolveWithApiByPlatformCompat($platformType);
+            
+            // 记录日志，方便调试
+            Log::info('回收余额 - 开始处理', [
+                'user_id' => $user->id,
+                'original_platform_type' => $originalPlatformType,
+                'normalized_platform_type' => $platformType,
+                'resolved_with_api' => $withApi
+            ]);
+
+            // 根据接口类型选择服务类
+            $serviceClass = '\\App\\Services\\' . ucfirst(strtolower($withApi)) . 'Service';
+            if (!class_exists($serviceClass)) {
+                // Special handling for DbDianzi/Dbzhenren/DbEvo/Dbkaiyuan
+                if (strtolower($withApi) === 'dbdianzi') {
+                    $serviceClass = '\\App\\Services\\DbdianziService';
+                } elseif (strtolower($withApi) === 'dbzhenren') {
+                    $serviceClass = '\\App\\Services\\DbzhenrenService';
+                } elseif (strtolower($withApi) === 'dbevo') {
+                    $serviceClass = '\\App\\Services\\DbevoService';
+                } elseif (strtolower($withApi) === 'dbkaiyuan') {
+                    $serviceClass = '\\App\\Services\\DbkaiyuanService';
+                } elseif (strtolower($withApi) === 'dbgmag') {
+                    $serviceClass = '\\App\\Services\\DbgmagService';
+                } elseif (strtolower($withApi) === 'dboneapi') {
+                    $serviceClass = '\\App\\Services\\DboneapiService';
+                } else {
+                    $serviceClass = '\\App\\Services\\TgService';
+                }
+            }
+            $service = new $serviceClass();
+
+            // 先获取user_api表中的余额（用于对比）
+            $User_Api = User_Api::where('api_code', $platformType)
+                ->where('user_id', $user->id)
+                ->first();
+            $userApiMoney = $User_Api ? floatval($User_Api->api_money ?? 0) : 0;
+            
+            // 获取游戏接口返回的实际余额（这是真实的余额，应该以此为准）
+            $result = null;
+            $interfaceAmount = 0;
+            
+            // 尝试获取余额，如果失败则使用user_api表中的余额作为兜底
+            // 使用 try-catch 确保即使获取余额时抛出异常也不会中断流程
+            try {
+                if (method_exists($service, 'balanceOfficial')) {
+                    $result = $service->balanceOfficial($platformType, $user->username);
+                } elseif (method_exists($service, 'balance')) {
+                    $result = $service->balance($platformType, $user->username);
+                }
+            } catch (\Exception $e) {
+                // 获取余额时抛出异常，记录日志但继续处理（使用user_api表中的余额作为兜底）
+                Log::warning('回收余额 - 获取接口余额时抛出异常，将使用user_api表中的余额作为兜底', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'with_api' => $withApi,
+                    'user_api_money' => $userApiMoney,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                $result = null;
+                $interfaceAmount = 0;
+            }
+
+            if ($result && isset($result['code']) && $result['code'] == 200) {
+                $interfaceAmount = floatval($result['data'] ?? 0);
+            } else {
+                // 获取余额失败，记录日志但继续处理（使用user_api表中的余额作为兜底）
+                Log::warning('回收余额 - 获取接口余额失败，将使用user_api表中的余额作为兜底', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'with_api' => $withApi,
+                    'user_api_money' => $userApiMoney,
+                    'result' => $result
+                ]);
+                $interfaceAmount = 0;
+            }
+            
+            // 优先使用接口返回的实际余额作为回收金额（这是真实的余额）
+            // 如果接口返回的余额为0，则使用user_api表中的余额作为兜底
+            $amount = $interfaceAmount > 0 ? $interfaceAmount : $userApiMoney;
+
+            // 即使金额为0，也要调用接口扣除余额（确保游戏接口方的余额被清零）
+            $amount = intval($amount);
+            $order_no = date('YmdHis') . rand(100000, 999999);
+            
+            // 如果金额为0，记录日志但继续调用接口
+            if ($amount < 1) {
+                Log::info('回收余额 - 余额为0，但仍需调用接口确保游戏接口方余额清零', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'amount' => $amount
+                ]);
+            }
+
+            // 创建转账记录（即使金额为0也要创建，确保调用接口）
+            // 使用 try-catch 确保即使创建记录时出错也不会中断流程
+            $transferLog = null;
+            try {
+                $arr = [
+                    'order_no' => $order_no,
+                    'api_type' => $withApi,
+                    'platform_type' => $platformType,
+                    'user_id' => $user->id,
+                    'transfer_type' => 1, // 回收
+                    'money' => $amount,
+                    'cash_fee' => 0,
+                    'real_money' => $amount,
+                    'before_money' => $user->balance,
+                    'after_money' => $user->balance,
+                    'state' => 0
+                ];
+                $transferLog = TransferLog::create($arr);
+            } catch (\Exception $e) {
+                // 创建转账记录失败，记录日志但继续处理（尝试调用接口）
+                Log::error('回收余额 - 创建转账记录失败', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'order_no' => $order_no,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                // 继续执行，尝试调用接口
+            }
+
+            // 检查服务类是否有 withdrawal 方法
+            if (!method_exists($service, 'withdrawal')) {
+                // 如果服务类没有 withdrawal 方法，删除转账记录并返回错误（但不抛出异常，让调用方继续处理其他场馆）
+                if ($transferLog) {
+                    try {
+                        $transferLog->delete();
+                    } catch (\Exception $e) {
+                        // 删除记录失败，记录日志但继续
+                        Log::warning('回收余额 - 删除转账记录失败', [
+                            'user_id' => $user->id,
+                            'platform_type' => $platformType,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                Log::error('回收余额 - 服务类不支持withdrawal方法', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'with_api' => $withApi,
+                    'service_class' => get_class($service)
+                ]);
+                return ['code' => 400, 'message' => "服务类不支持回收方法（withdrawal），platform_type: {$platformType}, with_api: {$withApi}", 'data' => []];
+            }
+
+            // 必须调用回收接口扣除游戏接口方的余额（即使金额为0也要调用）
+            // 即使接口调用失败，也要继续处理其他场馆，所以这里捕获所有异常
+            $res = null;
+            try {
+                if (strtolower($withApi) === 'db') {
+                    // DB接口需要venue_code
+                    $gameList = GameList::where('with_api', 'db')
+                        ->where('platform_name', $platformType)
+                        ->whereNotNull('venue_code')
+                        ->where('venue_code', '!=', '')
+                        ->first();
+
+                    if (!$gameList || empty($gameList->venue_code)) {
+                        if ($transferLog) {
+                            try {
+                                $transferLog->delete();
+                            } catch (\Exception $e) {
+                                // 删除记录失败，记录日志但继续
+                                Log::warning('回收余额 - 删除转账记录失败', [
+                                    'user_id' => $user->id,
+                                    'platform_type' => $platformType,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                        Log::error('回收余额 - 未找到venue_code', [
+                            'platform_type' => $platformType,
+                            'with_api' => $withApi
+                        ]);
+                        return ['code' => 400, 'message' => "未找到 api_code ({$platformType}) 对应的 venue_code", 'data' => []];
+                    }
+
+                    $venueCode = $gameList->venue_code;
+                    // 调用接口扣除游戏接口方的余额（即使金额为0也要调用）
+                    $res = $service->withdrawal($user->username, $amount, $order_no, $venueCode, 'USDT');
+                } else {
+                    // 其他平台：withdrawal($username, $amount, $orderNo, $api_code/platform)
+                    // 调用接口扣除游戏接口方的余额（即使金额为0也要调用）
+                    $res = $service->withdrawal($user->username, $amount, $order_no, $platformType);
+                }
+            } catch (\Exception $e) {
+                // 接口调用异常，删除转账记录，返回失败但不抛出异常（让调用方继续处理其他场馆）
+                if ($transferLog) {
+                    try {
+                        $transferLog->delete();
+                    } catch (\Exception $deleteException) {
+                        // 删除记录失败，记录日志但继续
+                        Log::warning('回收余额 - 删除转账记录失败', [
+                            'user_id' => $user->id,
+                            'platform_type' => $platformType,
+                            'error' => $deleteException->getMessage()
+                        ]);
+                    }
+                }
+                Log::error('回收余额 - 接口调用异常', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'amount' => $amount,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                return ['code' => 201, 'message' => '接口调用异常：' . $e->getMessage(), 'data' => []];
+            }
+
+            if ($res && isset($res['code']) && $res['code'] == 200) {
+                // 接口调用成功，更新用户余额和User_Api余额
+                try {
+                    // 如果回收金额大于0，更新用户余额
+                    if ($amount > 0) {
+                        $user->balance += $amount;
+                        $user->save();
+                    }
+                    
+                    // 更新转账记录（如果存在）
+                    if ($transferLog) {
+                        // 如果金额与记录中的金额不一致，更新记录
+                        if ($transferLog->money != $amount) {
+                            $transferLog->money = $amount;
+                            $transferLog->real_money = $amount;
+                        }
+                        $transferLog->after_money = $user->balance;
+                        $transferLog->state = 1;
+                        $transferLog->save();
+                    }
+
+                    // 更新User_Api余额（清零）- 无论金额多少，都清零，因为已经回收了
+                    if ($User_Api) {
+                        $oldApiMoney = $User_Api->api_money;
+                        $User_Api->api_money = 0;
+                        $saveResult = $User_Api->save();
+                        
+                        // 记录清零操作的结果
+                        if (!$saveResult) {
+                            Log::warning('回收余额 - User_Api余额清零失败', [
+                                'user_id' => $user->id,
+                                'platform_type' => $platformType,
+                                'old_api_money' => $oldApiMoney,
+                                'user_api_id' => $User_Api->id
+                            ]);
+                        } else {
+                            Log::info('回收余额 - User_Api余额已清零', [
+                                'user_id' => $user->id,
+                                'platform_type' => $platformType,
+                                'old_api_money' => $oldApiMoney,
+                                'new_api_money' => 0,
+                                'recycled_amount' => $amount
+                            ]);
+                        }
+                    } else {
+                        // 如果User_Api记录不存在，创建一条记录（api_money为0）
+                        try {
+                            $User_Api = User_Api::create([
+                                'user_id' => $user->id,
+                                'api_code' => $platformType,
+                                'api_user' => $user->username,
+                                'api_pass' => '', // 如果需要密码，可以从其他地方获取
+                                'api_money' => 0
+                            ]);
+                            Log::info('回收余额 - 创建User_Api记录（余额为0）', [
+                                'user_id' => $user->id,
+                                'platform_type' => $platformType
+                            ]);
+                        } catch (\Exception $e) {
+                            Log::warning('回收余额 - 创建User_Api记录失败', [
+                                'user_id' => $user->id,
+                                'platform_type' => $platformType,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
+
+                    Log::info('回收余额 - 接口调用成功', [
+                        'user_id' => $user->id,
+                        'platform_type' => $platformType,
+                        'interface_amount' => $interfaceAmount,
+                        'user_api_amount' => $userApiMoney,
+                        'recycled_amount' => $amount,
+                        'user_balance_before' => $user->balance - $amount,
+                        'user_balance_after' => $user->balance,
+                        'order_no' => $order_no
+                    ]);
+                    return ['code' => 200, 'message' => $amount > 0 ? '回收成功' : '接口调用成功（余额为0）', 'data' => ['amount' => $amount]];
+                } catch (\Exception $e) {
+                    // 更新数据时出错，记录日志但返回成功（因为接口调用已经成功）
+                    Log::error('回收余额 - 接口调用成功但更新数据失败', [
+                        'user_id' => $user->id,
+                        'platform_type' => $platformType,
+                        'amount' => $amount,
+                        'order_no' => $order_no,
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    return ['code' => 200, 'message' => '接口调用成功（但更新数据失败）', 'data' => ['amount' => $amount]];
+                }
+            } else {
+                // 接口调用失败（如余额不足、接口错误等），删除转账记录，返回失败但不抛出异常
+                if ($transferLog) {
+                    try {
+                        $transferLog->delete();
+                    } catch (\Exception $e) {
+                        // 删除记录失败，记录日志但继续
+                        Log::warning('回收余额 - 删除转账记录失败', [
+                            'user_id' => $user->id,
+                            'platform_type' => $platformType,
+                            'order_no' => $order_no,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                Log::warning('回收余额 - 接口调用失败（继续处理其他场馆）', [
+                    'user_id' => $user->id,
+                    'platform_type' => $platformType,
+                    'amount' => $amount,
+                    'result' => $res,
+                    'error_message' => (isset($res['message']) ? $res['message'] : '未知错误')
+                ]);
+                return ['code' => 201, 'message' => (isset($res['message']) ? $res['message'] : '接口调用失败'), 'data' => []];
+            }
+        } catch (\Throwable $e) {
+            // 捕获所有异常和错误（包括 Error 和 Exception），确保不会中断其他场馆的回收
+            Log::error('回收余额 - 异常', [
+                'user_id' => $user->id ?? null,
+                'platform_type' => $platformType ?? 'unknown',
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return ['code' => 500, 'message' => '回收异常：' . $e->getMessage(), 'data' => []];
+        }
+    }
+
     public function getPayWay()
     {
         $wxinfo = CodePay::where('status',1)->where('id',3)->count();
@@ -1154,6 +1506,54 @@ class PayController extends Controller
         $alipay = $alipayinfo ? 1 : 0;
         $card = count($cardlist) > 0 ? 1 : 0;
         return $this->returnMsg(200,compact('wechat','usdt','alipay','card'),'success');
+    }
+
+    /**
+     * 获取所有支付方式信息
+     * 从 code_pay 表获取所有启用的支付方式，并组装图片URL
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getPayments()
+    {
+        try {
+            // 获取所有启用的支付方式
+            $payments = CodePay::where('status', 1)
+                ->orderBy('id', 'asc')
+                ->get()
+                ->map(function ($item) {
+                    // 组装图片URL
+                    $payimgUrl = '';
+                    if (!empty($item->payimg)) {
+                        // 如果 payimg 已经是完整URL，直接使用；否则组装
+                        if (filter_var($item->payimg, FILTER_VALIDATE_URL)) {
+                            $payimgUrl = $item->payimg;
+                        } else {
+                            $payimgUrl = env('APP_URL') . '/uploads/' . ltrim($item->payimg, '/');
+                        }
+                    }
+                    
+                    return [
+                        'id' => $item->id,
+                        'mch_id' => $item->mch_id,
+                        'content' => $item->content,
+                        'payimg' => $payimgUrl,
+                        'min_price' => floatval($item->min_price ?? 0),
+                        'max_price' => floatval($item->max_price ?? 0),
+                        'status' => $item->status,
+                    ];
+                })
+                ->values()
+                ->toArray();
+
+            return $this->returnMsg(200, $payments, '获取成功');
+        } catch (\Exception $e) {
+            Log::error('获取支付方式列表失败', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $this->returnMsg(500, [], '获取支付方式列表失败：' . $e->getMessage());
+        }
     }
 
     public function userRedPacket(Request $request)

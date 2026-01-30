@@ -65,8 +65,9 @@ class CodePayController extends AdminController
     {
         return Form::make(new CodePay(), function (Form $form) {
             $form->display('id');
-             $form->text('content','标题')->required();
-            $form->text('mch_id','帐号')->required();
+            $form->text('content','标题')->required();
+            $form->text('mch_id','编码类型')->required();
+            $form->text('key','支付代码');
             $form->decimal('min_price','最低充值金额')->required();
             $form->decimal('max_price','最大充值金额')->required();
             $form->image('payimg','收款二维码')->uniqueName()->required()->rules('mimes:jpeg,png,jpg,gif,webp|max:2048');

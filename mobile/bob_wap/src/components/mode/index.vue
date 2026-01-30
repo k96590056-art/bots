@@ -10,8 +10,6 @@
       <div class="top-logo" @click="goToH5">
         <img :src="$store.state.appInfo.site_logo" alt="" class="logo" />
         <div class="logo-text">
-          <div class="logo-title">{{ $store.state.appInfo.site_name }}</div>
-          <div class="logo-domain">{{ ($store.state.appInfo.h5_url || '').replace(/^https?:\/\//, '') }}</div>
         </div>
       </div>
     </div>
@@ -56,7 +54,7 @@
         <div class="user-info-left" v-if="$store.state.token">
           <div class="user-name">{{ $store.state.userInfo.username }}</div>
           <div class="user-balance">
-            <span class="balance-amount">{{ balanceVisible ? '¥ ' + ($store.state.userInfo.balance || 0) : '******' }}</span>
+            <span class="balance-amount">{{ balanceVisible ? '$ ' + ($store.state.userInfo.balance || 0) : '******' }}</span>
             <img
               @click="toggleBalanceVisible"
               :class="['toggle-eye-icon', balanceVisible ? 'eye-open' : 'eye-closed']"
@@ -64,6 +62,7 @@
               alt="显示/隐藏余额"
             />
           </div>
+          <van-button class="recover-btn" type="primary" size="small" @click="transall">一键回收</van-button>
         </div>
         <div v-else class="user-info-left" @click="$parent.goNav('/login')">
           <div class="user-name not-login">您还未登录</div>
@@ -75,12 +74,6 @@
               <img src="/static/image/icon_deposit.png" alt="存款" class="action-icon-img" />
             </div>
             <span>存款</span>
-          </div>
-          <div class="action-btn" @click="$parent.goNav('/transfer')">
-            <div class="action-icon">
-              <img src="/static/image/icon_transfer.png" alt="转账" class="action-icon-img" />
-            </div>
-            <span>转账</span>
           </div>
           <div class="action-btn" @click="$parent.goNav('/withdrawal')">
             <div class="action-icon">
@@ -498,6 +491,32 @@ export default {
         window.location.href = url;
       }
     },
+    transall() {
+      let that = this;
+      that.$parent.showLoading();
+      that.$apiFun
+        .post('/api/transall', {})
+        .then(res => {
+          that.showTost(1, res.message);
+          that.refreshusermoney();
+          that.$parent.hideLoading();
+        })
+        .catch(res => {
+          that.$parent.hideLoading();
+        });
+    },
+    refreshusermoney() {
+      let that = this;
+      that.$apiFun.post('/api/refreshusermoney', {}).then(res => {
+        if (res.code == 200) {
+          localStorage.setItem('userInfo', JSON.stringify(res.data));
+          that.$store.commit('changUserInfo');
+        }
+      });
+    },
+    showTost(type, title) {
+      this.$parent.showTost(type, title);
+    },
   },
   mounted() {
     let that = this;
@@ -520,8 +539,7 @@ export default {
     cursor: pointer;
 
     .logo {
-      width: 8vw;
-      height: 8vw;
+      width: 12vw;
       margin-right: 2vw;
       border-radius: 1.5vw;
     }
@@ -707,7 +725,7 @@ export default {
         margin-top: 1vw;
 
         .balance-amount {
-          font-size: 5.8vw;
+          font-size: 4.5vw;
           font-weight: 700;
           color: #333333;
         }
@@ -726,6 +744,20 @@ export default {
             margin-top: -1.5vw;
           }
         }
+      }
+
+      .recover-btn {
+        margin-top: 2vw;
+        height: 6vw;
+        line-height: 6vw;
+        padding: 0 3vw;
+        font-size: 3vw;
+        font-weight: 600;
+        border-radius: 3vw;
+        min-width: 20vw;
+        align-self: flex-start;
+        background: #1890ff !important;
+        border-color: #1890ff !important;
       }
 
       .user-tip {
@@ -1171,7 +1203,6 @@ export default {
   flex-shrink: 0;
   // 自适应宽度：(屏幕宽度 - 左右边距10vw - 卡片间距3vw) / 2
   width: calc((100vw - 10vw - 3vw) / 2);
-  height: 55vw;
   margin: 0;
   cursor: pointer;
   transition: transform 0.3s ease;
@@ -1303,8 +1334,7 @@ export default {
     justify-content: center;
 
     img {
-      width: 100%;
-      height: 100%;
+      width: 90%;
       object-fit: cover;
       display: block;
     }

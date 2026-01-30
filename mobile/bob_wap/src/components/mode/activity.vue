@@ -15,11 +15,11 @@
 
     <!-- 活动列表 -->
     <div class="activity-list">
-      <div class="activity-card" v-for="(item, index) in activitylistList" :key="index" @click="$parent.goNav(`/activityInfo?id=${item.id}`)">
+      <div class="activity-card" v-for="(item, index) in activitylistList" :key="index">
           <img style="width: 100%;" :src="item.banner" alt="" />
       </div>
-
-      <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '20px 16px' }">END</van-divider>
+      <div style="height: 10px;text-align: center;color: #333;font-size: 18px; font-weight: 600;">详情请咨询客服</div>
+      <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '10px 16px' }">END</van-divider>
     </div>
 
     <!-- 底部占位 -->

@@ -15,6 +15,7 @@ use App\Models\Recharge;
 use App\Models\Withdraw;
 use App\Models\TransferLog;
 use App\Models\TelegramRebindToken;
+use App\Models\Activity;
 use Illuminate\Support\Facades\DB;
 use App\Services\TelegramBotService;
 use App\Services\TronUsdtService;
@@ -78,7 +79,7 @@ class TelegramWebhookController extends Controller
      */
     protected function initializeBotCommands()
     {
-        $cacheKey = 'telegram_bot_commands_initialized_v3';
+        $cacheKey = 'telegram_bot_commands_initialized_v2';
 
         // 检查是否已经设置过（缓存24小时）
         if (!Cache::has($cacheKey)) {
@@ -89,18 +90,8 @@ class TelegramWebhookController extends Controller
             ];
             $result = $this->telegramBot->setMyCommands($commands);
 
-            // 获取游戏入口地址，用于设置 Menu Button
-            $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: '');
-
-            // 设置 Menu Button 为 web_app 模式（显示 "Open" 按钮）
-            if (!empty($gameUrl)) {
-                $menuResult = $this->telegramBot->setChatMenuButton('web_app', null, $gameUrl, 'Open');
-                Log::info('设置 Menu Button 为 web_app 模式', ['url' => $gameUrl]);
-            } else {
-                // 如果没有配置游戏地址，使用默认的命令模式
-                $menuResult = $this->telegramBot->setChatMenuButton('commands');
-                Log::info('未配置游戏地址，Menu Button 使用 commands 模式');
-            }
+            // 设置 Menu Button 为命令模式（显示命令列表）
+            $menuResult = $this->telegramBot->setChatMenuButton('commands');
 
             if ($result['code'] == 200 && $menuResult['code'] == 200) {
                 // 设置成功后缓存24小时
@@ -365,16 +356,6 @@ class TelegramWebhookController extends Controller
             if ($text === '/start' || empty($text) || preg_match('/^\/start\s+\d+$/', $text)) {
                 // 清除用户状态，避免残留状态影响
                 $this->clearUserState($telegramId);
-        // 处理/start命令或首次进入
-        @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 检查是否为 /start 命令 ===' . PHP_EOL .
-            'Text: "' . $text . '"' . PHP_EOL .
-            'Text === /start: ' . ($text === '/start' ? 'Yes' : 'No') . PHP_EOL .
-            'Empty text: ' . (empty($text) ? 'Yes' : 'No') . PHP_EOL .
-            '---' . PHP_EOL, FILE_APPEND);
-
-        if ($text === '/start' || empty($text) || preg_match('/^\/start\s+\d+$/', $text)) {
-            // 清除用户状态，避免残留状态影响
-            $this->clearUserState($telegramId);
 
                 Log::info('触发显示主菜单', [
                     'chat_id' => $chatId,
@@ -401,12 +382,23 @@ class TelegramWebhookController extends Controller
                 ];
 
                 try {
+                    // 先发送欢迎文字消息（带常驻键盘）
+                    $welcomeText = "欢迎来到星云娱乐飞投\n\n";
+                    $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                    $replyKeyboard = $this->getPersistentKeyboard();
+                    $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
+                    
+                    $bannerImageUrl = env('APP_URL') . '/static/images/banner.jpg';
+                    $this->telegramBot->sendPhoto($chatId, $bannerImageUrl, '');
+                    
+                    // 然后显示主菜单（跳过欢迎文字，因为已经发送过了）
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
-                    $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
+                    $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo, null, null, true);
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用完成 ===' . PHP_EOL .
                         'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL .
                         '---' . PHP_EOL, FILE_APPEND);
                     Log::info('showMainMenu返回结果', ['result' => $result]);
+                    
                     return $result;
                 } catch (\Throwable $e) {
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL .
@@ -421,51 +413,6 @@ class TelegramWebhookController extends Controller
                     throw $e;
                 }
             }
-            Log::info('触发显示主菜单', [
-                'chat_id' => $chatId,
-                'user_id' => $user->id,
-                'text' => $text,
-                'is_new_user' => $isNewUser,
-                'line' => __LINE__
-            ]);
-
-            // 记录到文件日志
-            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 触发显示主菜单 ===' . PHP_EOL .
-                'Chat ID: ' . $chatId . PHP_EOL .
-                'User ID: ' . $user->id . PHP_EOL .
-                'Text: ' . $text . PHP_EOL .
-                'Is New User: ' . ($isNewUser ? 'Yes' : 'No') . PHP_EOL .
-                '准备调用 showMainMenu...' . PHP_EOL .
-                '---' . PHP_EOL, FILE_APPEND);
-
-            // showMainMenu会自动检查first_password并显示密码（如果是新用户）
-            // 传递 Telegram 用户信息以获取最新的名称、用户名和ID
-            $telegramUserInfo = [
-                'first_name' => $firstName,
-                'username' => $username
-            ];
-
-            try {
-                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
-                $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo);
-                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用完成 ===' . PHP_EOL .
-                    'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL .
-                    '---' . PHP_EOL, FILE_APPEND);
-                Log::info('showMainMenu返回结果', ['result' => $result]);
-                return $result;
-            } catch (\Throwable $e) {
-                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL .
-                    'Error: ' . $e->getMessage() . PHP_EOL .
-                    'File: ' . $e->getFile() . ':' . $e->getLine() . PHP_EOL .
-                    '---' . PHP_EOL, FILE_APPEND);
-                Log::error('showMainMenu调用异常', [
-                    'error' => $e->getMessage(),
-                    'file' => $e->getFile(),
-                    'line' => $e->getLine()
-                ]);
-                throw $e;
-            }
-        }
 
             // 处理/help命令
             if ($text === '/help') {
@@ -776,52 +723,6 @@ class TelegramWebhookController extends Controller
                         'username' => $callbackQuery['from']['username'] ?? null
                     ];
                     return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, $tipMessage);
-            case 'reclaim_balance':
-                // 回收余额 - 调用一键回收方法
-                $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
-
-                // 确保用户有 api_token
-                if (empty($user->api_token)) {
-                    $user->api_token = Str::random(60);
-                    $user->save();
-                }
-
-                // 创建 PayController 实例并调用 transAll 方法
-                $payController = new \App\Http\Controllers\Api\PayController();
-                $request = Request::create('/api/pay/transAll', 'POST', [], [], [], [
-                    'HTTP_AUTHORIZATION' => 'Bearer ' . $user->api_token
-                ]);
-                $request->headers->set('authorization', 'Bearer ' . $user->api_token);
-
-                try {
-                    $result = $payController->transAll($request);
-                    // returnMsg 返回的是 Response 对象，需要获取 JSON 内容
-                    $resultData = json_decode($result->getContent(), true);
-
-                    // 根据返回结果生成提示语
-                    if (isset($resultData['code']) && $resultData['code'] == 200) {
-                        $message = !empty($resultData['message']) ? $resultData['message'] : '回收成功';
-                        $tipMessage = '✅ ' . $message;
-                    } else {
-                        $message = !empty($resultData['message']) ? $resultData['message'] : '回收失败，请稍后重试';
-                        $tipMessage = '❌ ' . $message;
-                    }
-                } catch (\Throwable $e) {
-                    Log::error('Telegram一键回收异常', [
-                        'user_id' => $user->id,
-                        'username' => $user->username,
-                        'error' => $e->getMessage(),
-                        'file' => $e->getFile(),
-                        'line' => $e->getLine()
-                    ]);
-                    $tipMessage = '❌ 回收失败：' . $e->getMessage();
-                }
-
-                $telegramUserInfo = [
-                    'first_name' => $callbackQuery['from']['first_name'] ?? null,
-                    'username' => $callbackQuery['from']['username'] ?? null
-                ];
-                return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, $tipMessage);
 
                 case 'deposit_withdraw':
                     // 充值提现二级菜单
@@ -913,6 +814,11 @@ class TelegramWebhookController extends Controller
                         'username' => $callbackQuery['from']['username'] ?? null
                     ];
                     return $this->showMainMenu($chatId, $user, $messageId, $telegramUserInfo, '该功能正在开发中...');
+
+                case 'show_activities':
+                    // 显示福利活动图片
+                    $this->telegramBot->answerCallbackQuery($callbackQueryId, false); // 只消除加载状态
+                    return $this->showActivities($chatId, $user);
 
                 case 'language':
                     // 语言切换（待实现）
@@ -1130,9 +1036,10 @@ class TelegramWebhookController extends Controller
      * @param array|null $telegramUserInfo Telegram 用户信息（可选，包含 first_name、username 等）
      * @param string|null $noticeMessage 可选的提示信息，会在文字区顶部显示
      * @param string|null $flowDetail 可选的流水明细内容，会在文字区显示
+     * @param bool $skipWelcomeText 是否跳过发送欢迎文字消息（默认false，当从/start命令调用时设为true）
      * @return \Illuminate\Http\JsonResponse
      */
-    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null, $noticeMessage = null, $flowDetail = null)
+    protected function showMainMenu($chatId, $user, $messageId = null, $telegramUserInfo = null, $noticeMessage = null, $flowDetail = null, $skipWelcomeText = false)
     {
         try {
             // 刷新用户对象，确保获取最新的 first_password 字段
@@ -1202,8 +1109,9 @@ class TelegramWebhookController extends Controller
 
                 // 显示Telegram ID
                 $text .= "🆔 <b>ID：</b>{$user->telegram_id}\n";
-                $text .= "💰 钱包余额: {$walletBalance} CNY\n";
-                $text .= "💵 游戏余额: {$gameBalance} CNY\n";
+                $text .= "🆔 <b>用户名：</b>{$user->username}\n";
+                $text .= "💰 钱包余额: {$walletBalance}\n";
+                $text .= "💵 游戏余额: {$gameBalance}\n";
 
                 // 显示钱包地址
                 $moneyAddress = $user->money_address ?? '';
@@ -1292,9 +1200,7 @@ class TelegramWebhookController extends Controller
             }
             $redpacketRow[] = [
                 'text' => '🎁 福利活动',
-                'web_app' => [
-                    'url' => rtrim($gameUrl, '/') . '/#/activity'
-                ]
+                'callback_data' => 'show_activities'
             ];
 
             // 如果红包功能开启，一行两个按钮；如果关闭，只显示福利活动一个按钮
@@ -1324,21 +1230,34 @@ class TelegramWebhookController extends Controller
                 if ($mainImageUrl) {
                     $result = $this->telegramBot->editMessageMedia($chatId, $messageId, $mainImageUrl, $fullText, $inlineKeyboard);
                     if ($result['code'] != 200) {
-                        // 如果编辑失败（原消息是文本），发送新图片消息
-                        $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $fullText, $inlineKeyboard);
+                        // 如果编辑图片失败，尝试编辑文字消息
+                        $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $fullText, $inlineKeyboard);
+                        if ($result['code'] != 200) {
+                            Log::warning('编辑主菜单消息失败', [
+                                'chat_id' => $chatId,
+                                'message_id' => $messageId,
+                                'result' => $result
+                            ]);
+                        }
                     }
                 } else {
                     $result = $this->telegramBot->editMessageTextWithInlineKeyboard($chatId, $messageId, $fullText, $inlineKeyboard);
                     if ($result['code'] != 200) {
-                        $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $fullText, $inlineKeyboard);
+                        Log::warning('编辑主菜单文字消息失败', [
+                            'chat_id' => $chatId,
+                            'message_id' => $messageId,
+                            'result' => $result
+                        ]);
                     }
                 }
             } else {
-                // 先发送欢迎文字消息（带常驻键盘）
-                $welcomeText = "欢迎来到星云娱乐飞投\n\n";
-                $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
-                $replyKeyboard = $this->getPersistentKeyboard();
-                $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
+                // 如果没有跳过欢迎文字，先发送欢迎文字消息（带常驻键盘）
+                if (!$skipWelcomeText) {
+                    $welcomeText = "欢迎来到星云娱乐飞投\n\n";
+                    $welcomeText .= "🎁星云娱乐飞投：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
+                    $replyKeyboard = $this->getPersistentKeyboard();
+                    $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
+                }
 
                 // 发送图片消息，文字作为caption，按钮作为reply_markup
                 $photoResult = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
@@ -1362,21 +1281,6 @@ class TelegramWebhookController extends Controller
             }
 
             // 常驻键盘已在欢迎消息中设置，无需再单独发送
-
-            // 单独发送一条简单消息，只包含一个 web_app 按钮，用于在聊天列表显示 "Open" 按钮
-            $simpleInlineKeyboard = [[
-                [
-                    'text' => '🎮 点击进入游戏',
-                    'web_app' => [
-                        'url' => $gameUrl
-                    ]
-                ]
-            ]];
-            $this->telegramBot->sendMessageWithInlineKeyboard(
-                $chatId,
-                '🎮 点击下方按钮进入游戏',
-                $simpleInlineKeyboard
-            );
 
             return response()->json(['ok' => true]);
         } catch (\Exception $e) {
@@ -1501,8 +1405,8 @@ class TelegramWebhookController extends Controller
         $displayName = $this->getTelegramDisplayName($user, $telegramUsername);
         $text = "账户信息\n\n";
         $text .= "用户: {$displayName}\n";
-        $text .= "钱包余额: {$walletBalance} CNY\n";
-        $text .= "游戏余额: " . number_format($gameBalance, 4) . " CNY\n";
+        $text .= "钱包余额: {$walletBalance}\n";
+        $text .= "游戏余额: " . number_format($gameBalance, 4) . "\n";
 
         // 显示钱包地址
         $moneyAddress = $user->money_address ?? '';
@@ -1514,42 +1418,52 @@ class TelegramWebhookController extends Controller
         $text .= "当前游戏: {$game->name}\n";
         $text .= "当前时间: " . date('Y-m-d H:i:s');
 
-        // 获取游戏链接，用于绑定到"开始游戏"按钮
-        $gameUrl = $this->getGameUrl($user, $platformName, $gameCode, $game);
-
+        // 检查游戏是否支持机器人打开（is_bot == 1）
+        $isBot = (int)($game->is_bot ?? 0);
+        
         // 构建菜单按钮
         $inlineKeyboard = [];
 
-        // 检查是否为免转游戏（transferstatus == 0表示免转，== 1表示非免转）
-        if ($game->transferstatus == 1) {
-            // 非免转，显示转入和转出按钮
-            $inlineKeyboard[] = [
-                [
-                    'text' => '转入游戏',
-                    'callback_data' => 'transfer_in:' . $platformName . ':' . $gameCode
-                ],
-                [
-                    'text' => '转回钱包',
-                    'callback_data' => 'transfer_out:' . $platformName . ':' . $gameCode
-                ]
-            ];
-        }
-
-        // "开始游戏"按钮直接使用web_app类型，绑定游戏链接（放在最前面）
-        // 确保 $gameUrl 是有效的非空字符串
-        if (!empty($gameUrl) && is_string($gameUrl) && filter_var($gameUrl, FILTER_VALIDATE_URL)) {
-            $inlineKeyboard[] = [[
-                'text' => '🎮 开始游戏',
-                'web_app' => [
-                    'url' => (string)$gameUrl
-                ]
-            ]];
+        if ($isBot !== 1) {
+            // 如果不支持机器人打开，在文字区添加提示，不显示任何操作按钮
+            $text .= "\n\n⚠️ 请通过游戏入口进入该游戏";
         } else {
-            // 如果获取游戏链接失败，使用callback_data作为后备方案（会再次尝试获取链接）
-            $inlineKeyboard[] = [[
-                'text' => '🎮 开始游戏',
-                'callback_data' => 'start_game:' . $platformName . ':' . $gameCode
-            ]];
+            // 只有 is_bot == 1 时才显示操作按钮和开始游戏按钮
+            
+            // 检查是否为免转游戏（transferstatus == 0表示免转，== 1表示非免转）
+            if ($game->transferstatus == 1) {
+                // 非免转，显示转入和转出按钮
+                $inlineKeyboard[] = [
+                    [
+                        'text' => '转入游戏',
+                        'callback_data' => 'transfer_in:' . $platformName . ':' . $gameCode
+                    ],
+                    [
+                        'text' => '转回钱包',
+                        'callback_data' => 'transfer_out:' . $platformName . ':' . $gameCode
+                    ]
+                ];
+            }
+
+            // 获取游戏链接，用于绑定到"开始游戏"按钮
+            $gameUrl = $this->getGameUrl($user, $platformName, $gameCode, $game);
+
+            // "开始游戏"按钮：只有 is_bot == 1 时才使用 web_app 类型
+            // 确保 $gameUrl 是有效的非空字符串
+            if (!empty($gameUrl) && is_string($gameUrl) && filter_var($gameUrl, FILTER_VALIDATE_URL)) {
+                $inlineKeyboard[] = [[
+                    'text' => '🎮 开始游戏',
+                    'web_app' => [
+                        'url' => (string)$gameUrl
+                    ]
+                ]];
+            } else {
+                // 如果获取游戏链接失败，使用callback_data作为后备方案（会再次尝试获取链接）
+                $inlineKeyboard[] = [[
+                    'text' => '🎮 开始游戏',
+                    'callback_data' => 'start_game:' . $platformName . ':' . $gameCode
+                ]];
+            }
         }
 
         // 通用按钮：刷新、返回（放在开始游戏按钮后面）
@@ -1632,6 +1546,19 @@ class TelegramWebhookController extends Controller
                     'game_code' => $gameCode
                 ]);
                 $this->telegramBot->sendMessage($chatId, '游戏不存在');
+                return response()->json(['ok' => true]);
+            }
+
+            // 检查游戏是否支持机器人打开（is_bot == 1）
+            $isBot = (int)($game->is_bot ?? 0);
+            if ($isBot !== 1) {
+                Log::info('开始游戏 - 游戏不支持机器人打开', [
+                    'user_id' => $user->id,
+                    'platform' => $platformName,
+                    'game_code' => $gameCode,
+                    'is_bot' => $isBot
+                ]);
+                $this->telegramBot->sendMessage($chatId, '⚠️ 该游戏不支持直接机器人打开，请通过游戏入口进入');
                 return response()->json(['ok' => true]);
             }
 
@@ -2825,55 +2752,6 @@ class TelegramWebhookController extends Controller
     }
 
     /**
-     * 手动设置 Menu Button（调试接口）
-     * 访问方式：GET/POST /api/telegram/set-menu-button
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
-     */
-    public function setMenuButton(Request $request)
-    {
-        try {
-            // 获取游戏入口地址
-            $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: '');
-            $buttonText = $request->input('text', '星云娱乐');
-
-            $result = [
-                'game_url' => $gameUrl,
-                'button_text' => $buttonText,
-            ];
-
-            if (empty($gameUrl)) {
-                return response()->json([
-                    'success' => false,
-                    'error' => '未配置 telegram_bot_game_url，请在后台网站设置中配置"Telegram Bot游戏地址"',
-                    'config' => $result
-                ]);
-            }
-
-            // 设置 Menu Button 为 web_app 模式
-            $menuResult = $this->telegramBot->setChatMenuButton('web_app', null, $gameUrl, $buttonText);
-            $result['menu_button_result'] = $menuResult;
-
-            // 清除缓存，确保下次 webhook 不会覆盖设置
-            \Illuminate\Support\Facades\Cache::forget('telegram_bot_commands_initialized_v3');
-            $result['cache_cleared'] = true;
-
-            return response()->json([
-                'success' => $menuResult['code'] == 200,
-                'message' => $menuResult['code'] == 200 ? 'Menu Button 设置成功！请重启 Telegram 客户端查看效果。' : '设置失败',
-                'data' => $result
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ], 500);
-        }
-    }
-
-    /**
      * Telegram Web App 自动登录接口
      * 验证 initData 签名，自动注册/登录用户
      *
@@ -3227,7 +3105,6 @@ class TelegramWebhookController extends Controller
 
         $categoriesMap = [];
         foreach ($categories as $cat) {
-            // 使用 ID 作为键，因为 GameList 中的 category_id 是关联到 GameCategory 的 id
             $categoriesMap[$cat->id] = [
                 'name' => $cat->name,
                 'today_flow' => 0,
@@ -3235,81 +3112,120 @@ class TelegramWebhookController extends Controller
             ];
         }
 
+        // 构建 game_type（转小写）到 category_id 的映射
+        // game_categories.code 对应 game_records.game_type（转小写）
+        $gameTypeToCategoryIdMap = [];
+        foreach ($categories as $cat) {
+            $gameTypeCode = strtolower(trim($cat->code));
+            $gameTypeToCategoryIdMap[$gameTypeCode] = $cat->id;
+        }
+
         $todayStart = date('Y-m-d 00:00:00');
         $todayEnd = date('Y-m-d 23:59:59');
         $yesterdayStart = date('Y-m-d 00:00:00', strtotime('-1 day'));
         $yesterdayEnd = date('Y-m-d 23:59:59', strtotime('-1 day'));
 
-        // 2. 查询时间段内的所有有效注单
-        $records = DB::table('game_records')
+        // 2. 查询今日流水，按 game_type（不区分大小写）分组统计
+        $todayStats = DB::table('game_records')
             ->where('user_id', $user->id)
             ->where('status', 1)
-            ->whereBetween('updated_at', [$yesterdayStart, $todayEnd])
-            ->select('platform_type', 'game_type', 'valid_amount', 'win_loss', 'updated_at')
+            ->whereBetween('updated_at', [$todayStart, $todayEnd])
+            ->select(
+                DB::raw('LOWER(TRIM(game_type)) as game_type_lower'),
+                DB::raw('SUM(valid_amount) as total_valid_amount'),
+                DB::raw('SUM(win_loss) as total_win_loss')
+            )
+            ->groupBy(DB::raw('LOWER(TRIM(game_type))'))
             ->get();
 
-        if ($records->isEmpty()) {
-            return $this->formatFlowText($user, $categoriesMap, 0, 0);
-        }
+        // 3. 查询昨日流水，按 game_type（不区分大小写）分组统计
+        $yesterdayStats = DB::table('game_records')
+            ->where('user_id', $user->id)
+            ->where('status', 1)
+            ->whereBetween('updated_at', [$yesterdayStart, $yesterdayEnd])
+            ->select(
+                DB::raw('LOWER(TRIM(game_type)) as game_type_lower'),
+                DB::raw('SUM(valid_amount) as total_valid_amount')
+            )
+            ->groupBy(DB::raw('LOWER(TRIM(game_type))'))
+            ->get();
 
-        // 3. 获取相关的 game_lists 映射信息
-        $platformTypes = $records->pluck('platform_type')->unique()->toArray();
-
-        $gameLists = GameList::whereIn('platform_name', $platformTypes)
-            ->get(['platform_name', 'game_code', 'category_id']);
-
-        // 构建映射表
-        $exactMap = []; // 精确映射: platform + game_code -> category_id
-        $fuzzyMap = []; // 模糊映射: platform -> category_id
-
-        foreach ($gameLists as $gl) {
-            // 精确匹配键
-            $key = $gl->platform_name . '_' . $gl->game_code;
-            $exactMap[$key] = $gl->category_id;
-
-            // 模糊匹配键
-            // 注意：如果同一个平台有多个分类的游戏，模糊匹配可能会不准确
-            // 这里我们假设大部分平台属于单一分类，或者至少能覆盖大部分情况
-            if (!isset($fuzzyMap[$gl->platform_name])) {
-                $fuzzyMap[$gl->platform_name] = $gl->category_id;
-            }
-        }
+        // 添加调试日志
+        Log::debug('流水明细查询结果', [
+            'user_id' => $user->id,
+            'today_start' => $todayStart,
+            'today_end' => $todayEnd,
+            'yesterday_start' => $yesterdayStart,
+            'yesterday_end' => $yesterdayEnd,
+            'today_stats_count' => $todayStats->count(),
+            'yesterday_stats_count' => $yesterdayStats->count(),
+            'today_stats' => $todayStats->toArray(),
+            'yesterday_stats' => $yesterdayStats->toArray(),
+            'game_type_to_category_id_map' => $gameTypeToCategoryIdMap
+        ]);
 
         $todayTotalFlow = 0;
         $todayTotalWinLoss = 0;
 
-        // 4. 遍历注单进行归类统计
-        foreach ($records as $record) {
-            $catId = null;
-
-            // 尝试精确匹配
-            $exactKey = $record->platform_type . '_' . $record->game_type;
-            if (isset($exactMap[$exactKey])) {
-                $catId = $exactMap[$exactKey];
-            }
-            // 尝试模糊匹配
-            elseif (isset($fuzzyMap[$record->platform_type])) {
-                $catId = $fuzzyMap[$record->platform_type];
+        // 4. 处理今日流水数据
+        foreach ($todayStats as $stat) {
+            $gameTypeLower = strtolower(trim($stat->game_type_lower ?? ''));
+            
+            if (empty($gameTypeLower)) {
+                continue;
             }
 
-            // 如果找到了分类，且该分类在我们的统计列表中
-            if ($catId && isset($categoriesMap[$catId])) {
-                $amount = $record->valid_amount;
-                $winLoss = $record->win_loss;
-
-                // 统计今日数据
-                if ($record->updated_at >= $todayStart && $record->updated_at <= $todayEnd) {
+            // 通过 game_type 匹配 category_id
+            if (isset($gameTypeToCategoryIdMap[$gameTypeLower])) {
+                $catId = $gameTypeToCategoryIdMap[$gameTypeLower];
+                
+                if (isset($categoriesMap[$catId])) {
+                    $amount = floatval($stat->total_valid_amount ?? 0);
+                    $winLoss = floatval($stat->total_win_loss ?? 0);
+                    
                     $categoriesMap[$catId]['today_flow'] += $amount;
                     $todayTotalFlow += $amount;
                     $todayTotalWinLoss += $winLoss;
                 }
-
-                // 统计昨日数据
-                if ($record->updated_at >= $yesterdayStart && $record->updated_at <= $yesterdayEnd) {
-                    $categoriesMap[$catId]['yesterday_flow'] += $amount;
-                }
+            } else {
+                // 记录未匹配的 game_type
+                Log::debug('流水明细今日未匹配的game_type', [
+                    'game_type_lower' => $gameTypeLower,
+                    'total_valid_amount' => $stat->total_valid_amount ?? 0
+                ]);
             }
         }
+
+        // 5. 处理昨日流水数据
+        foreach ($yesterdayStats as $stat) {
+            $gameTypeLower = strtolower(trim($stat->game_type_lower ?? ''));
+            
+            if (empty($gameTypeLower)) {
+                continue;
+            }
+
+            // 通过 game_type 匹配 category_id
+            if (isset($gameTypeToCategoryIdMap[$gameTypeLower])) {
+                $catId = $gameTypeToCategoryIdMap[$gameTypeLower];
+                
+                if (isset($categoriesMap[$catId])) {
+                    $amount = floatval($stat->total_valid_amount ?? 0);
+                    $categoriesMap[$catId]['yesterday_flow'] += $amount;
+                }
+            } else {
+                // 记录未匹配的 game_type
+                Log::debug('流水明细昨日未匹配的game_type', [
+                    'game_type_lower' => $gameTypeLower,
+                    'total_valid_amount' => $stat->total_valid_amount ?? 0
+                ]);
+            }
+        }
+
+        Log::debug('流水明细最终统计结果', [
+            'today_total_flow' => $todayTotalFlow,
+            'today_total_win_loss' => $todayTotalWinLoss,
+            'categories_map' => $categoriesMap
+        ]);
 
         return $this->formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss);
     }
@@ -3320,29 +3236,29 @@ class TelegramWebhookController extends Controller
     protected function formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss)
     {
         $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
-
+        
         $text = '';
-
+        
         // 今日流水
         $text .= "💎 <b>今日流水 (" . date('Y-m-d') . ")</b>\n";
         foreach ($categoriesMap as $cat) {
             $name = $this->cleanEmoji($cat['name']);
-            $text .= "🔸 今日{$name}流水: " . number_format($cat['today_flow'], 2) . " USDT\n";
+            $text .= "🔸 今日{$name}总有效流水: " . number_format($cat['today_flow'], 2) . " USDT\n";
         }
 
         // 昨日流水
         $text .= "\n💎 <b>昨日流水 (" . date('Y-m-d', strtotime('-1 day')) . ")</b>\n";
         foreach ($categoriesMap as $cat) {
             $name = $this->cleanEmoji($cat['name']);
-            $text .= "🔹 昨日{$name}流水: " . number_format($cat['yesterday_flow'], 2) . " USDT\n";
+            $text .= "🔹 昨日{$name}总有效流水: " . number_format($cat['yesterday_flow'], 2) . " USDT\n";
         }
 
         // 汇总信息
         $text .= "\n💡 (流水更新大约有十分钟延迟哦~)\n\n";
-        $text .= "🔸 今日流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
-        $text .= "🔸 今日输赢: " . number_format($todayTotalWinLoss, 2) . " USDT\n";
+        $text .= "🔸 今日总输赢: " . number_format($todayTotalWinLoss, 2) . " USDT\n";
+        $text .= "🔸 今日总有效流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
-
+        
         return $text;
     }
 
@@ -3366,18 +3282,25 @@ class TelegramWebhookController extends Controller
     {
         try {
             // 获取客服用户名（从系统配置获取，如果没有则使用默认值）
-            $serviceUsername = SystemConfig::getValue('kefu_username') ?: 'JZTYKF';
+            $serviceUsername = SystemConfig::getValue('kefu_username') ?: 'aas8878';
             $currentTime = date('H:i');
 
             // 构建消息文本
             $text = "💻 在线值班 @{$serviceUsername} {$currentTime}";
 
             // 构建内联键盘按钮
+            $base = SystemConfig::getValue('kf_url') ?: 'https://www.baidu.com';
+            $base = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $base);
+            $separator = strpos($base, '?') !== false ? '&' : '?';
+            $userId = $user->id ?? 0;
+            $kefuUrl = $base . $separator . 'uid=' . $userId . '&mobile=1';
+            $kefuUrl = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $kefuUrl);
+            
             $inlineKeyboard = [
                 [
                     [
                         'text' => '🤖 双向客服',
-                        'url' => SystemConfig::getValue('kf_url') ?: 'https://www.baidu.com'
+                        'url' => $kefuUrl
                     ]
                 ],
                 [
@@ -4901,6 +4824,64 @@ class TelegramWebhookController extends Controller
             ]);
             $this->telegramBot->sendMessage($chatId, '❌ 换绑处理失败：' . $e->getMessage());
             return response()->json(['ok' => false, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    /**
+     * 显示福利活动图片
+     * 单独发送第一张活动图片
+     *
+     * @param int $chatId
+     * @param User $user
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function showActivities($chatId, $user)
+    {
+        try {
+            // 获取第一个启用状态的活动（state=1）
+            $activity = Activity::where('state', 0)
+                ->where('app_state', 0)
+                ->where('can_apply', 0)
+                ->whereNotNull('banner')
+                ->where('banner', '!=', '')
+                ->orderBy('id', 'desc')
+                ->first(['id', 'title', 'banner']);
+
+            if (!$activity) {
+                // 如果没有活动，不发送任何消息
+                return response()->json(['ok' => true]);
+            }
+
+            $appUrl = env('APP_URL');
+            $imageUrl = $appUrl . '/uploads/' . $activity->banner;
+
+            // 单独发送一张图片，不带任何描述和标题
+            $result = $this->telegramBot->sendPhoto($chatId, $imageUrl, '');
+
+            if ($result['code'] == 200) {
+                Log::info('福利活动图片发送成功', [
+                    'user_id' => $user->id,
+                    'activity_id' => $activity->id
+                ]);
+            } else {
+                Log::warning('发送活动图片失败', [
+                    'user_id' => $user->id,
+                    'activity_id' => $activity->id,
+                    'error' => $result['message'] ?? '未知错误',
+                    'result' => $result
+                ]);
+            }
+
+            return response()->json(['ok' => true]);
+
+        } catch (\Throwable $e) {
+            Log::error('显示福利活动异常', [
+                'user_id' => $user->id ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // 不发送错误提示，静默失败
+            return response()->json(['ok' => true]);
         }
     }
 }

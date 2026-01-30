@@ -47,7 +47,7 @@ class Db extends Command
         date_default_timezone_set('Asia/Shanghai');
 
         $param = $this->argument('param');
-        
+
         if (empty($param)) {
             $this->error('请提供参数：数字（同步游戏记录的时间，单位：分钟）或字符串（方法名）');
             $this->info('示例：');
@@ -81,7 +81,7 @@ class Db extends Command
 
     /**
      * 同步游戏记录
-     * 
+     *
      * @param int $minutes 同步时间范围（分钟）
      * @return void
      */
@@ -90,29 +90,44 @@ class Db extends Command
         $this->info("开始同步 {$minutes} 分钟内的游戏记录...");
 
         $service = new DbService();
-        
-        // 获取所有需要同步的场馆编码
-        $platformNames = GameList::where('with_api', 'db')
+
+        // 获取所有需要同步的场馆编码和对应的平台名称
+        $gameLists = GameList::where('with_api', 'db')
+            ->whereNotNull('venue_code')
+            ->where('venue_code', '!=', '')
+            ->whereNotNull('platform_name')
+            ->where('platform_name', '!=', '')
             ->select('platform_name', 'venue_code')
-            ->distinct()
             ->get();
 
-        if ($platformNames->isEmpty()) {
+        if ($gameLists->isEmpty()) {
             $this->warn('game_lists 未配置 with_api=db，无法定位场馆列表');
             return;
         }
 
-        // 获取所有唯一的 venue_code
-        $venueCodes = $platformNames->pluck('venue_code')
-            ->filter()
-            ->unique()
-            ->values()
-            ->toArray();
+        // 构建 venue_code 到 platform_name 的映射
+        // 如果同一个 venue_code 对应多个 platform_name，取第一个
+        $venueCodeToPlatformMap = [];
+        foreach ($gameLists as $gameList) {
+            $venueCode = trim((string)$gameList->venue_code);
+            $platformName = trim((string)$gameList->platform_name);
 
-        if (empty($venueCodes)) {
-            $this->warn('未找到有效的场馆编码（venue_code）');
+            if (empty($venueCode) || empty($platformName)) {
+                continue;
+            }
+
+            if (!isset($venueCodeToPlatformMap[$venueCode])) {
+                $venueCodeToPlatformMap[$venueCode] = $platformName;
+            }
+        }
+
+        if (empty($venueCodeToPlatformMap)) {
+            $this->warn('未找到有效的场馆编码（venue_code）和平台名称（platform_name）映射');
             return;
         }
+
+        // 获取所有唯一的 venue_code
+        $venueCodes = array_keys($venueCodeToPlatformMap);
 
         $this->info("找到 " . count($venueCodes) . " 个场馆需要同步");
 
@@ -127,7 +142,7 @@ class Db extends Command
         $endTs = $nowTs - $delaySeconds;
         $windowSeconds = min(((int)$minutes * 60), $maxWindow);
         $startTs = $endTs - $windowSeconds;
-        
+
         // 确保不跨天
         $startDate = date('Y-m-d', $startTs);
         $endDate = date('Y-m-d', $endTs);
@@ -136,7 +151,7 @@ class Db extends Command
             $startTs = strtotime($endDate . ' 00:00:00');
             $endTs = min($endTs, $startTs + $maxWindow);
         }
-        
+
         $end_time = date('Y-m-d H:i:s', $endTs);
         $start_time = date('Y-m-d H:i:s', $startTs);
 
@@ -148,8 +163,9 @@ class Db extends Command
 
         // 遍历每个场馆
         foreach ($venueCodes as $venueCode) {
-            $this->info("正在同步场馆：{$venueCode}");
-            
+            $platformName = $venueCodeToPlatformMap[$venueCode];
+            $this->info("正在同步场馆：{$venueCode} (平台：{$platformName})");
+
             try {
                 // 拉取游戏记录（支持分页）
                 $all_records = [];
@@ -157,28 +173,28 @@ class Db extends Command
                 $pageSize = 3000; // 每页最多3000条
                 $totalRecord = 0;
                 $totalPage = 0;
-                
+
                 do {
                     $result = $service->betBatchQuery($venueCode, $start_time, $end_time, 'USDT', $pageNum, $pageSize);
-                    
+
                     if ($result['code'] != 200) {
                         $this->error("拉取游戏记录失败（场馆：{$venueCode}，第{$pageNum}页）：{$result['message']}");
                         break;
                     }
-                    
+
                     $data = $result['data'] ?? [];
                     $records = $data['list'] ?? [];
                     $totalRecord = $data['totalRecord'] ?? 0;
                     $totalPage = $data['totalPage'] ?? 0;
-                    
+
                     if (!empty($records)) {
                         $all_records = array_merge($all_records, $records);
                         $this->info("已拉取第 {$pageNum}/{$totalPage} 页，本页 " . count($records) . " 条记录");
                     }
-                    
+
                     $pageNum++;
                 } while ($pageNum <= $totalPage && count($all_records) < $totalRecord);
-                
+
                 if (empty($all_records)) {
                     $this->info("场馆 {$venueCode} 没有需要同步的游戏记录");
                     continue;
@@ -186,16 +202,17 @@ class Db extends Command
 
                 $this->info("场馆 {$venueCode} 共获取到 " . count($all_records) . " 条游戏记录（总计：{$totalRecord} 条，共 {$totalPage} 页）");
 
-                // 处理并入库
-                $result = $this->processAndSaveRecords($all_records, $venueCode);
+                // 处理并入库，传入 platform_name
+                $result = $this->processAndSaveRecords($all_records, $venueCode, $platformName);
                 $total_success += $result['success'];
                 $total_fail += $result['fail'];
                 $total_skip += $result['skip'];
-                
+
             } catch (\Exception $e) {
                 $this->error("处理场馆 {$venueCode} 失败：" . $e->getMessage());
                 Log::error('DB同步游戏记录失败', [
                     'venueCode' => $venueCode,
+                    'platformName' => $platformName,
                     'error' => $e->getMessage(),
                     'trace' => $e->getTraceAsString()
                 ]);
@@ -207,12 +224,13 @@ class Db extends Command
 
     /**
      * 处理并保存游戏记录
-     * 
+     *
      * @param array $records 游戏记录数组
      * @param string $venueCode 场馆编码
+     * @param string $platformName 平台名称（从 game_lists.platform_name 获取）
      * @return array
      */
-    private function processAndSaveRecords($records, $venueCode)
+    private function processAndSaveRecords($records, $venueCode, $platformName)
     {
         $success_count = 0;
         $fail_count = 0;
@@ -249,7 +267,8 @@ class Db extends Command
                     $fail_count++;
                     Log::warning('DB同步游戏记录 - 用户不存在', [
                         'userName' => $userName,
-                        'venueCode' => $venueCode
+                        'venueCode' => $venueCode,
+                        'platformName' => $platformName
                     ]);
                     continue;
                 }
@@ -262,15 +281,16 @@ class Db extends Command
                     continue;
                 }
 
+                // 查询是否重复：根据 bet_id 和 platform_type（platform_name）来判断
                 $existing = GameRecord::where('bet_id', $betId)
-                    ->where('platform_type', 'DB')
+                    ->where('platform_type', $platformName)
                     ->first();
 
                 // 4) 处理时间字段
                 $betAt = $record['betAt'] ?? '';
                 $netAt = $record['netAt'] ?? '';
                 $syncAt = $record['syncAt'] ?? '';
-                
+
                 // 使用 betAt 作为投注时间，如果没有则使用当前时间
                 $betTime = !empty($betAt) ? $betAt : date('Y-m-d H:i:s');
                 // 验证时间格式
@@ -305,7 +325,7 @@ class Db extends Command
                     'game_type_id' => $gameTypeId,
                     'game_type_name' => $record['gameTypeName'] ?? '',
                     'game_code' => isset($gameTypeId) ? (string)$gameTypeId : '',
-                    'platform_type' => 'DB',
+                    'platform_type' => $platformName, // 使用从 game_lists 获取的 platform_name
                     'game_type' => $this->getGameTypeFromVenueCode($venueCode),
                     'platform_name' => $record['platformName'] ?? '',
                     'bet_time' => $betTime,
@@ -356,7 +376,7 @@ class Db extends Command
 
     /**
      * 根据场馆编码获取游戏类型
-     * 
+     *
      * @param string $venueCode 场馆编码
      * @return string
      */
@@ -367,19 +387,19 @@ class Db extends Command
             'ty' => 'sport',
             'dj' => 'poker',
             'zr' => 'live',
-            'byqp' => 'table',
+            'by_qp' => 'table',
             'cp' => 'lotto',
             'dbdz' => 'slots',
             'by' => 'fishing',
             'hash' => 'hash',
         ];
-        
+
         return $mapping[strtolower($venueCode)] ?? 'other';
     }
 
     /**
      * 同步用户余额
-     * 
+     *
      * @return void
      */
     private function syncBalance()
@@ -387,7 +407,7 @@ class Db extends Command
         $this->info('开始同步用户余额...');
 
         $service = new DbService();
-        
+
         // 一次性查询所有满足 with_api='db' 的记录，获取 platform_name 和 venue_code
         // user_api.api_code 应该匹配 game_lists.platform_name，然后获取 game_lists.venue_code
         $gameLists = GameList::where('with_api', 'db')
@@ -404,21 +424,21 @@ class Db extends Command
         // 组装数据：以 platform_name 为 key，venue_code 为 value
         // 用于匹配：user_api.api_code === game_lists.platform_name
         $platformVenueMap = [];
-        
+
         foreach ($gameLists as $gameList) {
             $platformName = strtolower(trim((string)$gameList->platform_name));
             $venueCode = trim((string)$gameList->venue_code);
-            
+
             if (empty($platformName) || empty($venueCode)) {
                 continue;
             }
-            
+
             // 如果同一个 platform_name 有多个 venue_code，取第一个（或可以取任意一个）
             if (!isset($platformVenueMap[$platformName])) {
                 $platformVenueMap[$platformName] = $venueCode;
             }
         }
-        
+
         if (empty($platformVenueMap)) {
             $this->warn('未找到有效的 platform_name 和 venue_code 映射关系');
             return;
@@ -442,7 +462,7 @@ class Db extends Command
         foreach ($user_apis as $user_api) {
             try {
                 $user = User::find($user_api->user_id);
-                
+
                 if (!$user) {
                     $this->warn("用户不存在：ID {$user_api->user_id}");
                     $fail_count++;
@@ -469,7 +489,7 @@ class Db extends Command
                 // 查询游戏余额（从接口获取余额，然后更新本地）
                 // 使用 user_api.api_user 而不是 user.username，因为 DB 接口注册时使用的是 api_user
                 $username = !empty($user_api->api_user) ? $user_api->api_user : $user->username;
-                
+
                 // DbService::balance() 参数顺序是 (username, venueCode, currency)
                 $result = $service->balance($username, $venueCode, 'USDT');
 

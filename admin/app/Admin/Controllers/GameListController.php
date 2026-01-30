@@ -21,12 +21,17 @@ class GameListController extends AdminController
     protected function getApiOptions()
     {
         return [
-            // 'tg' => 'Leyu聚合',
             'db' => 'DB',
-            // 'pussy' => 'Pussy888',
             // 'dbdianzi' => '1369',
             'dbgmag' => 'GMAG',
-            'dboneapi' => 'ONEAPI',
+            'dbzhenren' => 'DB真人',
+            'dbdianzi' => 'DB电子',
+            'dbdianjing' => 'DB电竞',
+            'dbcaipiao' => 'DB彩票',
+            'dbbuyu' => 'DB捕鱼',
+            'dbqipai' => 'DB棋牌',
+            'dbevo' => 'EVO',
+            'dbkaiyuan' => '开元棋牌',
         ];
     }
     /**

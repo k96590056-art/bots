@@ -407,6 +407,15 @@ class BackflowService
                 'remark' => $remark,
             ]);
 
+            // 7. 查询当前用户所有未发放的下级返水总额（transfer_type=99, state=0）
+            $totalUnclaimedAmount = TransferLog::where('user_id', $parentUserId)
+                ->where('transfer_type', 99)
+                ->where('state', 0)
+                ->sum('money');
+            
+            // 确保返回数字类型（sum 可能返回字符串）
+            $totalUnclaimedAmount = (float)($totalUnclaimedAmount ?? 0);
+
             Log::info('下级返水入账成功', [
                 'parent_user_id' => $parentUserId,
                 'subordinate_user_id' => $subordinateUserId,
@@ -417,6 +426,7 @@ class BackflowService
                 'backflow_ratio' => $backflowRatio,
                 'backflow_amount' => $backflowAmount,
                 'transfer_log_id' => $transferLog->id,
+                'total_unclaimed_amount' => $totalUnclaimedAmount,
             ]);
 
             return [
@@ -426,6 +436,7 @@ class BackflowService
                     'backflow_amount' => $backflowAmount,
                     'transfer_log_id' => $transferLog->id,
                     'order_no' => $orderNo,
+                    'total_unclaimed_amount' => $totalUnclaimedAmount, // 当前用户所有未发放的下级返水总额
                 ],
             ];
 

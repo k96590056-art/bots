@@ -28,7 +28,7 @@ class Dbgmag extends Command
 
     /**
      * API代码，从类名自动获取（用于game_records表的platform_type字段）
-     * 
+     *
      * @var string
      */
     protected $api_code;
@@ -41,7 +41,7 @@ class Dbgmag extends Command
     public function __construct()
     {
         parent::__construct();
-        
+
         // 从类名获取 api_code
         $className = class_basename($this);
         // 移除可能的命令后缀（如果有）
@@ -63,7 +63,7 @@ class Dbgmag extends Command
         date_default_timezone_set('Asia/Shanghai');
 
         $param = $this->argument('param');
-        
+
         if (empty($param)) {
             $this->error('请提供参数：数字（同步游戏记录的时间，单位：分钟）或字符串（方法名）');
             $this->info('示例：');
@@ -98,7 +98,7 @@ class Dbgmag extends Command
     /**
      * 同步游戏记录
      * 根据 cmag.md 文档：/history/game 接口返回的数据结构
-     * 
+     *
      * @param int $minutes 同步时间范围（分钟）
      * @return void
      */
@@ -107,7 +107,7 @@ class Dbgmag extends Command
         $this->info("开始同步 {$minutes} 分钟内的游戏记录...");
 
         $service = new DbgmagService();
-        
+
         // 计算时间范围（GMT+0时间，因为API要求GMT+0）
         // 注意：API要求时间格式为 YYYY-MM-DD HH:mm:00，秒数固定为00
         // endTime - startTime 必须小于 30 分钟
@@ -115,7 +115,7 @@ class Dbgmag extends Command
         if ($minutes > 30) {
             $this->warn("时间范围超过30分钟，已自动调整为30分钟");
         }
-        
+
         // 转换为GMT+0时间
         $end_time = gmdate('Y-m-d H:i:00');
         $start_time = gmdate('Y-m-d H:i:00', time() - ($max_minutes * 60));
@@ -128,34 +128,34 @@ class Dbgmag extends Command
         $size = 5000; // 每页最多5000条，最大10000条
         $total = 0;
         $pages = 0;
-        
+
         do {
             $result = $service->getGameHistory($start_time, $end_time, '', '', '', '', '', $page, $size);
-            
+
             if ($result['code'] != 200) {
                 $this->error("拉取游戏记录失败（第{$page}页）：{$result['message']}");
                 break;
             }
-            
+
             $records = $result['data'] ?? [];
             $total = $result['total'] ?? 0;
             $pages = $result['pages'] ?? 0;
-            
+
             if (!empty($records)) {
                 $all_records = array_merge($all_records, $records);
                 $this->info("已拉取第 {$page}/{$pages} 页，本页 " . count($records) . " 条记录");
             }
-            
+
             $page++;
         } while ($page <= $pages && count($all_records) < $total);
-        
+
         if (empty($all_records)) {
             $this->info('没有需要同步的游戏记录');
             return;
         }
 
         $this->info("共获取到 " . count($all_records) . " 条游戏记录（总计：{$total} 条，共 {$pages} 页）");
-        
+
         $records = $all_records;
 
         $success_count = 0;
@@ -185,7 +185,7 @@ class Dbgmag extends Command
                     $skip_count++;
                     continue;
                 }
-                
+
                 $user = User::where('username', $playerId)->first();
                 if (!$user) {
                     $skip_reasons['user_not_found']++;
@@ -206,7 +206,7 @@ class Dbgmag extends Command
                     Log::warning('Dbgmag同步游戏记录 - roundId为空', ['record' => $record]);
                     continue;
                 }
-                
+
                 // 使用 roundId 作为 bet_id（因为每个 roundId 只保留一条数据）
                 $betId = $roundId;
 
@@ -219,7 +219,7 @@ class Dbgmag extends Command
                 // 时间处理：endTime 是回合结束时间，使用它作为 bet_time
                 $endTime = $record['endTime'] ?? ($record['createdAt'] ?? null);
                 $betTime = null;
-                
+
                 if (!empty($endTime)) {
                     // 如果是时间戳（毫秒），转换为日期时间
                     if (is_numeric($endTime)) {
@@ -250,10 +250,10 @@ class Dbgmag extends Command
                 $bets = (float)($record['bets'] ?? 0);  // 押注金额
                 $wins = (float)($record['wins'] ?? 0);  // 赢取金额
                 $cancels = (float)($record['cancels'] ?? 0);  // 取消金额
-                
+
                 // 输赢金额 = 赢取金额 - 押注金额
                 $winLoss = $wins - $bets;
-                
+
                 // 有效投注金额：如果有 validBet 字段则使用，否则使用 bets
                 $validAmount = (float)($record['validBet'] ?? $bets);
 
@@ -261,17 +261,21 @@ class Dbgmag extends Command
                 $gameType = (string)($record['gameType'] ?? '');
                 $gameCode = (string)($record['gameCode'] ?? '');
 
+                // 游戏类型：通过 game_lists 表获取
+                // 根据 gameType（对应 game_lists.category_id）和 platform_type（对应 game_lists.platform_name）获取
+                $gameTypeFromLists = $this->getGameTypeFromGameLists($gameType, $this->api_code);
+
                 $recordData = [
                     'user_id' => $user->id,
                     'username' => $user->username,
                     'bet_id' => $betId,
                     'round_no' => $roundId,  // roundId 同时作为 round_no
                     'platform_type' => $this->api_code, // 使用自动获取的 api_code
-                    'game_type' => $gameType,
+                    'game_type' => $gameTypeFromLists,
                     'game_code' => $gameCode,
                     'bet_time' => $betTime,
                     'bet_amount' => $bets,
-                    'valid_amount' => $validAmount,
+                    'valid_amount' => ($winLoss > 0 ? $winLoss : -$winLoss),
                     'win_loss' => $winLoss,
                     'status' => $status,
                     'is_back' => 0,
@@ -309,7 +313,7 @@ class Dbgmag extends Command
         }
 
         $this->info("同步完成：成功 {$success_count} 条，失败 {$fail_count} 条，跳过 {$skip_count} 条");
-        
+
         if ($skip_count > 0) {
             $this->info("跳过原因统计：");
             foreach ($skip_reasons as $reason => $count) {
@@ -321,8 +325,35 @@ class Dbgmag extends Command
     }
 
     /**
+     * 根据 gameType 和 platform_type 从 game_lists 表获取 game_type（category_id）
+     *
+     * @param string $gameType API 返回的游戏类型（对应 game_lists.category_id）
+     * @param string $platformType 平台类型（对应 game_lists.platform_name）
+     * @return string
+     */
+    private function getGameTypeFromGameLists($gameType, $platformType)
+    {
+        if (empty($gameType) || empty($platformType)) {
+            return 'other';
+        }
+
+        // 在 game_lists 表中查找匹配的记录
+        // game_lists.category_id = gameType 且 game_lists.platform_name = platformType
+        $gameList = GameList::where('category_id', strtolower($gameType))
+            ->where('platform_name', $platformType)
+            ->first();
+
+        if ($gameList && !empty($gameList->category_id)) {
+            return strtolower($gameList->category_id);
+        }
+
+        // 如果找不到匹配的记录，尝试直接使用 gameType（转换为小写）
+        return strtolower($gameType);
+    }
+
+    /**
      * 同步用户余额
-     * 
+     *
      * @return void
      */
     private function syncBalance()
@@ -330,7 +361,7 @@ class Dbgmag extends Command
         $this->info('开始同步用户余额...');
 
         $service = new DbgmagService();
-        
+
         // 先根据 game_lists.with_api 找到对应的 platform_name，再用 platform_name 匹配 user_api.api_code
         $platformNames = GameList::where('with_api', 'dbgmag')
             ->select('platform_name')
@@ -364,7 +395,7 @@ class Dbgmag extends Command
         foreach ($user_apis as $user_api) {
             try {
                 $user = User::find($user_api->user_id);
-                
+
                 if (!$user) {
                     $this->warn("用户不存在：ID {$user_api->user_id}");
                     $fail_count++;
@@ -381,7 +412,7 @@ class Dbgmag extends Command
                 }
 
                 $game_balance = $result['data'] ?? 0;
-                
+
                 // 更新用户API余额记录（使用 api_money 字段）
                 $user_api->api_money = $game_balance;
                 $user_api->save();

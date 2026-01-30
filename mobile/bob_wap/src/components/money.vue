@@ -20,30 +20,36 @@
         </div>
         <div class="mesg">
           <div class="bosgf">
-            <div class="top"><img src="/static/image/qianbao123.png" alt="" />中心钱包</div>
-            <div class="bots"><span>￥</span>{{ $store.state.userInfo.balance || 0 }}</div>
+            <div class="wallet-card">
+              <div class="top"><img src="/static/image/qianbao123.png" alt="" />中心钱包</div>
+              <div class="bots"><span class="currency">$</span><span class="amount">{{ $store.state.userInfo.balance || 0 }}</span></div>
+            </div>
           </div>
-          <div class="bosgf">
-            <div class="top"><img src="/static/image/qianbao123.png" alt="" />游戏钱包</div>
-            <div class="bots"><span>￥</span>{{ $store.state.userInfo.gameblance }}</div>
+          <div class="qibao">
+            <van-button class="recover-btn" type="primary" size="small" @click="transall">
+              <span class="btn-icon">🔄</span>
+              一键回收
+            </van-button>
           </div>
         </div>
         <div class="typelist">
-          <div class="lis" @click="$parent.goNav('/recharge')"><img src="/static/image/feature_moneydraw.ddbdd6cb1996bc0dccf6c8570d9e0183.ddbdd6cb.png" alt="" />存款</div>
-          <div class="lis" @click="$parent.goNav('/transfer')"><img src="/static/image/feature_moneytransfer.5a83f20d17131faad2162df5435af5ca.5a83f20d.png" alt="" />转账</div>
-          <div class="lis" @click="$parent.goNav('/withdrawal')"><img src="/static/image/feature_withdrawmoney.932feadcf30fa1646577e19f04412aaf.932feadc.png" alt="" />取款</div>
-          <div class="lis" @click="$parent.goNav('/wallet')"><img src="/static/image/feature_bankcard.30833143844bfe739725bd4781495a2d.30833143.png" alt="" />卡片管理</div>
-        </div>
-        <div class="gamensg">
-          <div class="titws">
-            场馆余额
-            <div class="btn" @click="transall">一键回收</div>
-          </div>
-          <div class="gameBox">
-            <div class="lis" v-for="(item, index) in balancelist" :key="index">
-              <div class="name">{{ item.name }}</div>
-              <div class="nmey">{{ item.balance }}</div>
+          <div class="lis" @click="$parent.goNav('/recharge')">
+            <div class="icon-wrapper">
+              <img src="/static/image/feature_moneydraw.ddbdd6cb1996bc0dccf6c8570d9e0183.ddbdd6cb.png" alt="" />
             </div>
+            <span class="lis-text">存款</span>
+          </div>
+          <div class="lis" @click="$parent.goNav('/withdrawal')">
+            <div class="icon-wrapper">
+              <img src="/static/image/feature_withdrawmoney.932feadcf30fa1646577e19f04412aaf.932feadc.png" alt="" />
+            </div>
+            <span class="lis-text">取款</span>
+          </div>
+          <div class="lis" @click="$parent.goNav('/wallet')">
+            <div class="icon-wrapper">
+              <img src="/static/image/feature_bankcard.30833143844bfe739725bd4781495a2d.30833143.png" alt="" />
+            </div>
+            <span class="lis-text">卡片管理</span>
           </div>
         </div>
         <div style="height: 1rem"></div>
@@ -56,14 +62,10 @@
 export default {
   name: 'money',
   data() {
-    return { daoTime: null, balancelist: [] };
+    return {};
   },
   created() {
     let that = this;
-    that.getbalancelist();
-    that.daoTime = setInterval(() => {
-      that.getbalancelistNoLoding();
-    }, 3500);
   },
   methods: {
     transall() {
@@ -73,7 +75,6 @@ export default {
         .post('/api/transall', {})
         .then(res => {
           that.showTost(1, res.message);
-          that.getbalancelist();
           that.refreshusermoney();
           that.$parent.hideLoading();
         })
@@ -81,53 +82,17 @@ export default {
           that.$parent.hideLoading();
         });
     },
-    getbalancelist() {
-      let that = this;
-      that.$parent.showLoading();
-
-      that.$apiFun
-        .post('/api/balancelist', {})
-        .then(res => {
-          if (res.code !== 200) {
-            that.$parent.showTost(0, res.message);
-          }
-          if (res.code === 200) {
-            that.balancelist = res.data;
-            let balancelist = res.data;
-            that.balancelist = balancelist;
-          }
-          that.$parent.hideLoading();
-        })
-        .catch(res => {
-          that.$parent.hideLoading();
-        });
-    },
-    getbalancelistNoLoding() {
-      let that = this;
-
-      that.$apiFun
-        .post('/api/balancelist', {})
-        .then(res => {
-          if (res.code !== 200) {
-            that.$parent.showTost(0, res.message);
-          }
-          if (res.code === 200) {
-            that.balancelist = res.data;
-            let balancelist = res.data;
-            that.balancelist = balancelist;
-          }
-        })
-        .catch(res => {});
-    },
     refreshusermoney() {
       let that = this;
       that.$apiFun.post('/api/refreshusermoney', {}).then(res => {
-        that.$parent.hideLoading();
         if (res.code == 200) {
           localStorage.setItem('userInfo', JSON.stringify(res.data));
           that.$store.commit('changUserInfo');
         }
       });
+    },
+    showTost(type, title) {
+      this.$parent.showTost(type, title);
     },
   },
   mounted() {
@@ -136,10 +101,6 @@ export default {
   updated() {},
   beforeDestroy() {
     let that = this;
-    if (that.daoTime) {
-      clearInterval(that.daoTime);
-    }
-    that.daoTime = null;
   },
 };
 </script>
@@ -167,7 +128,9 @@ export default {
     margin: 0 auto;
     padding-top: 0.6rem;
     .titsg {
-      font-size: 0.5rem;
+      font-size: 0.48rem;
+      opacity: 0.9;
+      font-weight: 500;
     }
     .mehs {
       display: flex;
@@ -181,14 +144,22 @@ export default {
         padding-top: 6px;
         display: table-cell;
         vertical-align: bottom;
+        opacity: 0.9;
       }
       .num {
-        font-size: 0.8rem;
+        font-size: 0.88rem;
         font-weight: 700;
         margin: 0 0.3rem 0 0.1rem;
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        letter-spacing: 0.02rem;
       }
       .shua {
         width: 0.62rem;
+        opacity: 0.9;
+        transition: transform 0.3s ease;
+        &:active {
+          transform: rotate(180deg);
+        }
       }
     }
   }
@@ -198,49 +169,104 @@ export default {
   width: calc(100% - 24px);
   margin: 0 auto;
   margin-top: -1.5rem;
-  border-radius: 18px;
+  border-radius: 20px;
   background: #fff;
   overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
   .toptit {
-    background: #f2f4fc;
+    background: linear-gradient(135deg, #f2f4fc 0%, #e8ecf5 100%);
     height: 1.2rem;
     display: flex;
     align-items: center;
     color: #383b43;
     font-size: 0.4rem;
+    font-weight: 600;
     box-sizing: border-box;
     padding: 0 20px;
     .shu {
       margin-right: 15px;
       height: 0.5rem;
-      width: 2px;
-      background: #383b43;
+      width: 3px;
+      background: linear-gradient(180deg, #597ef7 0%, #1890ff 100%);
+      border-radius: 2px;
     }
   }
 }
 .mesg {
   display: flex;
   align-items: center;
-  height: 2rem;
+  min-height: 2.2rem;
+  padding: 0.3rem 0;
+  background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
   .bosgf {
     flex: 1;
     text-align: center;
-    .top {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 0.4rem;
-      img {
-        width: 0.5rem;
-        margin-right: 0.1rem;
+    padding: 0 0.2rem;
+    .wallet-card {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 16px;
+      padding: 0.4rem 0.3rem;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      .top {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 0.36rem;
+        color: rgba(255, 255, 255, 0.9);
+        margin-bottom: 0.2rem;
+        img {
+          width: 0.5rem;
+          margin-right: 0.1rem;
+          filter: brightness(0) invert(1);
+        }
+      }
+      .bots {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        .currency {
+          font-size: 0.4rem;
+          font-weight: 600;
+          color: rgba(255, 255, 255, 0.9);
+          margin-right: 0.1rem;
+        }
+        .amount {
+          font-size: 0.64rem;
+          font-weight: 700;
+          color: #fff;
+          letter-spacing: 0.02rem;
+        }
       }
     }
-    .bots {
-      margin-top: 0.1rem;
-      font-size: 0.5rem;
-      color: #597ef7;
-      span {
-        font-size: 0.23rem;
+  }
+  .qibao {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    box-sizing: border-box;
+    border-left: 1px solid #f0f0f0;
+    padding: 0 0.2rem;
+    .recover-btn {
+      height: 0.8rem;
+      line-height: 0.8rem;
+      padding: 0 0.4rem;
+      font-size: 0.32rem;
+      font-weight: 600;
+      border-radius: 0.4rem;
+      min-width: 1.8rem;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border: none;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+      transition: all 0.3s ease;
+      .btn-icon {
+        margin-right: 0.1rem;
+        font-size: 0.32rem;
+      }
+      &:active {
+        transform: scale(0.95);
+        box-shadow: 0 2px 8px rgba(102, 126, 234, 0.4);
       }
     }
   }
@@ -249,62 +275,46 @@ export default {
   display: flex;
   align-items: center;
   justify-content: space-around;
-  padding-bottom: 0.5rem;
+  padding: 0.4rem 0.2rem 0.5rem;
+  gap: 0.2rem;
   .lis {
-    width: 25%;
-    font-size: 0.3rem;
-    text-align: center;
-    img {
-      width: 70%;
-      display: block;
-      margin: 0 auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 0.3rem 0.2rem;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+    transition: all 0.3s ease;
+    cursor: pointer;
+    .icon-wrapper {
+      width: 1rem;
+      height: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 50%;
+      margin-bottom: 0.2rem;
+      box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
+      img {
+        width: 0.5rem;
+        height: 0.5rem;
+        filter: brightness(0) invert(1);
+      }
+    }
+    .lis-text {
+      font-size: 0.3rem;
+      color: #383b43;
+      font-weight: 500;
+      margin-top: 0.1rem;
+    }
+    &:active {
+      transform: scale(0.95);
+      background: linear-gradient(135deg, #e8ecf5 0%, #f2f4fc 100%);
     }
   }
 }
 
-.gamensg {
-  background: #fcfcff;
-  box-sizing: border-box;
-  width: calc(100% - 30px);
-  margin: 0 auto;
-  padding: 15px;
-  .titws {
-    display: flex;
-    font-size: 0.4rem;
-    .btn {
-      border: 1px solid #4080ff;
-      box-sizing: border-box;
-      border-radius: 0.5rem;
-      color: #4080ff;
-      height: 0.5rem;
-      font-size: 0.3rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      width: 1.8rem;
-      margin-left: 0.3rem;
-    }
-  }
-  .gameBox {
-    display: flex;
-    flex-wrap: wrap;
-    box-sizing: border-box;
-    padding-top: 0.2rem;
-    .lis {
-      width: 25%;
-      box-sizing: border-box;
-      padding: 0.3rem 0;
-      text-align: center;
-      .name {
-        color: #383b43;
-        font-size: 0.3rem;
-      }
-      .nmey {
-        color: #cbced8;
-        font-size: 0.3rem;
-        margin-top: 0.2rem;
-      }
-    }
-  }
-}
 </style>

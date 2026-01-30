@@ -4,6 +4,8 @@ namespace App\Providers;
 
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Schema;
+use App\Models\GameRecord;
+use App\Observers\GameRecordObserver;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,5 +33,8 @@ class AppServiceProvider extends ServiceProvider
                 return new \Illuminate\Support\HtmlString($value);
             });
         }
+
+        // 注册游戏记录观察者，监听游戏记录创建并自动生成返水记录
+        // GameRecord::observe(GameRecordObserver::class);
     }
 }

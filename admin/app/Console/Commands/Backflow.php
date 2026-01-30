@@ -50,30 +50,19 @@ class Backflow extends Command
 
         $this->info('开始执行自动返水命令...');
 
-        // 1. 检查并初始化 backflow_date 配置
-        $backflowDate = SystemConfig::getValue('backflow_date');
-        if (empty($backflowDate)) {
-            // 首次执行，添加配置
-            $today = date('Y-m-d');
-            SystemConfig::updateOrCreate(
-                ['key' => 'backflow_date'],
-                ['value' => $today]
-            );
-            $this->info("首次执行，已设置返水日期为：{$today}");
-            Log::info('返水命令首次执行，初始化 backflow_date', ['date' => $today]);
-            return 0;
-        }
-
-        // 2. 检查当前时间是否大于12点
+        // 1. 检查当前时间是否大于12点（必须在12点后才执行）
         $currentHour = (int)date('H');
         if ($currentHour < 12) {
-            $this->info("当前时间未到12点（当前：{$currentHour}点），不执行自动返水");
+            $this->info("当前时间未到12点（当前：{$currentHour}点），不执行自动返水，不更新返水日期");
             return 0;
         }
 
-        // 3. 检查 backflow_date 是否是今日
+        // 2. 检查并获取 backflow_date 配置
+        $backflowDate = SystemConfig::getValue('backflow_date');
         $today = date('Y-m-d');
-        if ($backflowDate === $today) {
+
+        // 3. 如果 backflow_date 是今日，说明今日已执行过，跳过
+        if (!empty($backflowDate) && $backflowDate === $today) {
             $this->info("今日（{$today}）已执行过自动返水，跳过");
             return 0;
         }
@@ -90,11 +79,12 @@ class Backflow extends Command
 
         if ($pendingBackflows->isEmpty()) {
             $this->info('没有待发放的返水记录');
-            // 更新 backflow_date 为今日
+            // 没有待返水记录，说明今日已处理完成，更新 backflow_date 为今日
             SystemConfig::updateOrCreate(
                 ['key' => 'backflow_date'],
                 ['value' => $today]
             );
+            $this->info("已更新返水日期为：{$today}");
             return 0;
         }
 
@@ -138,11 +128,16 @@ class Backflow extends Command
             }
         }
 
-        // 7. 更新 backflow_date 为今日
-        SystemConfig::updateOrCreate(
-            ['key' => 'backflow_date'],
-            ['value' => $today]
-        );
+        // 7. 只有在成功执行过返水（至少有一个用户成功）后才更新 backflow_date 为今日
+        if ($successCount > 0) {
+            SystemConfig::updateOrCreate(
+                ['key' => 'backflow_date'],
+                ['value' => $today]
+            );
+            $this->info("已更新返水日期为：{$today}");
+        } else {
+            $this->warn("今日返水执行失败，未更新返水日期，下次执行时会重试");
+        }
 
         // 8. 输出统计信息
         $this->info("\n自动返水执行完成！");

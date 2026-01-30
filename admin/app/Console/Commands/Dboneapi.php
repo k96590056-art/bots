@@ -9,6 +9,7 @@ use App\Models\User_Api;
 use App\Models\GameList;
 use App\Models\GameRecord;
 use Illuminate\Support\Facades\Log;
+use function GuzzleHttp\Psr7\str;
 
 class Dboneapi extends Command
 {
@@ -28,7 +29,7 @@ class Dboneapi extends Command
 
     /**
      * API代码，从类名自动获取（用于game_records表的platform_type字段）
-     * 
+     *
      * @var string
      */
     protected $api_code;
@@ -41,7 +42,7 @@ class Dboneapi extends Command
     public function __construct()
     {
         parent::__construct();
-        
+
         // 从类名获取 api_code
         $className = class_basename($this);
         // 移除可能的命令后缀（如果有）
@@ -63,7 +64,7 @@ class Dboneapi extends Command
         date_default_timezone_set('Asia/Shanghai');
 
         $param = $this->argument('param');
-        
+
         if (empty($param)) {
             $this->error('请提供参数：数字（同步游戏记录的时间，单位：分钟）或字符串（方法名）');
             $this->info('示例：');
@@ -98,7 +99,7 @@ class Dboneapi extends Command
     /**
      * 同步游戏记录
      * 根据 oneapi.md 文档：/transaction/list 接口返回的数据结构
-     * 
+     *
      * @param int $minutes 同步时间范围（分钟）
      * @return void
      */
@@ -107,7 +108,7 @@ class Dboneapi extends Command
         $this->info("开始同步 {$minutes} 分钟内的游戏记录...");
 
         $service = new DboneapiService();
-        
+
         // 计算时间范围（Unix时间戳，毫秒）
         // 注意：API要求时间戳为毫秒
         $to_time = (int) (now()->timestamp * 1000);
@@ -121,28 +122,28 @@ class Dboneapi extends Command
         $page_size = 2000; // 每页最多2000条，最大5000条
         $total = 0;
         $total_pages = 0;
-        
+
         do {
             $result = $service->getTransactionList($from_time, $to_time, $page_no, $page_size);
             if (isset($result['status']) && $result['status'] !== 'SC_OK') {
                 $this->error("拉取游戏记录失败（第{$page_no}页）：" . ($result['message'] ?? '未知错误'));
                 break;
             }
-            
+
             $data = $result['data'] ?? [];
             $transactions = $data['transactions'] ?? [];
             $headers = $data['headers'] ?? [];
             $total = $data['totalItems'] ?? 0;
             $total_pages = $data['totalPages'] ?? 0;
-            
+
             if (!empty($transactions)) {
                 $all_transactions = array_merge($all_transactions, $transactions);
                 $this->info("已拉取第 {$page_no}/{$total_pages} 页，本页 " . count($transactions) . " 条记录");
             }
-            
+
             $page_no++;
         } while ($page_no <= $total_pages && count($all_transactions) < $total);
-        
+
         if (empty($all_transactions)) {
             $this->info('没有需要同步的游戏记录');
             return;
@@ -247,7 +248,7 @@ class Dboneapi extends Command
                     $skip_count++;
                     continue;
                 }
-                
+
                 $user = User::where('username', $username)->first();
                 if (!$user) {
                     $skip_reasons['user_not_found']++;
@@ -264,7 +265,7 @@ class Dboneapi extends Command
                     // 如果 betId 为空，尝试使用 externalTransactionId 或 vendorBetId
                     $betId = $externalTransactionId ?: $vendorBetId;
                 }
-                
+
                 if ($betId === '') {
                     $skip_reasons['empty_bet_id']++;
                     $skip_count++;
@@ -281,7 +282,7 @@ class Dboneapi extends Command
                 // 时间处理：使用 vendorSettleTime（结算时间），如果没有则使用 vendorBetTime（投注时间）
                 $settleTime = $vendorSettleTime > 0 ? $vendorSettleTime : $vendorBetTime;
                 $betTime = null;
-                
+
                 if ($settleTime > 0) {
                     // 时间戳是毫秒，转换为日期时间
                     $betTime = date('Y-m-d H:i:s', (int)floor($settleTime / 1000));
@@ -303,8 +304,9 @@ class Dboneapi extends Command
                     $recordStatus = 0; // 已取消或已退款
                 }
 
-                // 游戏类型：使用 gameCategoryCode（如 SLOTS, LIVE 等）
-                $gameType = $gameCategoryCode ?: '';
+                // 游戏类型：通过 game_lists 表获取
+                // 根据 gameCategoryCode（对应 game_lists.category_id）和 platform_type（对应 game_lists.platform_name）获取
+                $gameType = $this->getGameTypeFromGameLists($gameCategoryCode, $this->api_code);
 
                 $recordData = [
                     'user_id' => $user->id,
@@ -316,7 +318,7 @@ class Dboneapi extends Command
                     'game_code' => $gameCode,
                     'bet_time' => $betTime,
                     'bet_amount' => $betAmount,
-                    'valid_amount' => $effectiveTurnover > 0 ? $effectiveTurnover : $betAmount,
+                    'valid_amount' => $winLoss > 0 ? $winLoss : -$winLoss,
                     'win_loss' => $winLoss,
                     'status' => $recordStatus,
                     'is_back' => 0,
@@ -353,7 +355,7 @@ class Dboneapi extends Command
         }
 
         $this->info("同步完成：成功 {$success_count} 条，失败 {$fail_count} 条，跳过 {$skip_count} 条");
-        
+
         if ($skip_count > 0) {
             $this->info("跳过原因统计：");
             foreach ($skip_reasons as $reason => $count) {
@@ -365,8 +367,35 @@ class Dboneapi extends Command
     }
 
     /**
+     * 根据 gameCategoryCode 和 platform_type 从 game_lists 表获取 game_type（category_id）
+     *
+     * @param string $gameCategoryCode API 返回的游戏分类代码（对应 game_lists.category_id）
+     * @param string $platformType 平台类型（对应 game_lists.platform_name）
+     * @return string
+     */
+    private function getGameTypeFromGameLists($gameCategoryCode, $platformType)
+    {
+        if (empty($gameCategoryCode) || empty($platformType)) {
+            return 'other';
+        }
+
+        // 在 game_lists 表中查找匹配的记录
+        // game_lists.category_id = gameCategoryCode 且 game_lists.platform_name = platformType
+        $gameList = GameList::where('category_id', strtolower($gameCategoryCode))
+            ->where('platform_name', $platformType)
+            ->first();
+
+        if ($gameList && !empty($gameList->category_id)) {
+            return strtolower($gameList->category_id);
+        }
+
+        // 如果找不到匹配的记录，尝试直接使用 gameCategoryCode（转换为小写）
+        return strtolower($gameCategoryCode);
+    }
+
+    /**
      * 同步用户余额
-     * 
+     *
      * @return void
      */
     private function syncBalance()
@@ -374,7 +403,7 @@ class Dboneapi extends Command
         $this->info('开始同步用户余额...');
 
         $service = new DboneapiService();
-        
+
         // 先根据 game_lists.with_api 找到对应的 platform_name，再用 platform_name 匹配 user_api.api_code
         $platformNames = GameList::where('with_api', 'dboneapi')
             ->select('platform_name')
@@ -408,7 +437,7 @@ class Dboneapi extends Command
         foreach ($user_apis as $user_api) {
             try {
                 $user = User::find($user_api->user_id);
-                
+
                 if (!$user) {
                     $this->warn("用户不存在：ID {$user_api->user_id}");
                     $fail_count++;

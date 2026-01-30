@@ -5,16 +5,11 @@
     <div style="width: 95%; min-width: 250px; margin: 0 auto; background: #fff; border-radius: 10px; box-sizing: border-box; padding: 10px; min-height: 90vh">
       <van-list style="margin-top: 10px; padding-bottom: 120px" finished-text="没有更多了" offset="300" v-model="loading" :finished="list.length == pageData.total" @load="getData" v-if="list.length > 0">
         <van-cell v-for="(item, index) in list" :key="index">
-          <div style="font-size: 0.3rem">订单号：{{ item.bet_id }}</div>
           <div style="display: flex; justify-content: space-between;">
+			<div style="font-size: 0.3rem">{{ item.date }}</div>
             <div style="font-size: 0.3rem">金额 :{{ item.bet_amount }}</div>
-            <div style="font-size: 0.3rem">派彩 :{{ item.win_loss }}</div>
+            <div style="font-size: 0.3rem">输赢 :{{ item.win_loss }}</div>
           </div>
-          <div style="display: flex; justify-content: space-between;">
-            <div style="font-size: 0.3rem">{{ item.Code }}</div>
-            <div style="font-size: 0.3rem">{{ statuType[item.status] }}</div>
-          </div>
-          <div style="font-size: 0.3rem">{{ item.created_at }}</div>
         </van-cell>
       </van-list>
       <div v-else style="margin-top: 60px; text-align: center">
