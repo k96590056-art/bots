@@ -201,6 +201,7 @@ Route::get('/agent/yongjin','Api\AuthController@agent_yongjin');  //计算佣金
 Route::any('/telegram/webhook', 'Api\TelegramWebhookController@webhook');  //Telegram Bot Webhook
 Route::any('/telegram/test', 'Api\TelegramWebhookController@test');  //测试DP游戏列表获取
 Route::any('/telegram/debug', 'Api\TelegramWebhookController@debug');  //调试Telegram Bot配置
+Route::any('/telegram/set-menu-button', 'Api\TelegramWebhookController@setMenuButton');  //手动设置Menu Button
 Route::post('/telegram/webapp-auth', 'Api\TelegramWebhookController@webappAuth');  //Telegram Web App 自动登录
 
 // CMAG回调接口（GM-Ag系统回调代理系统）
