@@ -1225,6 +1225,86 @@ class AppController extends Controller
 		return $this->returnMsg(200,$data,'成功');		
 	}
 
+    /**
+     * 获取用户邀请信息（推广链接、二维码、海报）
+     */
+    public function inviteInfo(Request $request)
+    {
+        $data = array();
+        $token = $request->header('authorization');
+        if (!$token) {
+            return $this->returnMsg(401, [], '未登录');
+        }
+        
+        $token = str_replace('Bearer ', '', $token);
+        $user = User::where('api_token', $token)->first();
+        if (!$user) {
+            return $this->returnMsg(401, [], '用户不存在');
+        }
+
+        $wapurl = env("WAP_URL");
+        $wapurl = explode(',', $wapurl);
+        $register_url = $wapurl[0] . '/#/register?pid=' . $user->id;
+        $data['invite_url'] = $register_url;
+
+        // 生成二维码
+        $qrcodes = public_path('/qrcodes/');
+        File::isDirectory($qrcodes) or File::makeDirectory($qrcodes, 0777, true, true);
+        
+        $img_file = 'qrcodes/' . $user['username'] . '.png';
+        if (!file_exists($img_file)) {
+            $QrCode = QrCode::format('png')->size(300)->generate($register_url, public_path($img_file));
+        }
+        $data['qrcode'] = env('APP_URL') . '/' . $img_file;
+
+        // 生成推广海报
+        $public_path = public_path('/inviterQrcodes/');
+        File::isDirectory($public_path) or File::makeDirectory($public_path, 0777, true, true);
+        $inviterQrcodes = 'inviterQrcodes/' . $user['username'] . '.png';
+        $bg_path = public_path('/src_761chess_resource_img_extension_shareqrbg.png');
+        
+        if (!file_exists($inviterQrcodes)) {
+            // 检查背景图片是否存在
+            if (file_exists($bg_path)) {
+                // 使用背景图片生成海报
+                $bg = imagecreatefrompng($bg_path);
+                $qrcode = imagecreatefrompng(public_path($img_file));
+                imagecopyresampled($bg, $qrcode, 105, 365, 0, 0, 70, 70, imagesx($qrcode), imagesy($qrcode));
+                imagepng($bg, public_path('/inviterQrcodes/' . $user['username'] . '.png'));
+                imagedestroy($bg);
+                imagedestroy($qrcode);
+            } else {
+                // 如果背景图片不存在，创建一个简单的海报（白色背景+二维码居中）
+                $qrcode = imagecreatefrompng(public_path($img_file));
+                $qrcode_width = imagesx($qrcode);
+                $qrcode_height = imagesy($qrcode);
+                
+                // 创建白色背景（400x600）
+                $poster_width = 400;
+                $poster_height = 600;
+                $bg = imagecreatetruecolor($poster_width, $poster_height);
+                $white = imagecolorallocate($bg, 255, 255, 255);
+                imagefill($bg, 0, 0, $white);
+                
+                // 将二维码居中放置
+                $x = ($poster_width - $qrcode_width) / 2;
+                $y = ($poster_height - $qrcode_height) / 2;
+                imagecopy($bg, $qrcode, $x, $y, 0, 0, $qrcode_width, $qrcode_height);
+                imagepng($bg, public_path('/inviterQrcodes/' . $user['username'] . '.png'));
+                imagedestroy($bg);
+                imagedestroy($qrcode);
+            }
+        }
+        
+        // 如果海报文件存在，返回海报URL，否则返回空
+        if (file_exists($inviterQrcodes)) {
+            $data['poster'] = env('APP_URL') . '/' . $inviterQrcodes;
+        } else {
+            $data['poster'] = '';
+        }
+
+        return $this->returnMsg(200, $data, '成功');
+    }
 
     public function querys(Request $request)
     {

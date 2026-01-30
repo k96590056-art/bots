@@ -130,6 +130,7 @@ Route::middleware(['crosstttp','api_auth'])->group(function () {
     Route::post('/balance','Api\AuthController@getUserBalance');
     Route::post('/logoff','Api\AuthController@logoff');
     Route::post('/applyagentdo','Api\IndexController@applyagentdo');
+    Route::post('/inviteInfo','Api\AppController@inviteInfo');  // 获取邀请信息（推广链接、二维码、海报）
     // 红包
     Route::post('/getredpacket','Api\PayController@getRedPacket');
     Route::any('/redpacket','Api\PayController@redPacket');

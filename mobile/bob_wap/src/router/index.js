@@ -46,6 +46,7 @@ import myFeedback from '@/components/myFeedback'
 import feedbackDetail from '@/components/feedbackDetail'
 import helpTutorial from '@/components/helpTutorial'
 import Webview from '@/components/Webview'
+import promotion from '@/components/promotion'
 
 
 
@@ -350,6 +351,13 @@ export default new Router({
       path: '/webview',
       name: 'webview',
       component: Webview
+    }, {
+      path: '/promotion',
+      name: 'promotion',
+      component: promotion,
+      meta: {
+        requireAuth: true,
+      }
     }
     , {
       path: '*', // 重定向页面地址

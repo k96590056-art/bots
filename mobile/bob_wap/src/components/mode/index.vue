@@ -81,7 +81,7 @@
             </div>
             <span>取款</span>
           </div>
-          <div class="action-btn" @click="$parent.goNav('/applyagent')">
+          <div class="action-btn" @click="$store.state.token ? $parent.goNav('/promotion') : $parent.goNav('/login')">
             <div class="action-icon">
               <img src="/static/image/icon_promote.png" alt="推广" class="action-icon-img" />
             </div>
