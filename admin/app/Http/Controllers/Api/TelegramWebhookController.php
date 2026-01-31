@@ -1217,7 +1217,7 @@ class TelegramWebhookController extends Controller
             $redpacketEnabled = SystemConfig::getValue('redpacket') === '1';
 
             // 构建优惠页面URL（用于新人特惠按钮，前端使用hash模式需要添加 # 符号）
-            $promotionUrl = rtrim($gameUrl, '/') . '/#/promotion';
+            $promotionUrl = rtrim($gameUrl, '/') . '/#/activity';
 
             // 构建红包、新人特惠和福利活动按钮行
             $activityRow = [];
@@ -4896,11 +4896,12 @@ class TelegramWebhookController extends Controller
             $appUrl = env('APP_URL');
             $imageUrl = $appUrl . '/static/image/xinren.jpg';
 
-            // 文字内容
-            $caption = "🎁新人特惠领取方式：\n咨询上级合营伙伴领取专属新人福利，点击图片查看福利详情！";
+            // 先发送文字消息
+            $textMessage = "🎁新人特惠领取方式：\n咨询上级合营伙伴领取专属新人福利，点击图片查看福利详情！";
+            $this->telegramBot->sendMessage($chatId, $textMessage);
 
-            // 发送图片+文字（不带按钮）
-            $result = $this->telegramBot->sendPhoto($chatId, $imageUrl, $caption);
+            // 再单独发送图片（不带caption，保持图片原始尺寸）
+            $result = $this->telegramBot->sendPhoto($chatId, $imageUrl, '');
 
             if ($result['code'] == 200) {
                 Log::info('新人特惠消息发送成功', [
@@ -4948,7 +4949,7 @@ class TelegramWebhookController extends Controller
             $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
             $gameUrl = (string)$gameUrl;
             // 前端使用hash模式，需要添加 # 符号
-            $promotionUrl = rtrim($gameUrl, '/') . '/#/promotion';
+            $promotionUrl = rtrim($gameUrl, '/') . '/#/activity';
 
             // 构建内联键盘按钮 - 活动专区
             $inlineKeyboard = [[
