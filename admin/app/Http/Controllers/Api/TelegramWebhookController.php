@@ -389,8 +389,14 @@ class TelegramWebhookController extends Controller
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                     
                     $bannerImageUrl = env('APP_URL') . '/static/image/banner1.jpg';
-                    $this->telegramBot->sendPhoto($chatId, $bannerImageUrl, '');
-                    
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === /start 发送banner图片 ===' . PHP_EOL .
+                        'banner_url: ' . $bannerImageUrl . PHP_EOL .
+                        '---' . PHP_EOL, FILE_APPEND);
+                    $bannerResult = $this->telegramBot->sendPhoto($chatId, $bannerImageUrl, '');
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === /start banner图片发送结果 ===' . PHP_EOL .
+                        'result: ' . json_encode($bannerResult, JSON_UNESCAPED_UNICODE) . PHP_EOL .
+                        '---' . PHP_EOL, FILE_APPEND);
+
                     // 然后显示主菜单（跳过欢迎文字，因为已经发送过了）
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
                     $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo, null, null, true);
@@ -1236,11 +1242,18 @@ class TelegramWebhookController extends Controller
 
             // 获取图片URL
             $mainImagePath = SystemConfig::getValue('telegram_bot_main_image');
+            $appLogo = SystemConfig::getValue('app_logo');
+            $logFile = storage_path('logs/telegram_webhook.log');
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 主菜单图片配置 ===' . PHP_EOL .
+                'telegram_bot_main_image: ' . var_export($mainImagePath, true) . PHP_EOL .
+                'app_logo: ' . var_export($appLogo, true) . PHP_EOL .
+                'APP_URL: ' . env('APP_URL') . PHP_EOL .
+                '---' . PHP_EOL, FILE_APPEND);
+
             if ($mainImagePath) {
                 $mainImageUrl = env('APP_URL') . '/uploads/' . $mainImagePath;
             } else {
                 // 如果没有配置Telegram Bot主图，使用系统logo作为默认图片
-                $appLogo = SystemConfig::getValue('app_logo');
                 if ($appLogo) {
                     $mainImageUrl = env('APP_URL') . '/uploads/' . $appLogo;
                 } else {
@@ -1248,6 +1261,9 @@ class TelegramWebhookController extends Controller
                     $mainImageUrl = env('APP_URL') . '/images/telegram/main_banner.jpg';
                 }
             }
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 最终图片URL ===' . PHP_EOL .
+                'mainImageUrl: ' . $mainImageUrl . PHP_EOL .
+                '---' . PHP_EOL, FILE_APPEND);
 
             if ($messageId) {
                 // 返回主菜单时，把欢迎文字合并到caption中一起编辑
@@ -1289,7 +1305,19 @@ class TelegramWebhookController extends Controller
                 }
 
                 // 发送图片消息，文字作为caption，按钮作为reply_markup
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 准备发送第2张图(主菜单图片) ===' . PHP_EOL .
+                    'mainImageUrl: ' . $mainImageUrl . PHP_EOL .
+                    'caption长度: ' . strlen($text) . PHP_EOL .
+                    'skipWelcomeText: ' . ($skipWelcomeText ? 'true' : 'false') . PHP_EOL .
+                    '---' . PHP_EOL, FILE_APPEND);
+
                 $photoResult = $this->telegramBot->sendPhotoWithInlineKeyboard($chatId, $mainImageUrl, $text, $inlineKeyboard);
+
+                @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 第2张图发送结果 ===' . PHP_EOL .
+                    'code: ' . ($photoResult['code'] ?? 'null') . PHP_EOL .
+                    'message: ' . ($photoResult['message'] ?? 'null') . PHP_EOL .
+                    'result: ' . json_encode($photoResult, JSON_UNESCAPED_UNICODE) . PHP_EOL .
+                    '---' . PHP_EOL, FILE_APPEND);
 
                 // 如果图片发送失败，降级为文字消息
                 if ($photoResult['code'] != 200) {
@@ -1298,6 +1326,8 @@ class TelegramWebhookController extends Controller
                         'image_url' => $mainImageUrl,
                         'result' => $photoResult
                     ]);
+                    @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 第2张图失败，降级为文字消息 ===' . PHP_EOL .
+                        '---' . PHP_EOL, FILE_APPEND);
                     // 发送文字消息和按钮
                     $messageResult = $this->telegramBot->sendMessageWithInlineKeyboard($chatId, $text, $inlineKeyboard);
                     if ($messageResult['code'] != 200) {
