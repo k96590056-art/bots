@@ -388,8 +388,13 @@ class TelegramWebhookController extends Controller
                     $replyKeyboard = $this->getPersistentKeyboard();
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                     
-                    $bannerImageUrl = env('APP_URL') . '/static/images/banner1.jpg';
-                    $this->telegramBot->sendPhoto($chatId, $bannerImageUrl, '');
+                    $bannerLocalPath = public_path('static/images/banner1.jpg');
+                    if (file_exists($bannerLocalPath)) {
+                        $bannerPhoto = new \CURLFile($bannerLocalPath, 'image/jpeg', 'banner1.jpg');
+                    } else {
+                        $bannerPhoto = env('APP_URL') . '/static/images/banner1.jpg';
+                    }
+                    $this->telegramBot->sendPhoto($chatId, $bannerPhoto, '');
                     
                     // 然后显示主菜单（跳过欢迎文字，因为已经发送过了）
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
