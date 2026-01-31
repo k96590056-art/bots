@@ -388,7 +388,7 @@ class TelegramWebhookController extends Controller
                     $replyKeyboard = $this->getPersistentKeyboard();
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
                     
-                    $bannerImageUrl = env('APP_URL') . '/static/images/banner.jpg';
+                    $bannerImageUrl = env('APP_URL') . '/static/image/banner1.jpg';
                     $this->telegramBot->sendPhoto($chatId, $bannerImageUrl, '');
                     
                     // 然后显示主菜单（跳过欢迎文字，因为已经发送过了）
@@ -1227,7 +1227,9 @@ class TelegramWebhookController extends Controller
             ];
             $activityRow[] = [
                 'text' => '🎁 福利活动',
-                'callback_data' => 'show_activities'
+                'web_app' => [
+                    'url' => $promotionUrl
+                ]
             ];
 
             $inlineKeyboard[] = $activityRow;
@@ -4862,7 +4864,7 @@ class TelegramWebhookController extends Controller
         try {
             // 获取新人特惠图片地址
             $appUrl = env('APP_URL');
-            $imageUrl = $appUrl . '/static/images/xinren.jpg';
+            $imageUrl = $appUrl . '/static/image/xinren.jpg';
 
             // 文字内容
             $caption = "🎁新人特惠领取方式：\n咨询上级合营伙伴领取专属新人福利，点击图片查看福利详情！";
@@ -4910,7 +4912,7 @@ class TelegramWebhookController extends Controller
         try {
             // 获取福利专区图片地址
             $appUrl = env('APP_URL');
-            $imageUrl = $appUrl . '/static/images/fuli.jpg';
+            $imageUrl = $appUrl . '/static/image/fuli.jpg';
 
             // 获取游戏入口地址用于构建优惠页面URL
             $gameUrl = SystemConfig::getValue('telegram_bot_game_url') ?: (SystemConfig::getValue('h5_url') ?: 'https://epay.266982.xyz/');
