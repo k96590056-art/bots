@@ -115,40 +115,64 @@ class TelegramBotService
         }
 
         try {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->apiUrl . 'sendPhoto');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            // 诊断日志：记录发送的图片URL
+            if (is_string($photo) && filter_var($photo, FILTER_VALIDATE_URL)) {
+                // 从服务器自身请求该URL，检查返回的Content-Type和状态码
+                $diagCh = curl_init();
+                curl_setopt($diagCh, CURLOPT_URL, $photo);
+                curl_setopt($diagCh, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($diagCh, CURLOPT_NOBODY, true); // HEAD请求
+                curl_setopt($diagCh, CURLOPT_FOLLOWLOCATION, true);
+                curl_setopt($diagCh, CURLOPT_CONNECTTIMEOUT, 5);
+                curl_setopt($diagCh, CURLOPT_TIMEOUT, 5);
+                curl_setopt($diagCh, CURLOPT_SSL_VERIFYPEER, FALSE);
+                curl_setopt($diagCh, CURLOPT_SSL_VERIFYHOST, FALSE);
+                curl_exec($diagCh);
+                $diagHttpCode = curl_getinfo($diagCh, CURLINFO_HTTP_CODE);
+                $diagContentType = curl_getinfo($diagCh, CURLINFO_CONTENT_TYPE);
+                $diagContentLength = curl_getinfo($diagCh, CURLINFO_CONTENT_LENGTH_DOWNLOAD);
+                $diagEffectiveUrl = curl_getinfo($diagCh, CURLINFO_EFFECTIVE_URL);
+                $diagRedirectCount = curl_getinfo($diagCh, CURLINFO_REDIRECT_COUNT);
+                $diagError = curl_error($diagCh);
+                curl_close($diagCh);
 
-            if ($curlError) {
-                Log::error('Telegram发送图片CURL错误', [
-                    'chat_id' => $chatId,
-                    'curl_error' => $curlError
+                Log::info('sendPhoto 诊断 - 服务器自检URL', [
+                    'photo_url' => $photo,
+                    'http_code' => $diagHttpCode,
+                    'content_type' => $diagContentType,
+                    'content_length' => $diagContentLength,
+                    'effective_url' => $diagEffectiveUrl,
+                    'redirect_count' => $diagRedirectCount,
+                    'curl_error' => $diagError ?: '无',
                 ]);
-                return ['code' => 500, 'message' => '请求失败：' . $curlError];
             }
 
-            $result = json_decode($response, true);
-            
-            if (!$result || !isset($result['ok']) || !$result['ok']) {
-                Log::error('Telegram发送图片失败', [
-                    'chat_id' => $chatId,
-                    'http_code' => $httpCode,
-                    'response' => $result
+            $result = $this->curlPostTelegram('sendPhoto', $data);
+
+            // 如果URL方式失败，记录详细信息并尝试本地文件上传
+            if ($result['code'] != 200 && is_string($photo) && filter_var($photo, FILTER_VALIDATE_URL)) {
+                $localPath = $this->urlToLocalPath($photo);
+                Log::info('sendPhoto 诊断 - URL方式失败，准备本地上传', [
+                    'photo_url' => $photo,
+                    'telegram_error' => $result['data']['description'] ?? ($result['message'] ?? '未知'),
+                    'local_path' => $localPath,
+                    'local_exists' => $localPath ? file_exists($localPath) : false,
+                    'local_size' => ($localPath && file_exists($localPath)) ? filesize($localPath) : 0,
+                    'local_mime' => ($localPath && file_exists($localPath)) ? mime_content_type($localPath) : '无',
                 ]);
-                return ['code' => 500, 'message' => '发送图片失败', 'data' => $result];
+
+                if ($localPath && file_exists($localPath)) {
+                    $data['photo'] = new \CURLFile($localPath, mime_content_type($localPath), basename($localPath));
+                    $result = $this->curlPostTelegram('sendPhoto', $data);
+                    Log::info('sendPhoto 诊断 - 本地文件上传结果', [
+                        'local_path' => $localPath,
+                        'success' => $result['code'] == 200,
+                        'error' => $result['code'] != 200 ? ($result['data']['description'] ?? $result['message'] ?? '未知') : '无',
+                    ]);
+                }
             }
 
-            return ['code' => 200, 'message' => '成功', 'data' => $result];
+            return $result;
         } catch (\Exception $e) {
             Log::error('Telegram发送图片异常', [
                 'chat_id' => $chatId,
@@ -156,6 +180,60 @@ class TelegramBotService
             ]);
             return ['code' => 500, 'message' => $e->getMessage()];
         }
+    }
+
+    /**
+     * 将APP_URL开头的URL转换为本地文件路径
+     */
+    protected function urlToLocalPath($url)
+    {
+        $appUrl = env('APP_URL', '');
+        if (!empty($appUrl) && strpos($url, $appUrl) === 0) {
+            $relativePath = substr($url, strlen($appUrl));
+            $relativePath = ltrim($relativePath, '/');
+            $localPath = public_path($relativePath);
+            return $localPath;
+        }
+        return null;
+    }
+
+    /**
+     * 通用Telegram API POST请求
+     */
+    protected function curlPostTelegram($method, $data)
+    {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $this->apiUrl . $method);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        if ($curlError) {
+            Log::error("Telegram {$method} CURL错误", [
+                'curl_error' => $curlError
+            ]);
+            return ['code' => 500, 'message' => '请求失败：' . $curlError];
+        }
+
+        $result = json_decode($response, true);
+
+        if (!$result || !isset($result['ok']) || !$result['ok']) {
+            Log::error("Telegram {$method} 失败", [
+                'http_code' => $httpCode,
+                'response' => $result
+            ]);
+            return ['code' => 500, 'message' => "{$method}失败", 'data' => $result];
+        }
+
+        return ['code' => 200, 'message' => '成功', 'data' => $result];
     }
 
     /**
@@ -185,40 +263,22 @@ class TelegramBotService
         $data = array_merge($data, $options);
 
         try {
-            $ch = curl_init();
-            curl_setopt($ch, CURLOPT_URL, $this->apiUrl . 'sendPhoto');
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-            curl_setopt($ch, CURLOPT_POST, 1);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_TIMEOUT, 30);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, FALSE);
-            $response = curl_exec($ch);
-            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            $curlError = curl_error($ch);
-            curl_close($ch);
+            $result = $this->curlPostTelegram('sendPhoto', $data);
 
-            if ($curlError) {
-                Log::error('Telegram发送带键盘图片CURL错误', [
-                    'chat_id' => $chatId,
-                    'curl_error' => $curlError
-                ]);
-                return ['code' => 500, 'message' => '请求失败：' . $curlError];
+            // 如果URL方式失败，尝试本地文件上传
+            if ($result['code'] != 200 && is_string($photo) && filter_var($photo, FILTER_VALIDATE_URL)) {
+                Log::info('Telegram sendPhotoWithInlineKeyboard URL方式失败，尝试本地文件上传', ['photo_url' => $photo]);
+                $localPath = $this->urlToLocalPath($photo);
+                if ($localPath && file_exists($localPath)) {
+                    $data['photo'] = new \CURLFile($localPath, mime_content_type($localPath), basename($localPath));
+                    $result = $this->curlPostTelegram('sendPhoto', $data);
+                    if ($result['code'] == 200) {
+                        Log::info('Telegram sendPhotoWithInlineKeyboard 本地文件上传成功', ['local_path' => $localPath]);
+                    }
+                }
             }
 
-            $result = json_decode($response, true);
-            
-            if (!$result || !isset($result['ok']) || !$result['ok']) {
-                Log::error('Telegram发送带键盘图片失败', [
-                    'chat_id' => $chatId,
-                    'http_code' => $httpCode,
-                    'response' => $result
-                ]);
-                return ['code' => 500, 'message' => '发送图片失败', 'data' => $result];
-            }
-
-            return ['code' => 200, 'message' => '成功', 'data' => $result];
+            return $result;
         } catch (\Exception $e) {
             Log::error('Telegram发送带键盘图片异常', [
                 'chat_id' => $chatId,
