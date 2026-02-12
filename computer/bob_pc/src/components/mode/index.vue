@@ -348,10 +348,8 @@ export default {
               { src: 'https://p3static.qwevo7g2g.com/images/new_public/web/bg/fd/cs/d4865hgi2sccru47d730_207494.png' }
             ];
           }
-          // 数据更新后重新初始化轮播图
-          that.$nextTick(() => {
-            that.initSwiper();
-          });
+          // 数据更新后轮播图会在 updated 钩子中自动初始化
+          // 不需要手动调用 initSwiper
         }
         that.bannerLoading = false; // 请求完成，重置标志
       }).catch(err => {
@@ -504,7 +502,7 @@ export default {
     // 获取 PC 分类数据
     fetchPcCategories() {
       let that = this;
-      that.$apiFun.get('/api/getGamePcCategories', {}).then(res => {
+      that.$apiFun.get('/api/game/pc_categories', {}).then(res => {
         if (res.code === 200 && res.data) {
           that.pcCategoriesData = res.data;
         }

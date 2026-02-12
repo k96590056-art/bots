@@ -1338,28 +1338,34 @@ export default {
 
       that.$apiFun.get('/api/game/list', { category: '' }).then(res => {
         if (res.code == 200) {
-          let list = res.data;
-          // that[name] = res.data;
-          list.forEach(el => {
-            if (el.category_id == 'realbet') {
-              that.realbetList.push(el);
-            }
-            if (el.category_id == 'joker') {
-              that.jokerList.push(el);
-            }
-            if (el.category_id == 'gaming') {
-              that.gamingList.push(el);
-            }
-            if (el.category_id == 'sport') {
-              that.sportList.push(el);
-            }
-            if (el.category_id == 'lottery') {
-              that.lotteryList.push(el);
-            }
-            if (el.category_id == 'concise') {
-              that.conciseList.push(el);
-            }
-          });
+          // API返回的数据结构是 {list: Array, app_list: Array}
+          let data = res.data;
+          let list = Array.isArray(data) ? data : (data.list || []);
+          // 检查 list 是否为数组
+          if (Array.isArray(list)) {
+            list.forEach(el => {
+              if (el.category_id == 'realbet') {
+                that.realbetList.push(el);
+              }
+              if (el.category_id == 'joker') {
+                that.jokerList.push(el);
+              }
+              if (el.category_id == 'gaming') {
+                that.gamingList.push(el);
+              }
+              if (el.category_id == 'sport') {
+                that.sportList.push(el);
+              }
+              if (el.category_id == 'lottery') {
+                that.lotteryList.push(el);
+              }
+              if (el.category_id == 'concise') {
+                that.conciseList.push(el);
+              }
+            });
+          } else {
+            console.warn('游戏列表数据格式不正确:', list);
+          }
         }
       });
     },
