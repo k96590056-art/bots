@@ -1778,7 +1778,7 @@ export default {
 //       $(this).addClass('_3OOfoEEz');
 //       $('.con6 ._3gLAHKzD').eq(index).show().siblings().hide();
 //     });
-//   },
+  },
   updated() {
     let that = this;
   },
