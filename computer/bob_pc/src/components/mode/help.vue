@@ -1731,54 +1731,54 @@ export default {
     },
   },
   mounted() {
-    $('.tab>div').click(function () {
-      var index = $(this).index();
-      $(this).addClass('_2-_kobu7').siblings().removeClass('_2-_kobu7');
-      $('.con>div').eq(index).show().siblings().hide();
-    });
-
-    $('.tabss>div').click(function () {
-      var index = $(this).index();
-      $(this).addClass('_2-_kobu7').siblings().removeClass('_2-_kobu7');
-      $('.conss>div').eq(index).show().siblings().hide();
-    });
-    $('.tab1>._2jbJB734').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab1>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con1 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-    $('.tab2>div').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab2>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con2 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-    $('.tab3>div').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab3>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con3 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-    $('.tab4>div').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab4>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con4 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-    $('.tab5>div').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab5>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con5 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-    $('.tab6>div').click(function () {
-      var index = $(this).attr('data-id') - 1;
-      $('.tab6>._2jbJB734').removeClass('_3OOfoEEz');
-      $(this).addClass('_3OOfoEEz');
-      $('.con6 ._3gLAHKzD').eq(index).show().siblings().hide();
-    });
-  },
+//     $('.tab>div').click(function () {
+//       var index = $(this).index();
+//       $(this).addClass('_2-_kobu7').siblings().removeClass('_2-_kobu7');
+//       $('.con>div').eq(index).show().siblings().hide();
+//     });
+// 
+//     $('.tabss>div').click(function () {
+//       var index = $(this).index();
+//       $(this).addClass('_2-_kobu7').siblings().removeClass('_2-_kobu7');
+//       $('.conss>div').eq(index).show().siblings().hide();
+//     });
+//     $('.tab1>._2jbJB734').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab1>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con1 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//     $('.tab2>div').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab2>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con2 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//     $('.tab3>div').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab3>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con3 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//     $('.tab4>div').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab4>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con4 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//     $('.tab5>div').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab5>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con5 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//     $('.tab6>div').click(function () {
+//       var index = $(this).attr('data-id') - 1;
+//       $('.tab6>._2jbJB734').removeClass('_3OOfoEEz');
+//       $(this).addClass('_3OOfoEEz');
+//       $('.con6 ._3gLAHKzD').eq(index).show().siblings().hide();
+//     });
+//   },
   updated() {
     let that = this;
   },

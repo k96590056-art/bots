@@ -16,7 +16,13 @@
     <!-- 活动列表 -->
     <div class="activity-list">
       <div class="activity-card" v-for="(item, index) in activitylistList" :key="index">
-          <img style="width: 100%;" :src="item.banner" alt="" />
+        <!-- 活动标题 -->
+        <div class="activity-title" v-if="item.title">
+          <span class="title-badge">热门</span>
+          <span class="title-text">{{ item.title }}</span>
+        </div>
+        <!-- 活动图片 -->
+        <img style="width: 100%;" :src="item.banner" alt="" />
       </div>
       <div style="height: 10px;text-align: center;color: #333;font-size: 18px; font-weight: 600;">详情请咨询客服</div>
       <van-divider dashed :style="{ color: '#ccc', borderColor: '#ccc', padding: '10px 16px' }">END</van-divider>
@@ -150,11 +156,46 @@ export default {
 // 活动卡片
 .activity-card {
   display: flex;
+  flex-direction: column;
   background: #fff;
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 10px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  // 活动标题
+  .activity-title {
+    padding: 12px 15px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+    .title-badge {
+      background: #ff4757;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+
+    .title-text {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  img {
+    width: 100%;
+    display: block;
+  }
 
   .card-left {
     flex: 1;

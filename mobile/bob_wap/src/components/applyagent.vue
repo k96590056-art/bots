@@ -23,6 +23,29 @@
         </div>
         <div class="zusnb">咨询</div>
       </div>
+      <!-- 推广链接区域 -->
+      <div class="promotion-card" v-if="$store.state.token">
+        <div class="card-title">推广链接</div>
+        <div class="link-section">
+          <div class="link-input-wrapper">
+            <input type="text" :value="inviteInfo.invite_url || ''" readonly class="link-input" />
+            <van-button type="primary" size="small" @click="copyLink" class="copy-btn">复制</van-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 二维码区域 -->
+      <div class="promotion-card" v-if="$store.state.token">
+        <div class="card-title">推广二维码</div>
+        <div class="qrcode-section">
+          <div class="qrcode-wrapper" v-if="inviteInfo.qrcode">
+            <img :src="inviteInfo.qrcode" alt="推广二维码" class="qrcode-img" />
+          </div>
+          <div v-else class="loading-tip">加载中...</div>
+          <p class="qrcode-desc">扫描二维码即可注册</p>
+        </div>
+      </div>
+
       <div class="bsd">
         <van-form>
           <van-field label="用户名" v-model="$store.state.userInfo.username" disabled />
@@ -41,12 +64,53 @@ export default {
   data() {
     return {
       info: {},
+      inviteInfo: {
+        invite_url: '',
+        qrcode: '',
+        poster: '',
+      },
     };
   },
   created() {
     let that = this;
+    if (this.$store.state.token) {
+      this.getInviteInfo();
+    }
   },
   methods: {
+    getInviteInfo() {
+      let that = this;
+      that.$parent.showLoading();
+      that.$apiFun
+        .post('/api/inviteInfo', {})
+        .then(res => {
+          that.$parent.hideLoading();
+          if (res.code == 200) {
+            that.inviteInfo = res.data || {};
+          } else {
+            that.$parent.showTost(0, res.message || '获取推广信息失败');
+          }
+        })
+        .catch(res => {
+          that.$parent.hideLoading();
+          that.$parent.showTost(0, '获取推广信息失败，请重试');
+        });
+    },
+    copyLink() {
+      let that = this;
+      if (!that.inviteInfo.invite_url) {
+        that.$parent.showTost(0, '推广链接不存在');
+        return;
+      }
+      let cInput = document.createElement('input');
+      cInput.style.opacity = '0';
+      cInput.value = that.inviteInfo.invite_url;
+      document.body.appendChild(cInput);
+      cInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(cInput);
+      that.$parent.showTost(1, '复制成功！');
+    },
     shenqing() {
       let that = this;
       let info = that.info;
@@ -134,5 +198,90 @@ export default {
   border-radius: 10px;
   padding: 20px 10px;
   margin-top: 10px;
+}
+
+.promotion-card {
+  width: 90%;
+  margin: 10px auto;
+  background: #fdfdfd;
+  border-radius: 10px;
+  padding: 20px 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 15px;
+    text-align: center;
+  }
+
+  .link-section {
+    .link-input-wrapper {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+
+      .link-input {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        color: #333;
+        background: #f8f8f8;
+        outline: none;
+      }
+
+      .copy-btn {
+        flex-shrink: 0;
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+    }
+  }
+
+  .qrcode-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    .qrcode-wrapper {
+      width: 200px;
+      height: 200px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+
+      .qrcode-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+    }
+
+    .loading-tip {
+      width: 200px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: #999;
+      margin-bottom: 12px;
+    }
+
+    .qrcode-desc {
+      font-size: 12px;
+      color: #666;
+      text-align: center;
+    }
+  }
 }
 </style>

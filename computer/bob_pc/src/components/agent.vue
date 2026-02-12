@@ -16,6 +16,33 @@
       <div style="height: 80px"></div>
     </div>
     <div class="_1MsAz5sh">
+      <!-- 推广链接和二维码区域 -->
+      <div class="promotion-section" v-if="$store.state.token">
+        <h6>推广中心</h6>
+        <div class="promotion-container">
+          <!-- 推广链接 -->
+          <div class="promotion-card">
+            <h3>推广链接</h3>
+            <div class="link-box">
+              <input type="text" :value="inviteInfo.invite_url || ''" readonly class="link-input" />
+              <button @click="copyLink" class="copy-btn">复制</button>
+            </div>
+          </div>
+
+          <!-- 推广二维码 -->
+          <div class="promotion-card">
+            <h3>推广二维码</h3>
+            <div class="qrcode-box">
+              <div class="qrcode-wrapper" v-if="inviteInfo.qrcode">
+                <img :src="inviteInfo.qrcode" alt="推广二维码" class="qrcode-img" />
+              </div>
+              <div v-else class="loading-tip">加载中...</div>
+              <p class="qrcode-desc">扫描二维码即可注册</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <h6>产品特色</h6>
       <div class="_3JT99ZzH">
         <div>
@@ -118,7 +145,22 @@ export default {
   name: 'agent',
   data() {
     // 1常见问题  2隐私政策  3免责说明  4联系我们  5代理加盟  7关于我们 8博彩责任
-    return { jumpUrl: null, dataBox1: {}, dataBox2: {}, dataBox3: {}, dataBox4: {}, dataBox5: {}, dataBox7: {}, dataBox8: {}, show: false };
+    return {
+      jumpUrl: null,
+      dataBox1: {},
+      dataBox2: {},
+      dataBox3: {},
+      dataBox4: {},
+      dataBox5: {},
+      dataBox7: {},
+      dataBox8: {},
+      show: false,
+      inviteInfo: {
+        invite_url: '',
+        qrcode: '',
+        poster: '',
+      },
+    };
   },
   components: {},
   created() {
@@ -128,9 +170,44 @@ export default {
     arr.forEach(el => {
       that.getAllCont(el);
     });
+
+    // 获取推广信息
+    if (this.$store.state.token) {
+      this.getInviteInfo();
+    }
   },
   mounted() {},
   methods: {
+    getInviteInfo() {
+      let that = this;
+      that.$apiFun
+        .post('/api/inviteInfo', {})
+        .then(res => {
+          if (res.code == 200) {
+            that.inviteInfo = res.data || {};
+          } else {
+            that.showTost(res.message || '获取推广信息失败');
+          }
+        })
+        .catch(res => {
+          that.showTost('获取推广信息失败，请重试');
+        });
+    },
+    copyLink() {
+      let that = this;
+      if (!that.inviteInfo.invite_url) {
+        that.showTost('推广链接不存在');
+        return;
+      }
+      let cInput = document.createElement('input');
+      cInput.style.opacity = '0';
+      cInput.value = that.inviteInfo.invite_url;
+      document.body.appendChild(cInput);
+      cInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(cInput);
+      that.showTost('复制成功！');
+    },
     getAllCont(type) {
       let that = this;
       that.show = true;
@@ -187,6 +264,125 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+.promotion-section {
+  margin-bottom: 40px;
+
+  h6 {
+    font-size: 24px;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: 30px;
+    color: #333;
+  }
+}
+
+.promotion-container {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+.promotion-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  width: 100%;
+
+  h3 {
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+
+  .link-box {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+
+    .link-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #333;
+      background: #f8f8f8;
+      outline: none;
+      font-family: monospace;
+    }
+
+    .copy-btn {
+      padding: 12px 24px;
+      background: #1890ff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.3s;
+
+      &:hover {
+        background: #40a9ff;
+      }
+
+      &:active {
+        background: #096dd9;
+      }
+    }
+  }
+
+  .qrcode-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+
+    .qrcode-wrapper {
+      width: 250px;
+      height: 250px;
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+
+      .qrcode-img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+    }
+
+    .loading-tip {
+      width: 250px;
+      height: 250px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      color: #999;
+      margin-bottom: 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+    }
+
+    .qrcode-desc {
+      font-size: 14px;
+      color: #666;
+      text-align: center;
+    }
+  }
+}
+
 .fangda {
   animation: _308UEapr 0.5s ease-out;
 }
