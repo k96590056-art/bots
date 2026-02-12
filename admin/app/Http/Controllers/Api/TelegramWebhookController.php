@@ -180,6 +180,7 @@ class TelegramWebhookController extends Controller
                 return $result;
             }
 
+
             Log::warning('Telegram Webhook未找到消息或回调', ['update' => $update]);
             // 写入文件日志
             $logFile = storage_path('logs/telegram_webhook.log');
@@ -387,7 +388,7 @@ class TelegramWebhookController extends Controller
                     $welcomeText .= "🎁MK体育：致力于打造全球玩家心中的顶级线上娱乐平台，凭借卓越品质和创新精神，深受玩家信赖与喜爱。全台厂商直营无私彩，公平公正假一赔十！拒绝盗版游戏享受健康生活！";
                     $replyKeyboard = $this->getPersistentKeyboard();
                     $this->telegramBot->sendMessageWithReplyKeyboard($chatId, $welcomeText, $replyKeyboard, true, false);
-                    
+
                     $bannerLocalPath = public_path('static/images/banner1.jpg');
                     if (file_exists($bannerLocalPath)) {
                         $bannerPhoto = new \CURLFile($bannerLocalPath, 'image/jpeg', 'banner1.jpg');
@@ -395,7 +396,7 @@ class TelegramWebhookController extends Controller
                         $bannerPhoto = env('APP_URL') . '/static/images/banner1.jpg';
                     }
                     $this->telegramBot->sendPhoto($chatId, $bannerPhoto, '');
-                    
+
                     // 然后显示主菜单（跳过欢迎文字，因为已经发送过了）
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === 开始调用 showMainMenu ===' . PHP_EOL, FILE_APPEND);
                     $result = $this->showMainMenu($chatId, $user, null, $telegramUserInfo, null, null, true);
@@ -403,7 +404,7 @@ class TelegramWebhookController extends Controller
                         'Result: ' . json_encode($result, JSON_UNESCAPED_UNICODE) . PHP_EOL .
                         '---' . PHP_EOL, FILE_APPEND);
                     Log::info('showMainMenu返回结果', ['result' => $result]);
-                    
+
                     return $result;
                 } catch (\Throwable $e) {
                     @file_put_contents($logFile, date('Y-m-d H:i:s') . ' === showMainMenu 调用异常 ===' . PHP_EOL .
@@ -1454,7 +1455,7 @@ class TelegramWebhookController extends Controller
 
         // 检查游戏是否支持机器人打开（is_bot == 1）
         $isBot = (int)($game->is_bot ?? 0);
-        
+
         // 构建菜单按钮
         $inlineKeyboard = [];
 
@@ -1463,7 +1464,7 @@ class TelegramWebhookController extends Controller
             $text .= "\n\n⚠️ 请通过游戏入口进入该游戏";
         } else {
             // 只有 is_bot == 1 时才显示操作按钮和开始游戏按钮
-            
+
             // 检查是否为免转游戏（transferstatus == 0表示免转，== 1表示非免转）
             if ($game->transferstatus == 1) {
                 // 非免转，显示转入和转出按钮
@@ -3199,7 +3200,7 @@ class TelegramWebhookController extends Controller
         // 4. 处理今日流水数据
         foreach ($todayStats as $stat) {
             $gameTypeLower = strtolower(trim($stat->game_type_lower ?? ''));
-            
+
             if (empty($gameTypeLower)) {
                 continue;
             }
@@ -3207,11 +3208,11 @@ class TelegramWebhookController extends Controller
             // 通过 game_type 匹配 category_id
             if (isset($gameTypeToCategoryIdMap[$gameTypeLower])) {
                 $catId = $gameTypeToCategoryIdMap[$gameTypeLower];
-                
+
                 if (isset($categoriesMap[$catId])) {
                     $amount = floatval($stat->total_valid_amount ?? 0);
                     $winLoss = floatval($stat->total_win_loss ?? 0);
-                    
+
                     $categoriesMap[$catId]['today_flow'] += $amount;
                     $todayTotalFlow += $amount;
                     $todayTotalWinLoss += $winLoss;
@@ -3228,7 +3229,7 @@ class TelegramWebhookController extends Controller
         // 5. 处理昨日流水数据
         foreach ($yesterdayStats as $stat) {
             $gameTypeLower = strtolower(trim($stat->game_type_lower ?? ''));
-            
+
             if (empty($gameTypeLower)) {
                 continue;
             }
@@ -3236,7 +3237,7 @@ class TelegramWebhookController extends Controller
             // 通过 game_type 匹配 category_id
             if (isset($gameTypeToCategoryIdMap[$gameTypeLower])) {
                 $catId = $gameTypeToCategoryIdMap[$gameTypeLower];
-                
+
                 if (isset($categoriesMap[$catId])) {
                     $amount = floatval($stat->total_valid_amount ?? 0);
                     $categoriesMap[$catId]['yesterday_flow'] += $amount;
@@ -3265,9 +3266,9 @@ class TelegramWebhookController extends Controller
     protected function formatFlowText($user, $categoriesMap, $todayTotalFlow, $todayTotalWinLoss)
     {
         $registerTime = $user->created_at ? date('Y-m-d H:i:s', strtotime($user->created_at)) : '未知';
-        
+
         $text = '';
-        
+
         // 今日流水
         $text .= "💎 <b>今日流水 (" . date('Y-m-d') . ")</b>\n";
         foreach ($categoriesMap as $cat) {
@@ -3287,7 +3288,7 @@ class TelegramWebhookController extends Controller
         $text .= "🔸 今日总输赢: " . number_format($todayTotalWinLoss, 2) . " USDT\n";
         $text .= "🔸 今日总有效流水: " . number_format($todayTotalFlow, 2) . " USDT\n";
         $text .= "🔹 注册时间: {$registerTime}\n\n";
-        
+
         return $text;
     }
 
@@ -3324,7 +3325,7 @@ class TelegramWebhookController extends Controller
             $userId = $user->id ?? 0;
             $kefuUrl = $base . $separator . 'uid=' . $userId . '&mobile=1';
             $kefuUrl = preg_replace('/[\x{200B}\x{200C}\x{200D}\x{FEFF}]/u', '', $kefuUrl);
-            
+
             $inlineKeyboard = [
                 [
                     [
